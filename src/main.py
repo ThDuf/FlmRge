@@ -106,35 +106,37 @@ class FlammeRougeGame:
         for player_idx, player in enumerate(self.game.players):
             base_x = MARGIN + player_idx * 250
 
-            # Clique sur une carte du sprinter
-            for card_idx, card in enumerate(player.sprinter.hand):
-                card_rect = pygame.Rect(
-                    base_x + card_idx * 40,
-                    hand_y_sprinter,
-                    40, 60
-                )
-                if card_rect.collidepoint(x, y):
-                    self.game.play_card(player, player.sprinter, card)
-                    print(f"✅ Carte {card.value} jouée pour {player.color} Sprinteur")
-                    if self.game.all_players_ready():
-                        print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
-                        self.game.resolve_movement_phase()
-                    return
+            # Sprinteur - vérifier qu'il n'a pas déjà joué
+            if self.game.cards_played_per_runner[player.sprinter.id] < 1:
+                for card_idx, card in enumerate(player.sprinter.hand):
+                    card_rect = pygame.Rect(
+                        base_x + card_idx * 40,
+                        hand_y_sprinter,
+                        40, 60
+                    )
+                    if card_rect.collidepoint(x, y):
+                        if self.game.play_card(player, player.sprinter, card):
+                            print(f"✅ {player.color} Sprinteur: carte {card.value} jouée")
+                            if self.game.all_players_ready():
+                                print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
+                                self.game.resolve_movement_phase()
+                        return
 
-            # Clique sur une carte du rouleur
-            for card_idx, card in enumerate(player.roller.hand):
-                card_rect = pygame.Rect(
-                    base_x + card_idx * 40,
-                    hand_y_roller,
-                    40, 60
-                )
-                if card_rect.collidepoint(x, y):
-                    self.game.play_card(player, player.roller, card)
-                    print(f"✅ Carte {card.value} jouée pour {player.color} Rouleur")
-                    if self.game.all_players_ready():
-                        print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
-                        self.game.resolve_movement_phase()
-                    return
+            # Rouleur - vérifier qu'il n'a pas déjà joué
+            if self.game.cards_played_per_runner[player.roller.id] < 1:
+                for card_idx, card in enumerate(player.roller.hand):
+                    card_rect = pygame.Rect(
+                        base_x + card_idx * 40,
+                        hand_y_roller,
+                        40, 60
+                    )
+                    if card_rect.collidepoint(x, y):
+                        if self.game.play_card(player, player.roller, card):
+                            print(f"✅ {player.color} Rouleur: carte {card.value} jouée")
+                            if self.game.all_players_ready():
+                                print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
+                                self.game.resolve_movement_phase()
+                        return
 
     def _draw_track(self) -> None:
         """Dessine la piste."""
@@ -255,14 +257,15 @@ class FlammeRougeGame:
                     width=2,
                     border_radius=5
                 )
+                sprinter_status = "✅" if self.game.cards_played_per_runner[player.sprinter.id] >= 1 else "❌"
                 sprinter_text = self.font.render(
-                    f"{player.color} Sprinteur:",
+                    f"{player.color} Sprinteur {sprinter_status}:",
                     True,
                     color,
                 )
                 self.screen.blit(sprinter_text, (base_x, hand_y_sprinter - 30))
 
-                # Dessiner les cartes du sprinter
+                # Dessiner les cartes du sprinter (grisées si déjà joué)
                 for card_idx, card in enumerate(player.sprinter.hand):
                     card_rect = pygame.Rect(
                         base_x + card_idx * 40,
@@ -270,7 +273,8 @@ class FlammeRougeGame:
                         40,
                         60
                     )
-                    pygame.draw.rect(self.screen, WHITE, card_rect, width=2)
+                    card_color = GRAY if self.game.cards_played_per_runner[player.sprinter.id] >= 1 else WHITE
+                    pygame.draw.rect(self.screen, card_color, card_rect, width=2)
                     card_text = self.font.render(str(card.value), True, BLACK)
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
@@ -283,14 +287,15 @@ class FlammeRougeGame:
                     width=2,
                     border_radius=5
                 )
+                roller_status = "✅" if self.game.cards_played_per_runner[player.roller.id] >= 1 else "❌"
                 roller_text = self.font.render(
-                    f"{player.color} Rouleur:",
+                    f"{player.color} Rouleur {roller_status}:",
                     True,
                     color,
                 )
                 self.screen.blit(roller_text, (base_x, hand_y_roller - 30))
 
-                # Dessiner les cartes du rouleur
+                # Dessiner les cartes du rouleur (grisées si déjà joué)
                 for card_idx, card in enumerate(player.roller.hand):
                     card_rect = pygame.Rect(
                         base_x + card_idx * 40,
@@ -298,7 +303,8 @@ class FlammeRougeGame:
                         40,
                         60
                     )
-                    pygame.draw.rect(self.screen, WHITE, card_rect, width=2)
+                    card_color = GRAY if self.game.cards_played_per_runner[player.roller.id] >= 1 else WHITE
+                    pygame.draw.rect(self.screen, card_color, card_rect, width=2)
                     card_text = self.font.render(str(card.value), True, BLACK)
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)

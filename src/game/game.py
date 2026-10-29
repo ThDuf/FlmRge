@@ -27,9 +27,15 @@ class Game:
         self.winner: Optional[Player] = None
         self.cards_played_this_turn = 0  # Compteur de cartes jouées ce tour
         self.total_cards_to_play = 0     # Total de cartes à jouer (2 par joueur)
+        self.cards_played_per_runner = {}  # {runner_id: nombre de cartes jouées}
 
         # Initialiser les joueurs
         self._initialize_players(player_count)
+        
+        # Initialiser le compteur de cartes par coureur
+        for player in self.players:
+            for runner in player.get_runners():
+                self.cards_played_per_runner[runner.id] = 0
 
         # Démarrer le premier tour
         self.start_turn()
@@ -122,9 +128,11 @@ class Game:
         self.cards_played_this_turn = 0  # Réinitialiser le compteur
         self.total_cards_to_play = len(self.players) * 2  # 2 cartes par joueur (1 par coureur)
 
-        # Pioche 4 cartes pour chaque coureur
+        # Réinitialiser le compteur de cartes par coureur
         for player in self.players:
-            player.draw_cards_for_all(4)
+            for runner in player.get_runners():
+                self.cards_played_per_runner[runner.id] = 0
+            player.draw_cards_for_all(4)  # Chaque coureur pioche 4 cartes
 
     def play_card(self, player: Player, runner: Runner, card: Card) -> bool:
         """
@@ -137,7 +145,13 @@ class Game:
         if card not in runner.hand:
             return False
 
+        # VÉRIFICATION: Ce coureur n'a pas déjà joué sa carte ce tour
+        if self.cards_played_per_runner[runner.id] >= 1:
+            print(f"⚠️ {runner.id} a déjà joué sa carte ce tour !")
+            return False
+
         runner.play_card(card)
+        self.cards_played_per_runner[runner.id] += 1
         self.cards_played_this_turn += 1  # Incrémenter le compteur
         return True
 
