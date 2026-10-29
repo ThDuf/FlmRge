@@ -1,5 +1,5 @@
 import random
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict
 from enum import Enum, auto
 from .player import Player
 from .runner import Runner, RunnerType
@@ -26,9 +26,9 @@ class Game:
         self.turn_count: int = 0
         self.game_over: bool = False
         self.winner: Optional[Player] = None
-        self.cards_played_this_turn = 0  # Compteur de cartes jouées ce tour
-        self.total_cards_to_play = 0     # Total de cartes à jouer (2 par joueur)
-        self.cards_played_per_runner = {}  # {runner_id: nombre de cartes jouées}
+        self.cards_played_this_turn = 0
+        self.total_cards_to_play = 0
+        self.cards_played_per_runner = {}
 
         # Initialiser les joueurs
         self._initialize_players(player_count)
@@ -68,15 +68,11 @@ class Game:
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:
         """Génère un deck Énergie pour un coureur."""
-        # Distribution des cartes selon le type (simplifiée)
-        # Sprinteur : plus de cartes à haute valeur (6-9)
-        # Rouleur : plus de cartes à faible valeur (2-5)
         if runner_type == RunnerType.SPRINTER:
             values = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 9, 9, 9]
-        else:  # Rouleur
+        else:
             values = [2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7, 7, 8, 9]
 
-        # Dupliquer pour avoir ~45 cartes (comme dans le jeu original)
         while len(values) < 45:
             values.extend(values[:10])
         values = values[:45]
@@ -86,24 +82,18 @@ class Game:
 
     def _generate_fatigue_deck(self) -> List[Card]:
         """Génère un deck Fatigue (toutes les cartes valent 2)."""
-        return [Card(2, CardType.FATIGUE) for _ in range(10)]  # 10 cartes Fatigue
+        return [Card(2, CardType.FATIGUE) for _ in range(10)]
 
     def _build_track(self, stage: str) -> Track:
         """Construit la piste selon l'étape choisie."""
         track = Track()
 
-        # Exemple pour "Avenue Corso Paseo" (setup: abcdefghijklmnopqrstu)
-        # On va simplifier avec une piste droite pour commencer
         if stage == "Avenue Corso Paseo":
-            # Départ
             track.add_tile(TileType.START)
-            # Ligne droite (20 cases = 10 tuiles)
             for _ in range(10):
                 track.add_tile(TileType.STRAIGHT)
-            # Arrivée
             track.add_tile(TileType.FINISH)
         elif stage == "test":
-            # Piste de test plus longue (15 tuiles = 30 cases)
             track.add_tile(TileType.START)
             for _ in range(13):
                 track.add_tile(TileType.STRAIGHT)
@@ -113,7 +103,6 @@ class Game:
 
     def _place_runner_at_start(self, runner: Runner) -> None:
         """Place un coureur à la ligne de départ."""
-        # Trouver la première case après le départ
         start_cell = self.track.get_cell(0, 0)
         if start_cell and start_cell.is_empty(0):
             start_cell.set_runner(runner, 0)
@@ -126,34 +115,27 @@ class Game:
         """Démarre un nouveau tour."""
         self.turn_count += 1
         self.current_phase = Phase.ENERGY
-        self.cards_played_this_turn = 0  # Réinitialiser le compteur
-        self.total_cards_to_play = len(self.players) * 2  # 2 cartes par joueur (1 par coureur)
+        self.cards_played_this_turn = 0
+        self.total_cards_to_play = len(self.players) * 2
 
-        # Réinitialiser le compteur de cartes par coureur
         for player in self.players:
             for runner in player.get_runners():
                 self.cards_played_per_runner[runner.id] = 0
-            player.draw_cards_for_all(4)  # Chaque coureur pioche 4 cartes
+            player.draw_cards_for_all(4)
 
     def play_card(self, player: Player, runner: Runner, card: Card) -> bool:
-        """
-        Joue une carte pour un coureur.
-        Retourne True si la carte a été jouée avec succès.
-        """
+        """Joue une carte pour un coureur."""
         if self.current_phase != Phase.ENERGY:
             return False
-
         if card not in runner.hand:
             return False
-
-        # VÉRIFICATION: Ce coureur n'a pas déjà joué sa carte ce tour
         if self.cards_played_per_runner[runner.id] >= 1:
             print(f"⚠️ {runner.id} a déjà joué sa carte ce tour !")
             return False
 
         runner.play_card(card)
-        self.cards_played_per_runner[runner.id] = 1  # Marquer comme ayant joué
-        self.cards_played_this_turn += 1  # Incrémenter le compteur
+        self.cards_played_per_runner[runner.id] = 1
+        self.cards_played_this_turn += 1
         return True
 
     def all_players_ready(self) -> bool:
@@ -161,44 +143,42 @@ class Game:
         return self.cards_played_this_turn >= self.total_cards_to_play
 
     def resolve_movement_phase(self) -> None:
-        """Résout la phase de mouvement (déplacement des coureurs)."""
+        """Résout la phase de mouvement."""
         if self.current_phase != Phase.ENERGY:
             return
 
         self.current_phase = Phase.MOVEMENT
 
-        # Récupérer tous les coureurs triés par position (du plus loin au plus proche)
+        # Récupérer tous les coureurs triés par position (du plus proche au plus loin)
         all_runners = []
         for player in self.players:
             all_runners.extend(player.get_runners())
-        all_runners.sort(key=lambda r: r.x, reverse=True)  # Du + loin au + proche
+        # Trier du plus proche de l'arrivée au plus loin (pour respecter les règles)
+        all_runners.sort(key=lambda r: r.x, reverse=True)
 
-        # Révéler les cartes et déplacer les coureurs
+        # Déplacer les coureurs un par un
         for runner in all_runners:
             if runner.discard_pile:
-                card = runner.discard_pile[-1]  # Dernière carte jouée
+                card = runner.discard_pile[-1]
+                print(f"  Déplacement: {runner.id} avance de {card.value} cases (position initiale: {runner.x})")
                 self.track.move_runner(runner, card.value)
+                print(f"    -> Nouvelle position: {runner.x}")
 
-        print("🚀 Phase de mouvement terminée. Appuyez sur ENTRÉE pour l'aspiration.")
+        print("🚀 Phase de mouvement terminée.")
 
-    def resolve_aspiration_phase(self) -> List[Tuple]:
-        """
-        Résout la phase d'aspiration.
-        Retourne la liste des mouvements d'aspiration.
-        """
+    def resolve_aspiration_phase(self) -> List:
+        """Résout la phase d'aspiration."""
         if self.current_phase != Phase.MOVEMENT:
             return []
 
-        # Appliquer l'aspiration sur la piste
         movements = self.track.apply_aspiration()
-        
-        self.current_phase = Phase.TERMINAL
-        print(f"🌪️ Phase d'aspiration terminée ({len(movements)} mouvements). Appuyez sur ENTRÉE pour la phase terminale.")
+        self.current_phase = Phase.ASPIRATION
+        print(f"🌪️ Phase d'aspiration: {len(movements)} mouvements effectués")
         return movements
 
     def resolve_terminal_phase(self) -> None:
-        """Résout la phase terminale (fatigue et préparation du prochain tour)."""
-        if self.current_phase != Phase.TERMINAL:
+        """Résout la phase terminale."""
+        if self.current_phase != Phase.ASPIRATION:
             return
 
         # 1. Attribuer les cartes Fatigue
@@ -217,17 +197,16 @@ class Game:
         for player in self.players:
             for runner in player.get_runners():
                 if runner.is_tired(self.track):
-                    # Pioche une carte Fatigue
                     if runner.fatigue_deck:
                         fatigue_card = runner.fatigue_deck.pop()
                         runner.discard_pile.append(fatigue_card)
+                        print(f"  Fatigue: {runner.id} a reçu une carte Fatigue")
 
     def _cleanup_hands(self) -> None:
         """Nettoie les mains des coureurs pour le prochain tour."""
         for player in self.players:
             for runner in player.get_runners():
                 runner.reset_hand()
-                # Re-mélanger le deck si nécessaire
                 if not runner.energy_deck and runner.discard_pile:
                     runner.reshuffle_deck()
 
@@ -238,6 +217,7 @@ class Game:
             for runner in player.get_runners():
                 if runner.x >= finish_x:
                     self.winner = player
+                    print(f"🏆 Victoire: {player.color} a gagné avec {runner.id} !")
                     return True
         return False
 
@@ -250,7 +230,7 @@ class Game:
         return self.current_phase.name
 
     def get_state(self) -> Dict:
-        """Retourne l'état actuel du jeu (pour l'UI)."""
+        """Retourne l'état actuel du jeu."""
         return {
             "turn": self.turn_count,
             "phase": self.current_phase.name,

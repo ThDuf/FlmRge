@@ -97,56 +97,50 @@ class Track:
     def move_runner(self, runner: Runner, steps: int) -> None:
         """
         Déplace un coureur de `steps` cases.
-        Gère les collisions et les règles de placement.
+        Gère les collisions : si une case est occupée, on s'arrête avant.
         """
-        new_x = runner.x + steps
-        # Limite la position à la piste
-        new_x = max(0, min(new_x, self.length - 1))
+        if steps <= 0:
+            return
 
-        # On avance case par case pour gérer les collisions
-        current_x = runner.x
+        new_x = runner.x
         current_y = runner.y
 
         # Retirer le coureur de sa position actuelle
-        current_cell = self.get_cell(current_x, current_y)
-        if current_cell:
-            current_cell.remove_runner(current_y)
+        old_cell = self.get_cell(runner.x, current_y)
+        if old_cell:
+            old_cell.remove_runner(current_y)
 
-        for x in range(current_x + 1, new_x + 1):
-            if x >= self.length:
+        # Avancer case par case
+        for step in range(steps):
+            new_x += 1
+            if new_x >= self.length:
+                new_x = self.length - 1
                 break
 
-            cell = self.get_cell(x, current_y)
-            if cell is None:
+            new_cell = self.get_cell(new_x, current_y)
+            if new_cell is None:
                 break
 
-            if cell.is_full():
-                # Case pleine : on s'arrête avant
-                prev_cell = self.get_cell(x - 1, current_y)
-                if prev_cell:
-                    prev_cell.set_runner(runner, current_y)
-                return
-            elif not cell.is_empty(current_y):
-                # La file actuelle est occupée : on essaie l'autre file
-                other_lane = 1 - current_y
-                if cell.is_empty(other_lane):
-                    current_y = other_lane
+            # Si la case est libre dans la file actuelle, on y va
+            if new_cell.is_empty(current_y):
+                continue
+            # Sinon, essayer l'autre file
+            else:
+                other_y = 1 - current_y
+                if new_cell.is_empty(other_y):
+                    current_y = other_y
+                    continue
+                # Si les deux files sont occupées, on s'arrête
                 else:
-                    # Les 2 files sont occupées : on s'arrête
-                    prev_cell = self.get_cell(x - 1, current_y)
-                    if prev_cell:
-                        prev_cell.set_runner(runner, current_y)
-                    return
+                    new_x -= 1
+                    break
 
-        # Si on a atteint la fin sans collision
+        # Placer le coureur à sa nouvelle position
+        runner.x = new_x
+        runner.y = current_y
         final_cell = self.get_cell(new_x, current_y)
-        if final_cell and not final_cell.is_full():
+        if final_cell:
             final_cell.set_runner(runner, current_y)
-        else:
-            # Si la case est pleine, on recule
-            prev_cell = self.get_cell(new_x - 1, current_y)
-            if prev_cell:
-                prev_cell.set_runner(runner, current_y)
 
     def get_runners_in_cell(self, x: int) -> List[Runner]:
         """Retourne tous les coureurs dans une case (les 2 files)."""
@@ -163,21 +157,43 @@ class Track:
     def get_groups(self) -> List[List[Runner]]:
         """
         Retourne les groupes de coureurs (collés sans case vide entre eux).
-        Un groupe = 1 ou plusieurs coureurs avec 0 case vide entre eux.
+        Un groupe = coureurs consécutifs dans les mêmes cases ou cases adjacentes.
         """
+        # Collecter tous les coureurs avec leur position
+        all_runners = []
+        for x in range(self.length):
+            cell = self.get_cell(x, 0)
+            if cell and cell.left:
+                all_runners.append((x, 0, cell.left))
+            if cell and cell.right:
+                all_runners.append((x, 1, cell.right))
+
+        # Trier par position x, puis par file
+        all_runners.sort(key=lambda r: (r[0], r[1]))
+
         groups = []
         current_group = []
 
-        # Parcourir toutes les cases de la piste
-        for x in range(self.length):
-            runners = self.get_runners_in_cell(x)
-            if runners:
-                current_group.extend(runners)
+        for x, y, runner in all_runners:
+            if not current_group:
+                current_group.append(runner)
             else:
-                if current_group:
-                    groups.append(current_group)
-                    current_group = []
-        # Ajouter le dernier groupe si la piste se termine par des coureurs
+                # Vérifier si ce coureur est adjacent au dernier du groupe
+                last_runner = current_group[-1]
+                last_x = last_runner.x
+                last_y = last_runner.y
+
+                # Même case ou case suivante adjacente
+                if x == last_x or (x == last_x + 1 and abs(y - last_y) <= 1):
+                    current_group.append(runner)
+                else:
+                    # Vérifier s'il y a une case vide entre les groupes
+                    if x > last_x + 1:
+                        groups.append(current_group)
+                        current_group = [runner]
+                    else:
+                        current_group.append(runner)
+
         if current_group:
             groups.append(current_group)
 
@@ -186,16 +202,16 @@ class Track:
     def apply_aspiration(self) -> List:
         """
         Applique la règle d'aspiration :
-        Si 1 case vide sépare 2 groupes, le groupe derrière avance de 1 case.
+        Si exactement 1 case vide sépare 2 groupes, le groupe derrière avance de 1 case.
         Retourne la liste des mouvements effectués (runner, old_x, new_x).
         """
         movements = []
         
-        # Continuer à appliquer l'aspiration jusqu'à ce qu'aucun mouvement ne soit plus possible
+        # Continuer jusqu'à ce qu'aucun mouvement ne soit plus possible
         while True:
             groups = self.get_groups()
             if len(groups) < 2:
-                break  # Pas d'aspiration possible
+                break
             
             moved = False
             
@@ -204,42 +220,51 @@ class Track:
                 group_behind = groups[i]
                 group_ahead = groups[i - 1]
 
-                # Trouver la position du groupe devant et derrière
+                # Position du groupe devant (la plus proche de l'arrivée)
                 x_ahead = min(runner.x for runner in group_ahead)
-                x_behind = max(runner.x for runner in group_behind)  # Position la plus avancée du groupe derrière
+                # Position du groupe derrière (la plus éloignée de l'arrivée)
+                x_behind = max(runner.x for runner in group_behind)
 
                 # Vérifier s'il y a exactement 1 case vide entre les groupes
                 if x_ahead - x_behind == 2:
-                    # Avancer TOUS les coureurs du groupe derrière de 1 case
+                    # Déplacer TOUS les coureurs du groupe derrière de 1 case
                     for runner in group_behind:
-                        # Sauvegarder la position actuelle
-                        old_x, old_y = runner.x, runner.y
-                        # Retirer le coureur de sa position actuelle
+                        old_x = runner.x
+                        old_y = runner.y
+
+                        # Retirer le coureur
                         old_cell = self.get_cell(old_x, old_y)
                         if old_cell:
                             old_cell.remove_runner(old_y)
-                        # Déplacer le coureur
-                        new_x = runner.x + 1
+
+                        # Avancer de 1 case
+                        new_x = old_x + 1
                         runner.x = new_x
+
+                        # Placer dans la même file si possible, sinon l'autre file
                         new_cell = self.get_cell(new_x, old_y)
-                        if new_cell:
-                            if new_cell.is_empty(old_y):
-                                new_cell.set_runner(runner, old_y)
+                        if new_cell and new_cell.is_empty(old_y):
+                            new_cell.set_runner(runner, old_y)
+                        else:
+                            # Essayer l'autre file
+                            new_y = 1 - old_y
+                            if new_cell and new_cell.is_empty(new_y):
+                                runner.y = new_y
+                                new_cell.set_runner(runner, new_y)
                             else:
-                                # Si la case est occupée, remettre le coureur
+                                # Remettre à l'ancienne position
                                 runner.x = old_x
                                 if old_cell:
                                     old_cell.set_runner(runner, old_y)
                                 continue
-                        
+
                         movements.append((runner, old_x, new_x))
                         moved = True
 
-                    # Recalculer les groupes (car l'ordre a changé)
-                    groups = self.get_groups()
-                    break  # Recommencer depuis le début après un mouvement
+                    # Recalculer les groupes après ce mouvement
+                    break
             
             if not moved:
-                break  # Aucun mouvement effectué, fin de l'aspiration
-        
+                break
+
         return movements
