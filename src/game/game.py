@@ -25,6 +25,8 @@ class Game:
         self.turn_count: int = 0
         self.game_over: bool = False
         self.winner: Optional[Player] = None
+        self.cards_played_this_turn = 0  # Compteur de cartes jouées ce tour
+        self.total_cards_to_play = 0     # Total de cartes à jouer (2 par joueur)
 
         # Initialiser les joueurs
         self._initialize_players(player_count)
@@ -117,6 +119,8 @@ class Game:
         """Démarre un nouveau tour."""
         self.turn_count += 1
         self.current_phase = Phase.ENERGY
+        self.cards_played_this_turn = 0  # Réinitialiser le compteur
+        self.total_cards_to_play = len(self.players) * 2  # 2 cartes par joueur (1 par coureur)
 
         # Pioche 4 cartes pour chaque coureur
         for player in self.players:
@@ -134,15 +138,12 @@ class Game:
             return False
 
         runner.play_card(card)
+        self.cards_played_this_turn += 1  # Incrémenter le compteur
         return True
 
     def all_players_ready(self) -> bool:
-        """Vérifie si tous les joueurs ont joué leurs cartes."""
-        for player in self.players:
-            for runner in player.get_runners():
-                if len(runner.hand) != 3:  # 4 cartes piochées - 1 jouée = 3
-                    return False
-        return True
+        """Vérifie si tous les joueurs ont joué leurs 2 cartes (1 par coureur)."""
+        return self.cards_played_this_turn >= self.total_cards_to_play
 
     def resolve_movement_phase(self) -> None:
         """Résout la phase de mouvement."""
