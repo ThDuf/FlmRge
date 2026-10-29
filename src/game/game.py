@@ -1,5 +1,5 @@
 import random
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from enum import Enum, auto
 from .player import Player
 from .runner import Runner, RunnerType

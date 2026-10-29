@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from enum import Enum, auto
 from .runner import Runner
 
@@ -183,7 +183,7 @@ class Track:
 
         return groups
 
-    def apply_aspiration(self) -> List[Tuple]:
+    def apply_aspiration(self) -> List:
         """
         Applique la règle d'aspiration :
         Si 1 case vide sépare 2 groupes, le groupe derrière avance de 1 case.

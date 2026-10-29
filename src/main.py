@@ -1,6 +1,6 @@
 import pygame
 import sys
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from game.game import Game, Phase
 from game.runner import Runner
 from game.card import Card, CardType
