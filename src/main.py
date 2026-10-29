@@ -120,7 +120,7 @@ class FlammeRougeGame:
                             if self.game.all_players_ready():
                                 print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
                                 self.game.resolve_movement_phase()
-                        return
+                        return  # Sortir après avoir joué une carte
 
             # Rouleur - vérifier qu'il n'a pas déjà joué
             if self.game.cards_played_per_runner[player.roller.id] < 1:
@@ -136,7 +136,10 @@ class FlammeRougeGame:
                             if self.game.all_players_ready():
                                 print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
                                 self.game.resolve_movement_phase()
-                        return
+                        return  # Sortir après avoir joué une carte
+            
+            # Si on arrive ici, ce joueur a déjà joué toutes ses cartes, on passe au suivant
+            continue
 
     def _draw_track(self) -> None:
         """Dessine la piste."""

@@ -151,7 +151,7 @@ class Game:
             return False
 
         runner.play_card(card)
-        self.cards_played_per_runner[runner.id] += 1
+        self.cards_played_per_runner[runner.id] = 1  # Marquer comme ayant joué
         self.cards_played_this_turn += 1  # Incrémenter le compteur
         return True
 
