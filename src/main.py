@@ -1,6 +1,6 @@
 import pygame
 import sys
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from game.game import Game, Phase
 from game.runner import Runner
 from game.card import Card, CardType
@@ -53,6 +53,19 @@ class FlammeRougeGame:
 
         # État de l'UI
         self.show_hands = True  # Afficher les mains des coureurs
+        
+        # Scroll horizontal pour la piste
+        self.scroll_x = 0  # Position de défilement
+        self.scroll_speed = 30  # Vitesse de défilement
+        
+        # Carte sélectionnée affichée à côté des mains
+        self.selected_cards_display = []  # Liste de (player_color, runner_type, card_value, x, y)
+
+    def _calculate_max_scroll(self) -> int:
+        """Calcule le scroll maximum possible."""
+        track_width = self.game.track.length * CELL_SIZE
+        visible_width = SCREEN_WIDTH - 2 * MARGIN
+        return max(0, track_width - visible_width)
 
     def run(self):
         """Boucle principale du jeu."""
@@ -69,6 +82,8 @@ class FlammeRougeGame:
                     if event.key == pygame.K_r:
                         # Recommencer la partie
                         self.game = Game(stage="test", player_count=2)
+                        self.scroll_x = 0
+                        self.selected_cards_display = []
                     elif event.key == pygame.K_h:
                         # Basculer l'affichage des mains
                         self.show_hands = not self.show_hands
@@ -78,6 +93,12 @@ class FlammeRougeGame:
                             self.game.resolve_movement_phase()
                         elif self.game.current_phase == Phase.MOVEMENT:
                             self.game.resolve_terminal_phase()
+                    elif event.key == pygame.K_LEFT:
+                        # Scroll à gauche
+                        self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
+                    elif event.key == pygame.K_RIGHT:
+                        # Scroll à droite
+                        self.scroll_x = min(self._calculate_max_scroll(), self.scroll_x + self.scroll_speed)
 
             # Mettre à jour l'affichage
             self.screen.fill(WHITE)
@@ -117,9 +138,18 @@ class FlammeRougeGame:
                     if card_rect.collidepoint(x, y):
                         if self.game.play_card(player, player.sprinter, card):
                             print(f"✅ {player.color} Sprinteur: carte {card.value} jouée")
+                            # Enregistrer la carte sélectionnée pour l'affichage
+                            self.selected_cards_display.append((
+                                player.color,
+                                "Sprinteur",
+                                card.value,
+                                base_x + card_idx * 40 + 40,
+                                hand_y_sprinter
+                            ))
                             if self.game.all_players_ready():
                                 print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
                                 self.game.resolve_movement_phase()
+                                self.selected_cards_display = []  # Réinitialiser pour la phase suivante
                         return  # Sortir après avoir joué une carte
 
             # Rouleur - vérifier qu'il n'a pas déjà joué
@@ -133,29 +163,45 @@ class FlammeRougeGame:
                     if card_rect.collidepoint(x, y):
                         if self.game.play_card(player, player.roller, card):
                             print(f"✅ {player.color} Rouleur: carte {card.value} jouée")
+                            # Enregistrer la carte sélectionnée pour l'affichage
+                            self.selected_cards_display.append((
+                                player.color,
+                                "Rouleur",
+                                card.value,
+                                base_x + card_idx * 40 + 40,
+                                hand_y_roller
+                            ))
                             if self.game.all_players_ready():
                                 print("🚀 Toutes les cartes jouées ! Lancement de la phase de mouvement...")
                                 self.game.resolve_movement_phase()
+                                self.selected_cards_display = []  # Réinitialiser pour la phase suivante
                         return  # Sortir après avoir joué une carte
             
             # Si on arrive ici, ce joueur a déjà joué toutes ses cartes, on passe au suivant
             continue
 
     def _draw_track(self) -> None:
-        """Dessine la piste."""
+        """Dessine la piste avec scroll."""
         # Dessiner le fond de la piste
         track_height = LANE_HEIGHT * 2 + 10
         track_y = (SCREEN_HEIGHT - track_height) // 2 - 50  # Déplacé vers le haut
+        
+        # Calculer la position visible de la piste
+        visible_start = self.scroll_x // CELL_SIZE
+        visible_end = min(self.game.track.length, (self.scroll_x + SCREEN_WIDTH - MARGIN) // CELL_SIZE)
+        
+        # Dessiner le fond de la piste (visible)
+        visible_width = (visible_end - visible_start) * CELL_SIZE
         pygame.draw.rect(
             self.screen,
             LIGHT_GRAY,
-            (MARGIN, track_y, self.game.track.length * CELL_SIZE, track_height),
+            (MARGIN - self.scroll_x % CELL_SIZE, track_y, visible_width + CELL_SIZE, track_height),
             border_radius=5,
         )
 
-        # Dessiner les cases
-        for x in range(self.game.track.length):
-            cell_x = MARGIN + x * CELL_SIZE
+        # Dessiner les cases visibles
+        for x in range(visible_start, visible_end):
+            cell_x = MARGIN + x * CELL_SIZE - self.scroll_x
             # File du haut (gauche)
             pygame.draw.rect(
                 self.screen,
@@ -188,7 +234,7 @@ class FlammeRougeGame:
                 )
 
             # Numéro des cases (pour debug)
-            if x % 2 == 0:
+            if x % 5 == 0:
                 text = self.font.render(str(x), True, BLACK)
                 self.screen.blit(text, (cell_x + 5, track_y + 5))
 
@@ -198,8 +244,13 @@ class FlammeRougeGame:
 
         for player in self.game.players:
             for runner in player.get_runners():
-                cell_x = MARGIN + runner.x * CELL_SIZE
+                # Calculer la position visible avec scroll
+                cell_x = MARGIN + runner.x * CELL_SIZE - self.scroll_x
                 cell_y = track_y + runner.y * LANE_HEIGHT
+                
+                # Ne dessiner que si le coureur est visible
+                if cell_x + CELL_SIZE < MARGIN or cell_x > SCREEN_WIDTH - MARGIN:
+                    continue
 
                 # Dessiner le coureur (cercle coloré)
                 color = PLAYER_COLORS.get(player.color, BLACK)
@@ -216,17 +267,8 @@ class FlammeRougeGame:
                 text_rect = text.get_rect(center=(cell_x + CELL_SIZE // 2, cell_y + LANE_HEIGHT // 2))
                 self.screen.blit(text, text_rect)
 
-                # Afficher la carte sélectionnée à côté du coureur (si phase d'énergie)
-                if self.game.current_phase == Phase.ENERGY and runner.discard_pile:
-                    # Afficher la dernière carte jouée (celle sélectionnée) à droite du coureur
-                    last_card = runner.discard_pile[-1]
-                    card_text = self.font.render(f"→{last_card.value}", True, BLACK)
-                    self.screen.blit(
-                        card_text,
-                        (cell_x + CELL_SIZE + 5, cell_y + LANE_HEIGHT // 2 - 10),
-                    )
                 # Dessiner la dernière carte jouée (si phase de mouvement)
-                elif self.game.current_phase == Phase.MOVEMENT and runner.discard_pile:
+                if self.game.current_phase == Phase.MOVEMENT and runner.discard_pile:
                     last_card = runner.discard_pile[-1]
                     card_text = self.font.render(str(last_card.value), True, BLACK)
                     self.screen.blit(
@@ -244,13 +286,18 @@ class FlammeRougeGame:
         )
         self.screen.blit(phase_text, (MARGIN, 10))
 
-        # Nombre de cartes jouées/à jouer
+        # Nombre de cartes jouées
         cards_text = self.big_font.render(
             f"Cartes jouées: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}",
             True,
             BLACK,
         )
         self.screen.blit(cards_text, (MARGIN, 50))
+
+        # Afficher les cartes sélectionnées à côté des mains
+        for (color, runner_type, card_value, x, y) in self.selected_cards_display:
+            card_text = self.font.render(f"→{card_value}", True, PLAYER_COLORS.get(color, BLACK))
+            self.screen.blit(card_text, (x + 10, y))
 
         # Afficher les mains des coureurs (si activé)
         if self.show_hands and self.game.current_phase == Phase.ENERGY:
@@ -335,18 +382,20 @@ class FlammeRougeGame:
         if self.game.current_phase == Phase.ENERGY:
             instructions = [
                 f"Jouez 1 carte par coureur ({self.game.total_cards_to_play} cartes au total)",
+                "Flèches gauche/droite pour scroller sur la piste",
                 "Appuyez sur H pour masquer/afficher les mains",
                 "Appuyez sur R pour recommencer",
             ]
         else:
             instructions = [
                 f"Phase: {self.game.get_current_phase_name()}",
+                "Flèches gauche/droite pour scroller sur la piste",
                 "Appuyez sur ESPACE pour passer à la phase suivante (debug)",
                 "Appuyez sur R pour recommencer",
             ]
         for i, text in enumerate(instructions):
             text_surface = self.font.render(text, True, GRAY)
-            self.screen.blit(text_surface, (MARGIN, SCREEN_HEIGHT - 60 + i * 25))
+            self.screen.blit(text_surface, (MARGIN, SCREEN_HEIGHT - 80 + i * 25))
 
 
 if __name__ == "__main__":
