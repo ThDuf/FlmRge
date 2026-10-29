@@ -181,20 +181,20 @@ class Game:
 
         print("🚀 Phase de mouvement terminée. Appuyez sur ENTRÉE pour l'aspiration.")
 
-    def resolve_aspiration_phase(self) -> bool:
+    def resolve_aspiration_phase(self) -> List[Tuple]:
         """
         Résout la phase d'aspiration.
-        Retourne True si l'aspiration est terminée.
+        Retourne la liste des mouvements d'aspiration.
         """
         if self.current_phase != Phase.MOVEMENT:
-            return True
+            return []
 
         # Appliquer l'aspiration sur la piste
-        self.track.apply_aspiration()
+        movements = self.track.apply_aspiration()
         
         self.current_phase = Phase.TERMINAL
-        print("🌪️ Phase d'aspiration terminée. Appuyez sur ENTRÉE pour la phase terminale.")
-        return True
+        print(f"🌪️ Phase d'aspiration terminée ({len(movements)} mouvements). Appuyez sur ENTRÉE pour la phase terminale.")
+        return movements
 
     def resolve_terminal_phase(self) -> None:
         """Résout la phase terminale (fatigue et préparation du prochain tour)."""

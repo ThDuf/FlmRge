@@ -183,14 +183,16 @@ class Track:
 
         return groups
 
-    def apply_aspiration(self) -> None:
+    def apply_aspiration(self) -> List[Tuple]:
         """
         Applique la règle d'aspiration :
         Si 1 case vide sépare 2 groupes, le groupe derrière avance de 1 case.
+        Retourne la liste des mouvements effectués (runner, old_x, new_x).
         """
+        movements = []
         groups = self.get_groups()
         if len(groups) < 2:
-            return  # Pas d'aspiration possible
+            return movements  # Pas d'aspiration possible
 
         # Parcourir les groupes de l'arrière vers l'avant
         for i in range(len(groups) - 1, 0, -1):
@@ -205,17 +207,23 @@ class Track:
             if x_ahead - x_behind == 2:
                 # Avancer le groupe derrière de 1 case
                 for runner in group_behind:
-                    # Sauvegarder la position actuelle
-                    old_x, old_y = runner.x, runner.y
-                    # Retirer le coureur de sa position actuelle
-                    old_cell = self.get_cell(old_x, old_y)
-                    if old_cell:
-                        old_cell.remove_runner(old_y)
-                    # Déplacer le coureur
-                    new_x = runner.x + 1
-                    new_cell = self.get_cell(new_x, old_y)
-                    if new_cell:
-                        new_cell.set_runner(runner, old_y)
+                    if runner.x == x_behind:  # Seuls les coureurs à la position x_behind bougent
+                        # Sauvegarder la position actuelle
+                        old_x, old_y = runner.x, runner.y
+                        # Retirer le coureur de sa position actuelle
+                        old_cell = self.get_cell(old_x, old_y)
+                        if old_cell:
+                            old_cell.remove_runner(old_y)
+                        # Déplacer le coureur
+                        new_x = runner.x + 1
+                        runner.x = new_x
+                        new_cell = self.get_cell(new_x, old_y)
+                        if new_cell:
+                            new_cell.set_runner(runner, old_y)
+                        
+                        movements.append((runner, old_x, new_x))
 
                 # Recalculer les groupes (car l'ordre a changé)
                 groups = self.get_groups()
+        
+        return movements

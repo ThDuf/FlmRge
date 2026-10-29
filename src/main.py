@@ -1,6 +1,6 @@
 import pygame
 import sys
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from game.game import Game, Phase
 from game.runner import Runner
 from game.card import Card, CardType
@@ -54,18 +54,72 @@ class FlammeRougeGame:
         # État de l'UI
         self.show_hands = True  # Afficher les mains des coureurs
         
-        # Scroll horizontal pour la piste
+        # Scroll horizontal pour la piste avec la souris
         self.scroll_x = 0  # Position de défilement
         self.scroll_speed = 30  # Vitesse de défilement
+        self.dragging = False  # Indique si on est en train de draguer
+        self.last_mouse_pos = (0, 0)  # Dernière position de la souris
         
         # Carte sélectionnée affichée à côté des mains
         self.selected_cards_display = []  # Liste de (player_color, runner_type, card_value, x, y)
+        
+        # Phase d'aspiration
+        self.showing_aspiration = False
+        self.aspiration_step = 0
+        self.aspiration_groups = []
+        self.aspiration_movements = []  # Liste des (runner, old_x, new_x)
 
     def _calculate_max_scroll(self) -> int:
         """Calcule le scroll maximum possible."""
         track_width = self.game.track.length * CELL_SIZE
         visible_width = SCREEN_WIDTH - 2 * MARGIN
         return max(0, track_width - visible_width)
+
+    def _initialize_aspiration(self):
+        """Initialise l'affichage de l'aspiration."""
+        self.showing_aspiration = True
+        self.aspiration_step = 0
+        self.aspiration_groups = self.game.track.get_groups()
+        self.aspiration_movements = []
+        
+        # Trouver tous les mouvements d'aspiration possibles
+        for i in range(len(self.aspiration_groups) - 1, 0, -1):
+            group_behind = self.aspiration_groups[i]
+            group_ahead = self.aspiration_groups[i - 1]
+            
+            x_ahead = min(runner.x for runner in group_ahead)
+            x_behind = max(runner.x for runner in group_behind)
+            
+            # Vérifier s'il y a exactement 1 case vide entre les groupes
+            if x_ahead - x_behind == 2:
+                # Tous les coureurs du groupe derrière peuvent avancer
+                for runner in group_behind:
+                    if runner.x < x_behind:  # Seuls les coureurs à la position x_behind bougent
+                        self.aspiration_movements.append((runner, runner.x, runner.x + 1))
+
+    def _apply_next_aspiration_step(self) -> bool:
+        """Applique une étape d'aspiration. Retourne True si terminé."""
+        if not self.aspiration_movements:
+            return True
+        
+        # Appliquer le premier mouvement
+        runner, old_x, new_x = self.aspiration_movements.pop(0)
+        
+        # Retirer le coureur de sa position actuelle
+        old_cell = self.game.track.get_cell(old_x, runner.y)
+        if old_cell:
+            old_cell.remove_runner(runner.y)
+        
+        # Déplacer le coureur
+        runner.x = new_x
+        
+        # Placer le coureur à sa nouvelle position
+        new_cell = self.game.track.get_cell(new_x, runner.y)
+        if new_cell:
+            new_cell.set_runner(runner, runner.y)
+        
+        self.aspiration_step += 1
+        return len(self.aspiration_movements) == 0
 
     def run(self):
         """Boucle principale du jeu."""
@@ -76,7 +130,26 @@ class FlammeRougeGame:
                     running = False
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    self._handle_click(event.pos)
+                    if event.button == 1:  # Clic gauche
+                        self._handle_click(event.pos)
+                        # Démarrer le drag pour le scroll
+                        self.dragging = True
+                        self.last_mouse_pos = event.pos
+                    elif event.button == 4:  # Molette vers le haut
+                        self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
+                    elif event.button == 5:  # Molette vers le bas
+                        self.scroll_x = min(self._calculate_max_scroll(), self.scroll_x + self.scroll_speed)
+
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 1:  # Relâcher le clic gauche
+                        self.dragging = False
+
+                elif event.type == pygame.MOUSEMOTION:
+                    if self.dragging:
+                        # Calculer le décalage
+                        dx = event.pos[0] - self.last_mouse_pos[0]
+                        self.scroll_x = max(0, min(self._calculate_max_scroll(), self.scroll_x - dx))
+                        self.last_mouse_pos = event.pos
 
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
@@ -84,6 +157,8 @@ class FlammeRougeGame:
                         self.game = Game(stage="test", player_count=2)
                         self.scroll_x = 0
                         self.selected_cards_display = []
+                        self.showing_aspiration = False
+                        self.aspiration_step = 0
                     elif event.key == pygame.K_h:
                         # Basculer l'affichage des mains
                         self.show_hands = not self.show_hands
@@ -93,11 +168,36 @@ class FlammeRougeGame:
                             self.game.resolve_movement_phase()
                             self.selected_cards_display = []
                         elif self.game.current_phase == Phase.MOVEMENT:
-                            if self.game.resolve_aspiration_phase():
-                                self.game.resolve_terminal_phase()
-                                self.selected_cards_display = []
+                            # Initialiser l'aspiration avec les mouvements
+                            self.aspiration_movements = self.game.resolve_aspiration_phase()
+                            self._initialize_aspiration()
+                            self.showing_aspiration = True
+                            if not self.aspiration_movements:
+                                # Pas d'aspiration possible, passer directement à la phase terminale
+                                self.showing_aspiration = False
+                                self.game.current_phase = Phase.TERMINAL
+                                self.game._assign_fatigue_cards()
+                                if not self.game._check_win_condition():
+                                    self.game._cleanup_hands()
+                                    self.game.start_turn()
+                                    self.selected_cards_display = []
+                                else:
+                                    self.game.game_over = True
+                        elif self.showing_aspiration:
+                            if self._apply_next_aspiration_step():
+                                # Aspiration terminée
+                                self.showing_aspiration = False
+                                self.game.current_phase = Phase.TERMINAL
+                                self.game._assign_fatigue_cards()
+                                if not self.game._check_win_condition():
+                                    self.game._cleanup_hands()
+                                    self.game.start_turn()
+                                    self.selected_cards_display = []
+                                else:
+                                    self.game.game_over = True
                         elif self.game.current_phase == Phase.TERMINAL:
-                            self.game.resolve_terminal_phase()
+                            self.game._cleanup_hands()
+                            self.game.start_turn()
                             self.selected_cards_display = []
                     elif event.key == pygame.K_LEFT:
                         # Scroll à gauche
@@ -277,6 +377,16 @@ class FlammeRougeGame:
                         card_text,
                         (cell_x + CELL_SIZE // 2 - 10, cell_y + LANE_HEIGHT // 2 - 20),
                     )
+                
+                # Dessiner l'indicateur d'aspiration (flèche orange)
+                if self.showing_aspiration and (runner, runner.x - 1, runner.x) in self.aspiration_movements:
+                    pygame.draw.line(
+                        self.screen,
+                        ORANGE,
+                        (cell_x + CELL_SIZE // 2 - 10, cell_y + LANE_HEIGHT // 2),
+                        (cell_x + CELL_SIZE // 2 + 10, cell_y + LANE_HEIGHT // 2),
+                        3
+                    )
 
     def _draw_ui(self) -> None:
         """Dessine l'interface utilisateur (infos, mains, etc.)."""
@@ -287,6 +397,15 @@ class FlammeRougeGame:
             BLACK,
         )
         self.screen.blit(phase_text, (MARGIN, 10))
+
+        # Phase d'aspiration
+        if self.showing_aspiration:
+            aspiration_text = self.big_font.render(
+                f"🌪️ Aspiration: Étape {self.aspiration_step}/{len(self.aspiration_movements)}",
+                True,
+                ORANGE,
+            )
+            self.screen.blit(aspiration_text, (MARGIN, 50))
 
         # Nombre de cartes jouées
         if self.game.current_phase == Phase.ENERGY:
@@ -386,33 +505,39 @@ class FlammeRougeGame:
             if self.game.all_players_ready():
                 instructions = [
                     "⏳ Appuyez sur ENTRÉE pour lancer la phase de mouvement",
-                    "Flèches gauche/droite pour scroller sur la piste",
+                    "Molette ou flèches pour scroller | Clic+glisser pour défilement",
                     "Appuyez sur H pour masquer/afficher les mains",
                     "Appuyez sur R pour recommencer",
                 ]
             else:
                 instructions = [
                     f"Jouez 1 carte par coureur ({self.game.total_cards_to_play} cartes au total)",
-                    "Flèches gauche/droite pour scroller sur la piste",
+                    "Molette ou flèches pour scroller | Clic+glisser pour défilement",
                     "Appuyez sur H pour masquer/afficher les mains",
                     "Appuyez sur R pour recommencer",
                 ]
         elif self.game.current_phase == Phase.MOVEMENT:
             instructions = [
                 "⏳ Appuyez sur ENTRÉE pour lancer la phase d'aspiration",
-                "Flèches gauche/droite pour scroller sur la piste",
+                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
+                "Appuyez sur R pour recommencer",
+            ]
+        elif self.showing_aspiration:
+            instructions = [
+                "⏳ Appuyez sur ENTRÉE pour continuer l'aspiration",
+                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
                 "Appuyez sur R pour recommencer",
             ]
         elif self.game.current_phase == Phase.TERMINAL:
             instructions = [
                 "⏳ Appuyez sur ENTRÉE pour commencer un nouveau tour",
-                "Flèches gauche/droite pour scroller sur la piste",
+                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
                 "Appuyez sur R pour recommencer",
             ]
         else:
             instructions = [
                 f"Phase: {self.game.get_current_phase_name()}",
-                "Flèches gauche/droite pour scroller sur la piste",
+                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
                 "Appuyez sur R pour recommencer",
             ]
         for i, text in enumerate(instructions):
