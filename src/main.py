@@ -216,8 +216,17 @@ class FlammeRougeGame:
                 text_rect = text.get_rect(center=(cell_x + CELL_SIZE // 2, cell_y + LANE_HEIGHT // 2))
                 self.screen.blit(text, text_rect)
 
+                # Afficher la carte sélectionnée à côté du coureur (si phase d'énergie)
+                if self.game.current_phase == Phase.ENERGY and runner.discard_pile:
+                    # Afficher la dernière carte jouée (celle sélectionnée) à droite du coureur
+                    last_card = runner.discard_pile[-1]
+                    card_text = self.font.render(f"→{last_card.value}", True, BLACK)
+                    self.screen.blit(
+                        card_text,
+                        (cell_x + CELL_SIZE + 5, cell_y + LANE_HEIGHT // 2 - 10),
+                    )
                 # Dessiner la dernière carte jouée (si phase de mouvement)
-                if self.game.current_phase == Phase.MOVEMENT and runner.discard_pile:
+                elif self.game.current_phase == Phase.MOVEMENT and runner.discard_pile:
                     last_card = runner.discard_pile[-1]
                     card_text = self.font.render(str(last_card.value), True, BLACK)
                     self.screen.blit(

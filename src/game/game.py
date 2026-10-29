@@ -102,9 +102,9 @@ class Game:
             # Arrivée
             track.add_tile(TileType.FINISH)
         elif stage == "test":
-            # Piste de test courte (5 tuiles = 10 cases)
+            # Piste de test plus longue (15 tuiles = 30 cases)
             track.add_tile(TileType.START)
-            for _ in range(3):
+            for _ in range(13):
                 track.add_tile(TileType.STRAIGHT)
             track.add_tile(TileType.FINISH)
 
