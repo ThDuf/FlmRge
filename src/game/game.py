@@ -10,6 +10,7 @@ from .track import Track, TileType
 class Phase(Enum):
     ENERGY = auto()    # Phase d'Énergie
     MOVEMENT = auto()  # Phase de Mouvement
+    ASPIRATION = auto()  # Phase d'Aspiration
     TERMINAL = auto()  # Phase Terminale
 
 
@@ -156,11 +157,11 @@ class Game:
         return True
 
     def all_players_ready(self) -> bool:
-        """Vérifie si tous les joueurs ont joué leurs 2 cartes (1 par coureur)."""
+        """Vérifie si chaque joueur a joué 2 cartes (1 par coureur)."""
         return self.cards_played_this_turn >= self.total_cards_to_play
 
     def resolve_movement_phase(self) -> None:
-        """Résout la phase de mouvement."""
+        """Résout la phase de mouvement (déplacement des coureurs)."""
         if self.current_phase != Phase.ENERGY:
             return
 
@@ -178,28 +179,36 @@ class Game:
                 card = runner.discard_pile[-1]  # Dernière carte jouée
                 self.track.move_runner(runner, card.value)
 
-        # Passer à la phase terminale
-        self.resolve_terminal_phase()
+        print("🚀 Phase de mouvement terminée. Appuyez sur ENTRÉE pour l'aspiration.")
+
+    def resolve_aspiration_phase(self) -> bool:
+        """
+        Résout la phase d'aspiration.
+        Retourne True si l'aspiration est terminée.
+        """
+        if self.current_phase != Phase.MOVEMENT:
+            return True
+
+        # Appliquer l'aspiration sur la piste
+        self.track.apply_aspiration()
+        
+        self.current_phase = Phase.TERMINAL
+        print("🌪️ Phase d'aspiration terminée. Appuyez sur ENTRÉE pour la phase terminale.")
+        return True
 
     def resolve_terminal_phase(self) -> None:
-        """Résout la phase terminale."""
-        if self.current_phase != Phase.MOVEMENT:
+        """Résout la phase terminale (fatigue et préparation du prochain tour)."""
+        if self.current_phase != Phase.TERMINAL:
             return
 
-        self.current_phase = Phase.TERMINAL
-
-        # 1. Retirer les cartes jouées (déjà fait via discard_pile)
-        # 2. Appliquer l'aspiration
-        self.track.apply_aspiration()
-
-        # 3. Attribuer les cartes Fatigue
+        # 1. Attribuer les cartes Fatigue
         self._assign_fatigue_cards()
 
-        # 4. Vérifier la condition de victoire
+        # 2. Vérifier la condition de victoire
         if self._check_win_condition():
             self.game_over = True
         else:
-            # Préparer le prochain tour
+            # 3. Préparer le prochain tour
             self._cleanup_hands()
             self.start_turn()
 
