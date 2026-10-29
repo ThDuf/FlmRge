@@ -190,24 +190,28 @@ class Track:
         Retourne la liste des mouvements effectués (runner, old_x, new_x).
         """
         movements = []
-        groups = self.get_groups()
-        if len(groups) < 2:
-            return movements  # Pas d'aspiration possible
+        
+        # Continuer à appliquer l'aspiration jusqu'à ce qu'aucun mouvement ne soit plus possible
+        while True:
+            groups = self.get_groups()
+            if len(groups) < 2:
+                break  # Pas d'aspiration possible
+            
+            moved = False
+            
+            # Parcourir les groupes de l'arrière vers l'avant
+            for i in range(len(groups) - 1, 0, -1):
+                group_behind = groups[i]
+                group_ahead = groups[i - 1]
 
-        # Parcourir les groupes de l'arrière vers l'avant
-        for i in range(len(groups) - 1, 0, -1):
-            group_behind = groups[i]
-            group_ahead = groups[i - 1]
+                # Trouver la position du groupe devant et derrière
+                x_ahead = min(runner.x for runner in group_ahead)
+                x_behind = max(runner.x for runner in group_behind)  # Position la plus avancée du groupe derrière
 
-            # Trouver la position du groupe devant et derrière
-            x_ahead = min(runner.x for runner in group_ahead)
-            x_behind = max(runner.x for runner in group_behind)  # Position la plus avancée du groupe derrière
-
-            # Vérifier s'il y a exactement 1 case vide entre les groupes
-            if x_ahead - x_behind == 2:
-                # Avancer le groupe derrière de 1 case
-                for runner in group_behind:
-                    if runner.x == x_behind:  # Seuls les coureurs à la position x_behind bougent
+                # Vérifier s'il y a exactement 1 case vide entre les groupes
+                if x_ahead - x_behind == 2:
+                    # Avancer TOUS les coureurs du groupe derrière de 1 case
+                    for runner in group_behind:
                         # Sauvegarder la position actuelle
                         old_x, old_y = runner.x, runner.y
                         # Retirer le coureur de sa position actuelle
@@ -219,11 +223,23 @@ class Track:
                         runner.x = new_x
                         new_cell = self.get_cell(new_x, old_y)
                         if new_cell:
-                            new_cell.set_runner(runner, old_y)
+                            if new_cell.is_empty(old_y):
+                                new_cell.set_runner(runner, old_y)
+                            else:
+                                # Si la case est occupée, remettre le coureur
+                                runner.x = old_x
+                                if old_cell:
+                                    old_cell.set_runner(runner, old_y)
+                                continue
                         
                         movements.append((runner, old_x, new_x))
+                        moved = True
 
-                # Recalculer les groupes (car l'ordre a changé)
-                groups = self.get_groups()
+                    # Recalculer les groupes (car l'ordre a changé)
+                    groups = self.get_groups()
+                    break  # Recommencer depuis le début après un mouvement
+            
+            if not moved:
+                break  # Aucun mouvement effectué, fin de l'aspiration
         
         return movements

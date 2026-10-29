@@ -14,6 +14,7 @@ SCREEN_HEIGHT = 800
 CELL_SIZE = 60  # Taille d'une case en pixels
 LANE_HEIGHT = CELL_SIZE // 2  # Hauteur d'une file
 MARGIN = 50  # Marge autour de la piste
+INSTRUCTIONS_X = SCREEN_WIDTH - 350  # Position X des instructions
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -83,18 +84,22 @@ class FlammeRougeGame:
         self.aspiration_movements = []
         
         # Trouver tous les mouvements d'aspiration possibles
-        for i in range(len(self.aspiration_groups) - 1, 0, -1):
-            group_behind = self.aspiration_groups[i]
-            group_ahead = self.aspiration_groups[i - 1]
+        # On doit recalculer les groupes après chaque mouvement, donc on fait une simulation
+        temp_track = self.game.track
+        groups = temp_track.get_groups()
+        
+        for i in range(len(groups) - 1, 0, -1):
+            group_behind = groups[i]
+            group_ahead = groups[i - 1]
             
             x_ahead = min(runner.x for runner in group_ahead)
             x_behind = max(runner.x for runner in group_behind)
             
             # Vérifier s'il y a exactement 1 case vide entre les groupes
             if x_ahead - x_behind == 2:
-                # Tous les coureurs du groupe derrière peuvent avancer
+                # Tous les coureurs du groupe derrière à la position x_behind peuvent avancer
                 for runner in group_behind:
-                    if runner.x < x_behind:  # Seuls les coureurs à la position x_behind bougent
+                    if runner.x == x_behind:
                         self.aspiration_movements.append((runner, runner.x, runner.x + 1))
 
     def _apply_next_aspiration_step(self) -> bool:
@@ -116,9 +121,32 @@ class FlammeRougeGame:
         # Placer le coureur à sa nouvelle position
         new_cell = self.game.track.get_cell(new_x, runner.y)
         if new_cell:
-            new_cell.set_runner(runner, runner.y)
+            if new_cell.is_empty(runner.y):
+                new_cell.set_runner(runner, runner.y)
+            else:
+                # Si la case est occupée, remettre le coureur à l'ancienne position
+                runner.x = old_x
+                if old_cell:
+                    old_cell.set_runner(runner, runner.y)
         
         self.aspiration_step += 1
+        
+        # Recalculer les groupes et mouvements restants
+        self.aspiration_groups = self.game.track.get_groups()
+        remaining_movements = []
+        for i in range(len(self.aspiration_groups) - 1, 0, -1):
+            group_behind = self.aspiration_groups[i]
+            group_ahead = self.aspiration_groups[i - 1]
+            
+            x_ahead = min(runner.x for runner in group_ahead)
+            x_behind = max(runner.x for runner in group_behind)
+            
+            if x_ahead - x_behind == 2:
+                for runner in group_behind:
+                    if runner.x == x_behind:
+                        remaining_movements.append((runner, runner.x, runner.x + 1))
+        
+        self.aspiration_movements = remaining_movements
         return len(self.aspiration_movements) == 0
 
     def run(self):
@@ -131,8 +159,10 @@ class FlammeRougeGame:
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Clic gauche
-                        self._handle_click(event.pos)
-                        # Démarrer le drag pour le scroll
+                        # Vérifier si on clique sur une carte (seulement en phase ENERGY)
+                        if self.game.current_phase == Phase.ENERGY and self.show_hands:
+                            self._handle_click(event.pos)
+                        # Démarrer le drag pour le scroll (si on ne clique pas sur une carte)
                         self.dragging = True
                         self.last_mouse_pos = event.pos
                     elif event.button == 4:  # Molette vers le haut
@@ -145,7 +175,7 @@ class FlammeRougeGame:
                         self.dragging = False
 
                 elif event.type == pygame.MOUSEMOTION:
-                    if self.dragging:
+                    if self.dragging and self.game.current_phase != Phase.ENERGY:
                         # Calculer le décalage
                         dx = event.pos[0] - self.last_mouse_pos[0]
                         self.scroll_x = max(0, min(self._calculate_max_scroll(), self.scroll_x - dx))
@@ -286,7 +316,7 @@ class FlammeRougeGame:
         """Dessine la piste avec scroll."""
         # Dessiner le fond de la piste
         track_height = LANE_HEIGHT * 2 + 10
-        track_y = (SCREEN_HEIGHT - track_height) // 2 - 50  # Déplacé vers le haut
+        track_y = (SCREEN_HEIGHT - track_height) // 2 - 30  # Déplacé vers le haut pour plus d'espace
         
         # Calculer la position visible de la piste
         visible_start = self.scroll_x // CELL_SIZE
@@ -342,7 +372,7 @@ class FlammeRougeGame:
 
     def _draw_runners(self) -> None:
         """Dessine les coureurs sur la piste."""
-        track_y = (SCREEN_HEIGHT - (LANE_HEIGHT * 2 + 10)) // 2 - 50
+        track_y = (SCREEN_HEIGHT - (LANE_HEIGHT * 2 + 10)) // 2 - 30
 
         for player in self.game.players:
             for runner in player.get_runners():
@@ -389,39 +419,99 @@ class FlammeRougeGame:
                     )
 
     def _draw_ui(self) -> None:
-        """Dessine l'interface utilisateur (infos, mains, etc.)."""
-        # Afficher la phase actuelle
+        """Dessine l'interface utilisateur."""
+        # ===== PHASE ACTUELLE (en haut à gauche) =====
         phase_text = self.big_font.render(
-            f"Phase: {self.game.get_current_phase_name()} | Tour: {self.game.turn_count}",
+            f"Phase: {self.game.get_current_phase_name()}",
             True,
             BLACK,
         )
         self.screen.blit(phase_text, (MARGIN, 10))
 
-        # Phase d'aspiration
+        # ===== TOUR ACTUEL (en haut à gauche) =====
+        turn_text = self.big_font.render(
+            f"Tour: {self.game.turn_count}",
+            True,
+            BLACK,
+        )
+        self.screen.blit(turn_text, (MARGIN, 50))
+
+        # ===== PHASE D'ASPIRATION (si active) =====
         if self.showing_aspiration:
             aspiration_text = self.big_font.render(
                 f"🌪️ Aspiration: Étape {self.aspiration_step}/{len(self.aspiration_movements)}",
                 True,
                 ORANGE,
             )
-            self.screen.blit(aspiration_text, (MARGIN, 50))
+            self.screen.blit(aspiration_text, (MARGIN, 90))
 
-        # Nombre de cartes jouées
+        # ===== NOMBRE DE CARTES JOUÉES (si phase ENERGY) =====
         if self.game.current_phase == Phase.ENERGY:
             cards_text = self.big_font.render(
-                f"Cartes jouées: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}",
+                f"Cartes: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}",
                 True,
                 BLACK,
             )
-            self.screen.blit(cards_text, (MARGIN, 50))
+            self.screen.blit(cards_text, (MARGIN, 90))
 
-        # Afficher les cartes sélectionnées à côté des mains
+        # ===== INSTRUCTIONS (en haut à droite) =====
+        instructions_y = 10
+        if self.game.current_phase == Phase.ENERGY:
+            if self.game.all_players_ready():
+                instructions = [
+                    "⏳ Appuyez sur ENTRÉE",
+                    "    pour lancer",
+                    "    la phase de mouvement",
+                ]
+            else:
+                instructions = [
+                    f"Jouez 1 carte par",
+                    f"    coureur ({self.game.total_cards_to_play} total)",
+                ]
+        elif self.game.current_phase == Phase.MOVEMENT:
+            instructions = [
+                "⏳ Appuyez sur ENTRÉE",
+                "    pour lancer",
+                "    l'aspiration",
+            ]
+        elif self.showing_aspiration:
+            instructions = [
+                "⏳ Appuyez sur ENTRÉE",
+                "    pour continuer",
+                "    l'aspiration",
+            ]
+        elif self.game.current_phase == Phase.TERMINAL:
+            instructions = [
+                "⏳ Appuyez sur ENTRÉE",
+                "    pour un nouveau",
+                "    tour",
+            ]
+        else:
+            instructions = [
+                f"Phase: {self.game.get_current_phase_name()}",
+            ]
+        
+        for i, text in enumerate(instructions):
+            text_surface = self.font.render(text, True, BLACK)
+            self.screen.blit(text_surface, (INSTRUCTIONS_X, instructions_y + i * 25))
+
+        # ===== CONTRÔLES (en haut à droite, sous les instructions) =====
+        controls_y = instructions_y + len(instructions) * 25 + 10
+        controls = [
+            "Molette/flèches: scroller",
+            "H: masquer mains",
+            "R: recommencer",
+        ]
+        for i, text in enumerate(controls):
+            text_surface = self.font.render(text, True, GRAY)
+            self.screen.blit(text_surface, (INSTRUCTIONS_X, controls_y + i * 25))
+
+        # ===== CARTES SÉLECTIONNÉES (à côté des mains) =====
         for (color, runner_type, card_value, x, y) in self.selected_cards_display:
             card_text = self.font.render(f"→{card_value}", True, PLAYER_COLORS.get(color, BLACK))
             self.screen.blit(card_text, (x + 10, y))
 
-        # Afficher les mains des coureurs (si activé)
+        # ===== MAINS DES COUREURS (en bas) =====
         if self.show_hands and self.game.current_phase == Phase.ENERGY:
             hand_y_sprinter = SCREEN_HEIGHT - 120
             hand_y_roller = SCREEN_HEIGHT - 60
@@ -490,59 +580,23 @@ class FlammeRougeGame:
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
 
-        # Afficher le gagnant si la partie est terminée
+        # ===== GAGNANT (si partie terminée) =====
         if self.game.game_over:
             winner_text = self.big_font.render(
-                f"Gagnant: {self.game.winner.color} ! (Appuyez sur R pour recommencer)",
+                f"Gagnant: {self.game.winner.color} !",
                 True,
                 PLAYER_COLORS.get(self.game.winner.color, BLACK),
             )
-            text_rect = winner_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+            text_rect = winner_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
             self.screen.blit(winner_text, text_rect)
-
-        # Instructions
-        if self.game.current_phase == Phase.ENERGY:
-            if self.game.all_players_ready():
-                instructions = [
-                    "⏳ Appuyez sur ENTRÉE pour lancer la phase de mouvement",
-                    "Molette ou flèches pour scroller | Clic+glisser pour défilement",
-                    "Appuyez sur H pour masquer/afficher les mains",
-                    "Appuyez sur R pour recommencer",
-                ]
-            else:
-                instructions = [
-                    f"Jouez 1 carte par coureur ({self.game.total_cards_to_play} cartes au total)",
-                    "Molette ou flèches pour scroller | Clic+glisser pour défilement",
-                    "Appuyez sur H pour masquer/afficher les mains",
-                    "Appuyez sur R pour recommencer",
-                ]
-        elif self.game.current_phase == Phase.MOVEMENT:
-            instructions = [
-                "⏳ Appuyez sur ENTRÉE pour lancer la phase d'aspiration",
-                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
+            
+            restart_text = self.font.render(
                 "Appuyez sur R pour recommencer",
-            ]
-        elif self.showing_aspiration:
-            instructions = [
-                "⏳ Appuyez sur ENTRÉE pour continuer l'aspiration",
-                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
-                "Appuyez sur R pour recommencer",
-            ]
-        elif self.game.current_phase == Phase.TERMINAL:
-            instructions = [
-                "⏳ Appuyez sur ENTRÉE pour commencer un nouveau tour",
-                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
-                "Appuyez sur R pour recommencer",
-            ]
-        else:
-            instructions = [
-                f"Phase: {self.game.get_current_phase_name()}",
-                "Molette ou flèches pour scroller | Clic+glisser pour défilement",
-                "Appuyez sur R pour recommencer",
-            ]
-        for i, text in enumerate(instructions):
-            text_surface = self.font.render(text, True, GRAY)
-            self.screen.blit(text_surface, (MARGIN, SCREEN_HEIGHT - 80 + i * 25))
+                True,
+                BLACK,
+            )
+            restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 10))
+            self.screen.blit(restart_text, restart_rect)
 
 
 if __name__ == "__main__":
