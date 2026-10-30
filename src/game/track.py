@@ -135,10 +135,10 @@ class Track:
                 runner.x = new_x
                 continue
             else:
-                # Priorité à la droite (file 1) selon les règles officielles
-                other_y = 1  # Toujours essayer la droite en premier
-                if runner.y == 1:
-                    other_y = 0  # Si déjà à droite, essayer la gauche
+                # Priorité à la GAUCHE (file 0) selon les règles officielles
+                other_y = 0  # Toujours essayer la GAUCHE en premier
+                if runner.y == 0:
+                    other_y = 1  # Si déjà à gauche, essayer la droite
                 
                 if new_cell.is_empty(other_y):
                     runner.y = other_y
@@ -225,10 +225,10 @@ class Track:
                         # Avancer de 1 case
                         new_x = old_x + 1
                         
-                        # Priorité à la droite (file 1)
-                        preferred_y = 1
-                        if old_y == 1:
-                            preferred_y = 0
+                        # Priorité à la GAUCHE (file 0)
+                        preferred_y = 0
+                        if old_y == 0:
+                            preferred_y = 1
                         
                         new_cell = self.get_cell(new_x, preferred_y)
                         if new_cell and new_cell.is_empty(preferred_y):
