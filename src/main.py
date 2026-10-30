@@ -57,6 +57,7 @@ class FlammeRougeGame:
         self.selected_cards_display = []
         self.showing_aspiration = False
         self.aspiration_step = 0
+        self.aspiration_total = 0
         self.aspiration_movements = []
 
     def _calculate_max_scroll(self) -> int:
@@ -65,43 +66,37 @@ class FlammeRougeGame:
         return max(0, track_width - visible_width)
 
     def _initialize_aspiration(self):
-        """Initialise l'affichage de l'aspiration."""
+        """Prépare l'affichage pas-à-pas de l'aspiration.
+
+        Attention : les mouvements ont DÉJÀ été appliqués au plateau par
+        Game.resolve_aspiration_phase() -> Track.apply_aspiration().
+        Le pas-à-pas ici est purement visuel : aucun mouvement n'est rejoué.
+        """
         self.showing_aspiration = True
         self.aspiration_step = 0
-        self.aspiration_movements = []
-        
-        # L'aspiration a déjà été calculée dans resolve_aspiration_phase
-        # On inverse juste l'ordre pour l'affichage
-        self.aspiration_movements = self.aspiration_movements[::-1]
-        print(f"DEBUG: _initialize_aspiration avec {len(self.aspiration_movements)} mouvements")
+        self.aspiration_total = len(self.aspiration_movements)
 
-    def _apply_next_aspiration_step(self) -> bool:
-        """Applique une étape d'aspiration. Retourne True si terminé."""
+    def _next_aspiration_step(self) -> bool:
+        """Avance l'affichage d'un mouvement d'aspiration. Retourne True si terminé."""
         if not self.aspiration_movements:
             return True
-        
-        runner, old_x, new_x = self.aspiration_movements.pop(0)
-        
-        # Retirer le coureur de sa position actuelle
-        old_cell = self.game.track.get_cell(old_x, runner.y)
-        if old_cell:
-            old_cell.remove_runner(runner.y)
-        
-        # Déplacer le coureur
-        runner.x = new_x
-        
-        # Placer le coureur à sa nouvelle position
-        new_cell = self.game.track.get_cell(new_x, runner.y)
-        if new_cell:
-            if new_cell.is_empty(runner.y):
-                new_cell.set_runner(runner, runner.y)
-            else:
-                # Si la case est occupée, remettre le coureur
-                runner.x = old_x
-                if old_cell:
-                    old_cell.set_runner(runner, runner.y)
-        
+        self.aspiration_movements.pop(0)
+        self.aspiration_step += 1
         return len(self.aspiration_movements) == 0
+
+    def _finish_aspiration_phase(self):
+        """Passe en phase terminale : fatigue, victoire éventuelle, nouveau tour."""
+        self.showing_aspiration = False
+        self.aspiration_step = 0
+        self.aspiration_movements = []
+        self.game.current_phase = Phase.TERMINAL
+        self.game._assign_fatigue_cards()
+        if not self.game._check_win_condition():
+            self.game._cleanup_hands()
+            self.game.start_turn()
+            self.selected_cards_display = []
+        else:
+            self.game.game_over = True
 
     def run(self):
         running = True
@@ -146,34 +141,19 @@ class FlammeRougeGame:
                             self.game.resolve_movement_phase()
                             self.selected_cards_display = []
                         elif self.game.current_phase == Phase.MOVEMENT:
+                            # Le moteur applique TOUTES les aspirations d'un coup
+                            # et retourne la liste des mouvements effectués.
                             self.aspiration_movements = self.game.resolve_aspiration_phase()
-                            self._initialize_aspiration()
                             if not self.aspiration_movements:
                                 print("DEBUG: Aucune aspiration possible, passage en phase terminale")
-                                self.showing_aspiration = False
-                                self.game.current_phase = Phase.TERMINAL
-                                self.game._assign_fatigue_cards()
-                                if not self.game._check_win_condition():
-                                    self.game._cleanup_hands()
-                                    self.game.start_turn()
-                                    self.selected_cards_display = []
-                                else:
-                                    self.game.game_over = True
+                                self._finish_aspiration_phase()
                             else:
-                                print(f"DEBUG: {len(self.aspiration_movements)} mouvements d'aspiration à appliquer")
+                                print(f"DEBUG: {len(self.aspiration_movements)} mouvements d'aspiration à afficher")
+                                self._initialize_aspiration()
                         elif self.showing_aspiration:
-                            if self._apply_next_aspiration_step():
-                                self.showing_aspiration = False
-                                self.aspiration_step = 0
-                                self.aspiration_movements = []
-                                self.game.current_phase = Phase.TERMINAL
-                                self.game._assign_fatigue_cards()
-                                if not self.game._check_win_condition():
-                                    self.game._cleanup_hands()
-                                    self.game.start_turn()
-                                    self.selected_cards_display = []
-                                else:
-                                    self.game.game_over = True
+                            # Pas-à-pas purement visuel (déjà appliqué par le moteur)
+                            if self._next_aspiration_step():
+                                self._finish_aspiration_phase()
                         elif self.game.current_phase == Phase.TERMINAL:
                             if not self.game.game_over:
                                 self.game._cleanup_hands()
@@ -292,10 +272,15 @@ class FlammeRougeGame:
         turn_text = self.big_font.render(f"Tour: {self.game.turn_count}", True, BLACK)
         self.screen.blit(turn_text, (MARGIN, 50))
 
-        # Phase d'aspiration
+        # Phase d'aspiration (pas-à-pas purement visuel)
         if self.showing_aspiration:
-            aspiration_text = self.big_font.render(f"Aspiration: {self.aspiration_step}/{len(self.aspiration_movements)}", True, ORANGE)
+            aspiration_text = self.big_font.render(
+                f"Aspiration: {self.aspiration_step}/{self.aspiration_total}", True, ORANGE)
             self.screen.blit(aspiration_text, (MARGIN, 90))
+            if self.aspiration_movements:
+                runner, old_x, new_x = self.aspiration_movements[0]
+                next_text = self.font.render(f"Prochain: {runner.id} {old_x} -> {new_x}", True, ORANGE)
+                self.screen.blit(next_text, (MARGIN, 125))
 
         # Cartes jouées
         if self.game.current_phase == Phase.ENERGY:

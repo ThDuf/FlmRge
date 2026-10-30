@@ -160,8 +160,8 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
-- [ ] **Implémentation complète de l'aspiration**
-- [ ] **Implémentation complète de la fatigue**
+- [x] **Implémentation complète de l'aspiration** (vérifiée par `tests/test_aspiration.py`)
+- [ ] **Implémentation complète de la fatigue** (bug connu : seuls les leaders de groupe reçoivent une carte Fatigue)
 - [ ] **Ajout des montées/descentes**
 - [ ] **Amélioration de l'UI** (boutons, animations)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)

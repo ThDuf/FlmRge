@@ -134,7 +134,7 @@ class Track:
             if new_cell is None:
                 break
 
-            # Priorit ABSOLUE e0 la file A (lane 0)
+            # Priorité ABSOLUE à la file A (lane 0)
             if new_cell.is_empty(0):
                 new_cell.set_runner(runner, 0)
                 runner.x = new_x
@@ -144,7 +144,7 @@ class Track:
                 runner.x = new_x
                 runner.y = 1
             else:
-                # Les deux files sont occups, remettre et s'arrter
+                # Les deux files sont occupées, remettre et s'arrêter
                 if old_cell:
                     old_cell.set_runner(runner, runner.y)
                 break
