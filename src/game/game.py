@@ -104,9 +104,9 @@ class Game:
     def _place_runner_at_start(self, runner: Runner) -> None:
         """Place un coureur à la ligne de départ.
         
-        Règle : Priorité à la GAUCHE (file 0) pour tous les coureurs.
+        Règle : Priorité à la file A (lane 0) pour tous les coureurs.
         """
-        # Priorité à la GAUCHE (file 0) selon les règles officielles
+        # Priorité à la file A (lane 0) selon les règles
         start_cell = self.track.get_cell(0, 0)
         if start_cell and start_cell.is_empty(0):
             start_cell.set_runner(runner, 0)

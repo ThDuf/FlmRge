@@ -4,6 +4,11 @@ from enum import Enum, auto
 from .runner import Runner
 
 
+class Lane(Enum):
+    A = 0  # File A (prioritaire)
+    B = 1  # File B
+
+
 class TileType(Enum):
     START = auto()      # Départ
     FINISH = auto()     # Arrivée
@@ -16,31 +21,31 @@ class TileType(Enum):
 
 @dataclass
 class Cell:
-    """Représente une case sur la piste (avec 2 files: gauche/droite)."""
-    left: Optional[Runner] = None
-    right: Optional[Runner] = None
+    """Représente une case sur la piste (avec 2 files: A et B)."""
+    a: Optional[Runner] = None  # File A (prioritaire)
+    b: Optional[Runner] = None  # File B
     x: int = 0  # Position X de la case
 
     def is_empty(self, lane: int) -> bool:
-        """Vérifie si une file est vide (0=gauche, 1=droite)."""
-        return (lane == 0 and self.left is None) or (lane == 1 and self.right is None)
+        """Vérifie si une file est vide (0=A, 1=B)."""
+        return (lane == 0 and self.a is None) or (lane == 1 and self.b is None)
 
     def is_full(self) -> bool:
         """Vérifie si la case est complètement occupée (2 coureurs)."""
-        return self.left is not None and self.right is not None
+        return self.a is not None and self.b is not None
 
     def get_runner(self, lane: int) -> Optional[Runner]:
         """Retourne le coureur dans une file (ou None)."""
-        return self.left if lane == 0 else self.right
+        return self.a if lane == 0 else self.b
 
     def set_runner(self, runner: Runner, lane: int) -> bool:
         """Place un coureur dans une file. Retourne True si succès."""
         if not self.is_empty(lane):
             return False
         if lane == 0:
-            self.left = runner
+            self.a = runner
         else:
-            self.right = runner
+            self.b = runner
         runner.x, runner.y = self.x, lane
         return True
 
@@ -48,9 +53,9 @@ class Cell:
         """Retire un coureur d'une file."""
         runner = self.get_runner(lane)
         if lane == 0:
-            self.left = None
+            self.a = None
         else:
-            self.right = None
+            self.b = None
         return runner
 
 
@@ -135,10 +140,10 @@ class Track:
                 runner.x = new_x
                 continue
             else:
-                # Priorité à la GAUCHE (file 0) selon les règles officielles
-                other_y = 0  # Toujours essayer la GAUCHE en premier
+                # Priorité à la file A (lane 0) selon les règles
+                other_y = 0  # Toujours essayer la file A en premier
                 if runner.y == 0:
-                    other_y = 1  # Si déjà à gauche, essayer la droite
+                    other_y = 1  # Si déjà en A, essayer B
                 
                 if new_cell.is_empty(other_y):
                     runner.y = other_y
@@ -225,7 +230,7 @@ class Track:
                         # Avancer de 1 case
                         new_x = old_x + 1
                         
-                        # Priorité à la GAUCHE (file 0)
+                        # Priorité à la file A (lane 0)
                         preferred_y = 0
                         if old_y == 0:
                             preferred_y = 1
