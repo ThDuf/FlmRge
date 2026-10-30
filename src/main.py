@@ -367,6 +367,10 @@ class FlammeRougeGame:
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
 
+        # Affichage des decks
+        if self.show_decks:
+            self._draw_decks()
+
     def _format_cards_count(self, cards: List[Card]) -> str:
         """Formate une liste de cartes en affichant le nombre de cartes par valeur."""
         from game.card import CardType
@@ -444,10 +448,6 @@ class FlammeRougeGame:
             if player_idx < len(self.game.players) - 1:
                 pygame.draw.line(self.screen, GRAY, (deck_x, deck_y + 140 + player_idx * 110),
                                (deck_x + 280, deck_y + 140 + player_idx * 110), 1)
-
-        # Affichage des decks
-        if self.show_decks:
-            self._draw_decks()
 
         # Gagnant
         if self.game.game_over:
