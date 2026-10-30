@@ -50,14 +50,14 @@ class Game:
                 type=RunnerType.SPRINTER,
                 color=color,
                 energy_deck=self._generate_energy_deck(RunnerType.SPRINTER),
-                fatigue_deck=self._generate_fatigue_deck(),
+                fatigue_deck=self._generate_fatigue_deck(RunnerType.SPRINTER),
             )
             roller = Runner(
                 id=f"roller_{i}",
                 type=RunnerType.ROLLER,
                 color=color,
                 energy_deck=self._generate_energy_deck(RunnerType.ROLLER),
-                fatigue_deck=self._generate_fatigue_deck(),
+                fatigue_deck=self._generate_fatigue_deck(RunnerType.ROLLER),
             )
             player = Player(id=f"player_{i}", color=color, sprinter=sprinter, roller=roller)
             self.players.append(player)
@@ -68,22 +68,31 @@ class Game:
             self._place_runner_at_start(roller, lane=1)
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:
-        """Génère un deck Énergie pour un coureur."""
+        """Génère un deck Énergie de 15 cartes pour un coureur.
+        
+        Règles officielles :
+        - Sprinteur : 15 cartes (2,2,3,3,4,4,5,5,6,6,6,7,7,7,8)
+        - Rouleur : 15 cartes (2,2,2,3,3,3,4,4,4,5,5,5,6,6,7)
+        """
         if runner_type == RunnerType.SPRINTER:
-            values = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 9, 9, 9]
+            # Deck officiel Sprinteur : 15 cartes
+            values = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8]
+            runner_str = "S"
         else:
-            values = [2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7, 7, 8, 9]
-
-        while len(values) < 45:
-            values.extend(values[:10])
-        values = values[:45]
+            # Deck officiel Rouleur : 15 cartes
+            values = [2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7]
+            runner_str = "R"
 
         random.shuffle(values)
-        return [Card(value, CardType.ENERGY) for value in values]
+        return [Card(value, CardType.ENERGY, runner_str) for value in values]
 
-    def _generate_fatigue_deck(self) -> List[Card]:
-        """Génère un deck Fatigue (toutes les cartes valent 2)."""
-        return [Card(2, CardType.FATIGUE) for _ in range(10)]
+    def _generate_fatigue_deck(self, runner_type: RunnerType) -> List[Card]:
+        """Génère un deck Fatigue de 10 cartes pour un coureur.
+        
+        Règles officielles : 10 cartes Fatigue par type (toutes valent 2)
+        """
+        runner_str = "S" if runner_type == RunnerType.SPRINTER else "R"
+        return [Card(2, CardType.FATIGUE, runner_str) for _ in range(10)]
 
     def _build_track(self, stage: str) -> Track:
         """Construit la piste selon l'étape choisie."""

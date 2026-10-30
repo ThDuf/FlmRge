@@ -48,6 +48,7 @@ class FlammeRougeGame:
         self.selected_runner = None
         self.selected_card = None
         self.show_hands = True
+        self.show_decks = False  # Option pour afficher les decks
         self.scroll_x = 0
         self.scroll_speed = 30
         self.dragging = False
@@ -138,6 +139,8 @@ class FlammeRougeGame:
                         self.showing_aspiration = False
                     elif event.key == pygame.K_h:
                         self.show_hands = not self.show_hands
+                    elif event.key == pygame.K_d:
+                        self.show_decks = not self.show_decks
                     elif event.key == pygame.K_RETURN:
                         if self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
                             self.game.resolve_movement_phase()
@@ -322,7 +325,7 @@ class FlammeRougeGame:
 
         # Contrôles
         controls_y = instructions_y + len(instructions) * 25 + 10
-        controls = ["Molette/flèches: scroller", "H: masquer mains", "R: recommencer"]
+        controls = ["Molette/flèches: scroller", "H: masquer mains", "D: afficher decks", "R: recommencer"]
         for i, text in enumerate(controls):
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (INSTRUCTIONS_X, controls_y + i * 25))
@@ -361,6 +364,39 @@ class FlammeRougeGame:
                     card_text = self.font.render(str(card.value), True, BLACK)
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
+
+        # Affichage des decks (optionnel)
+        if self.show_decks:
+            deck_y = SCREEN_HEIGHT - 200
+            for player_idx, player in enumerate(self.game.players):
+                base_x = MARGIN + player_idx * 250
+                color = PLAYER_COLORS.get(player.color, BLACK)
+
+                # Deck Énergie Sprinteur
+                pygame.draw.rect(self.screen, color, (base_x - 10, deck_y - 10, 200, 80), width=2, border_radius=5)
+                sprinter_deck_text = self.font.render(f"{player.color} Sprinter Deck Énergie ({len(player.sprinter.energy_deck)}):", True, color)
+                self.screen.blit(sprinter_deck_text, (base_x, deck_y - 30))
+                
+                deck_values = [str(c.value) + (c.runner_type or "") for c in player.sprinter.energy_deck[:10]]
+                deck_text = self.font.render(", ".join(deck_values), True, BLACK)
+                self.screen.blit(deck_text, (base_x, deck_y))
+
+                # Deck Fatigue Sprinteur
+                fatigue_text = self.font.render(f"Fatigue ({len(player.sprinter.fatigue_deck)}): " + ", ".join([str(c.value) + (c.runner_type or "") for c in player.sprinter.fatigue_deck]), True, BLACK)
+                self.screen.blit(fatigue_text, (base_x, deck_y + 30))
+
+                # Deck Énergie Rouleur
+                pygame.draw.rect(self.screen, color, (base_x - 10, deck_y + 60, 200, 80), width=2, border_radius=5)
+                roller_deck_text = self.font.render(f"{player.color} Roller Deck Énergie ({len(player.roller.energy_deck)}):", True, color)
+                self.screen.blit(roller_deck_text, (base_x, deck_y + 40))
+                
+                deck_values = [str(c.value) + (c.runner_type or "") for c in player.roller.energy_deck[:10]]
+                deck_text = self.font.render(", ".join(deck_values), True, BLACK)
+                self.screen.blit(deck_text, (base_x, deck_y + 70))
+
+                # Deck Fatigue Rouleur
+                fatigue_text = self.font.render(f"Fatigue ({len(player.roller.fatigue_deck)}): " + ", ".join([str(c.value) + (c.runner_type or "") for c in player.roller.fatigue_deck]), True, BLACK)
+                self.screen.blit(fatigue_text, (base_x, deck_y + 100))
 
         # Gagnant
         if self.game.game_over:
