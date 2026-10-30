@@ -156,9 +156,10 @@ class Game:
     def resolve_movement_phase(self) -> None:
         """
         Résout la phase de mouvement selon les règles officielles.
-        
-        Règle : Les coureurs se déplacent dans l'ordre inverse de leur position
-        (du plus proche de l'arrivée au plus loin).
+
+        Règle : on déplace d'abord le coureur le plus en avant ; à égalité
+        de position, la file A (file de droite, double ligne) est
+        considérée en tête et bouge en premier.
         """
         if self.current_phase != Phase.ENERGY:
             return
@@ -166,33 +167,36 @@ class Game:
         self.current_phase = Phase.MOVEMENT
         print("\n--- PHASE DE MOUVEMENT ---")
 
-        # Récupérer tous les coureurs triés par position (du plus proche au plus loin de l'arrivée)
+        # Récupérer tous les coureurs triés du plus proche au plus loin de l'arrivée
         all_runners = []
         for player in self.players:
             all_runners.extend(player.get_runners())
-        all_runners.sort(key=lambda r: r.x, reverse=True)
+        all_runners.sort(key=lambda r: (-r.x, r.y))
 
         print(f"Ordre de déplacement (du plus proche au plus loin) : {[r.id for r in all_runners]}")
 
         # Déplacer les coureurs un par un
         for runner in all_runners:
-            if runner.discard_pile:
-                card = runner.discard_pile[-1]
+            if runner.played_card is not None:
+                card = runner.played_card
                 print(f"  {runner.id} (pos {runner.x}) joue carte {card.value}")
-                old_x = runner.x
                 self.track.move_runner(runner, card.value)
-                print(f"    -> Déplacé à {runner.x} (déplacement de {card.value} cases)")
+                print(f"    -> Déplacé à {runner.x}, file {runner.y}")
 
         print("--- Fin de la phase de mouvement ---\n")
 
     def resolve_aspiration_phase(self) -> List:
         """
-        Résout la phase d'aspiration selon les règles officielles.
-        
-        Règle : "Si exactement une case vide sépare deux groupes, 
-        le groupe derrière avance d'une case."
-        
-        Retourne la liste des mouvements effectués.
+        Calcule les mouvements d'aspiration SANS les appliquer.
+
+        Règle officielle : "Si exactement une case vide sépare deux packs,
+        le pack arrière avance d'une case pour fusionner avec celui de
+        devant. Puis on revérifie le pack fusionné (un coureur peut aspirer
+        plusieurs fois dans le même tour)."
+
+        Retourne la liste des étapes (une étape = les mouvements d'un pack),
+        à appliquer via Game.apply_slipstream_step() ou
+        Game.apply_aspiration_steps().
         """
         if self.current_phase != Phase.MOVEMENT:
             return []
@@ -200,25 +204,29 @@ class Game:
         self.current_phase = Phase.ASPIRATION
         print("\n--- PHASE D'ASPIRATION ---")
 
-        # Afficher les groupes avant aspiration
         groups = self.track.get_groups()
-        print(f"Groupes avant aspiration : {len(groups)} groupes")
+        print(f"Packs avant aspiration : {len(groups)} packs")
         for i, group in enumerate(groups):
             positions = [r.x for r in group]
-            print(f"  Groupe {i}: coureurs à positions {positions}")
+            print(f"  Pack {i}: coureurs à positions {positions}")
 
-        # Appliquer l'aspiration
-        movements = self.track.apply_aspiration()
+        steps = self.track.compute_slipstream_steps()
 
-        # Afficher les groupes après aspiration
-        groups = self.track.get_groups()
-        print(f"Groupes après aspiration : {len(groups)} groupes")
-        for i, group in enumerate(groups):
-            positions = [r.x for r in group]
-            print(f"  Groupe {i}: coureurs à positions {positions}")
+        for i, step in enumerate(steps):
+            desc = ", ".join(f"{r.id} {fx},{fl}->{tx},{tl}" for r, fx, fl, tx, tl in step)
+            print(f"  Etape {i + 1}: {desc}")
 
-        print(f"--- Fin de la phase d'aspiration ({len(movements)} mouvements) ---\n")
-        return movements
+        print(f"--- Fin du calcul d'aspiration ({len(steps)} étapes) ---\n")
+        return steps
+
+    def apply_slipstream_step(self, step) -> None:
+        """Applique UNE étape d'aspiration sur le plateau (pour le pas-à-pas UI)."""
+        self.track.apply_slipstream_step(step)
+
+    def apply_aspiration_steps(self, steps: List) -> None:
+        """Applique toutes les étapes d'aspiration (usage headless)."""
+        for step in steps:
+            self.track.apply_slipstream_step(step)
 
     def resolve_terminal_phase(self) -> None:
         """
@@ -252,54 +260,51 @@ class Game:
     def _assign_fatigue_cards(self) -> None:
         """
         Attribue les cartes Fatigue selon les règles officielles.
-        
-        Règle : Seuls les premiers coureurs de chaque groupe reçoivent une carte Fatigue
-        si la case devant eux est vide.
+
+        Règle : "Un coureur est fatigué si la CASE devant lui est vide"
+        (les 2 files vides). Une simple file libre devant lui ne suffit
+        PAS — dans une vraie course, le pack roule au milieu de la route.
+        Chaque coureur dans cette situation reçoit une carte Fatigue
+        (valeur 2), recyclée dans son deck.
         """
-        # Obtenir tous les coureurs triés par position
-        all_runners = []
         for player in self.players:
-            all_runners.extend(player.get_runners())
-        
-        # Trouver les groupes
-        groups = self.track.get_groups()
-        print(f"  Groupes pour la fatigue: {len(groups)} groupes")
-        
-        # Pour chaque groupe, seul le premier coureur (celui le plus en avant) peut être fatigué
-        for group in groups:
-            if not group:
-                continue
-            
-            # Le premier du groupe est celui avec la position x la plus élevée
-            leader = max(group, key=lambda r: (r.x, r.y))
-            print(f"  Premier du groupe: {leader.id} à position {leader.x}, file {leader.y}")
-            
-            # Vérifier si la case devant le leader est vide
-            if self.track.is_cell_empty(leader.x + 1, leader.y):
-                # Créer une nouvelle carte Fatigue (les coureurs ne commencent pas avec des Fatigue dans leur deck)
-                from .card import Card, CardType
-                fatigue_card = Card(2, CardType.FATIGUE, "S" if leader.type == RunnerType.SPRINTER else "R")
-                leader.discard_pile.append(fatigue_card)
-                print(f"  {leader.id} (premier du groupe) est fatigué -> reçoit une carte Fatigue (valeur 2)")
-            else:
-                print(f"  {leader.id} (premier du groupe) n'est pas fatigué (case devant occupée)")
+            for runner in player.get_runners():
+                if self.track.is_square_empty(runner.x + 1):
+                    fatigue_card = Card(2, CardType.FATIGUE,
+                                        "S" if runner.type == RunnerType.SPRINTER else "R")
+                    runner.discard_pile.append(fatigue_card)
+                    print(f"  {runner.id} est fatigué (case devant vide) -> carte Fatigue (valeur 2)")
 
     def _cleanup_hands(self) -> None:
-        """Nettoie les mains des coureurs pour le prochain tour."""
+        """Nettoie les mains des coureurs pour le prochain tour.
+
+        Règles officielles : les cartes non jouées sont recyclées, la
+        carte jouée est RETIRÉE DU JEU (le deck s'épuise au fil de la
+        course). Le remélange des cartes recyclées se fait à la pioche
+        quand le deck est vide (cf. Runner.draw_cards).
+        """
         for player in self.players:
             for runner in player.get_runners():
                 runner.reset_hand()
-                if not runner.energy_deck and runner.discard_pile:
-                    runner.reshuffle_deck()
 
     def _check_win_condition(self) -> bool:
-        """Vérifie si un coureur a franchi la ligne d'arrivée."""
+        """Vérifie si un coureur a franchi la ligne d'arrivée.
+
+        Règle officielle : si plusieurs coureurs franchissent la ligne dans
+        le même tour, le plus loin devant gagne ; à égalité, la file A
+        (file de droite) est considérée en tête.
+        """
         finish_x = self.track.length - 1
+        best = None
         for player in self.players:
             for runner in player.get_runners():
                 if runner.x >= finish_x:
-                    self.winner = player
-                    return True
+                    key = (runner.x, -runner.y)  # plus loin devant, puis file A
+                    if best is None or key > best[0]:
+                        best = (key, player, runner)
+        if best is not None:
+            self.winner = best[1]
+            return True
         return False
 
     def get_current_player(self) -> Player:

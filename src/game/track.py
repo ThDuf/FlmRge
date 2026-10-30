@@ -5,8 +5,8 @@ from .runner import Runner
 
 
 class Lane(Enum):
-    A = 0  # File A (prioritaire)
-    B = 1  # File B
+    A = 0  # File A = file de DROITE (double ligne, prioritaire selon les règles officielles)
+    B = 1  # File B = file de gauche
 
 
 class TileType(Enum):
@@ -99,6 +99,16 @@ class Track:
         cell = self.get_cell(x, lane)
         return cell is not None and cell.is_empty(lane)
 
+    def is_square_empty(self, x: int) -> bool:
+        """Une CASE est vide si ses 2 files sont vides (règles officielles).
+
+        Utilisée pour l'aspiration (écart entre packs) et la fatigue
+        (« un coureur est fatigué si la CASE devant lui est vide » ;
+        une simple file vide devant lui ne suffit pas).
+        """
+        cell = self.get_cell(x, 0)
+        return cell is not None and cell.a is None and cell.b is None
+
     def get_all_runners(self) -> List[Tuple[int, int, Runner]]:
         """Retourne tous les coureurs avec leur position (x, lane, runner)."""
         runners = []
@@ -112,42 +122,34 @@ class Track:
 
     def move_runner(self, runner: Runner, steps: int) -> None:
         """
-        Déplace un coureur de `steps` cases.
-        - Avance case par case
-        - Priorité à la file A (lane 0) si la file actuelle est bloquée
-        - Si les 2 files sont occupées, s'arrête
+        Déplace un coureur de `steps` cases selon les règles officielles :
+        - Il avance exactement `steps` cases et PEUT TRAVERSER les autres
+          coureurs ; il ne peut juste pas FINIR son mouvement sur une case
+          entièrement occupée.
+        - Si la case d'arrivée est pleine, il s'arrête derrière, sur la
+          première case offrant une file libre.
+        - Case d'arrivée vide -> placé dans la file A (file de droite,
+          marquée d'une double ligne) ; sinon il prend la file libre.
         """
         if steps <= 0:
             return
 
-        for _ in range(steps):
-            # Retirer de la position actuelle
-            old_cell = self.get_cell(runner.x, runner.y)
-            if old_cell:
-                old_cell.remove_runner(runner.y)
+        target = min(runner.x + steps, self.length - 1)
+        x = target
+        # Reculer tant que la case est pleine, jusqu'à trouver une file libre
+        while x > runner.x and self.get_cell(x, 0).is_full():
+            x -= 1
+        if x == runner.x:
+            return  # bloqué : toutes les cases devant sont pleines
 
-            new_x = runner.x + 1
-            if new_x >= self.length:
-                new_x = self.length - 1
+        old_cell = self.get_cell(runner.x, runner.y)
+        old_cell.remove_runner(runner.y)
 
-            new_cell = self.get_cell(new_x, 0)
-            if new_cell is None:
-                break
-
-            # Priorité ABSOLUE à la file A (lane 0)
-            if new_cell.is_empty(0):
-                new_cell.set_runner(runner, 0)
-                runner.x = new_x
-                runner.y = 0
-            elif new_cell.is_empty(1):
-                new_cell.set_runner(runner, 1)
-                runner.x = new_x
-                runner.y = 1
-            else:
-                # Les deux files sont occupées, remettre et s'arrêter
-                if old_cell:
-                    old_cell.set_runner(runner, runner.y)
-                break
+        cell = self.get_cell(x, 0)
+        if cell.is_empty(0):
+            cell.set_runner(runner, 0)  # file A (droite) en priorité
+        else:
+            cell.set_runner(runner, 1)  # seule la file B est libre
 
     def get_groups(self) -> List[List[Runner]]:
         """
@@ -177,79 +179,93 @@ class Track:
             groups.append(current_group)
         return groups
 
-    def apply_aspiration(self) -> List:
+    def _packs_from_positions(self, positions: dict) -> List[List[str]]:
+        """Groupe des positions {runner_id: (x, lane)} en packs officiels :
+        coureurs séparés par aucune case vide (cases consécutives)."""
+        items = sorted(positions.items(), key=lambda kv: (kv[1][0], kv[1][1]))
+        packs = []
+        current = []
+        last_x = None
+        for rid, (x, _lane) in items:
+            if last_x is None or x == last_x or x == last_x + 1:
+                current.append(rid)
+            else:
+                packs.append(current)
+                current = [rid]
+            last_x = x
+        if current:
+            packs.append(current)
+        return packs
+
+    def compute_slipstream_steps(self) -> List[List[tuple]]:
         """
-        Applique la règle d'aspiration :
-        "Si exactement une case vide sépare deux groupes, le groupe derrière avance d'une case."
-        
-        Retourne la liste des mouvements effectués (runner, old_x, new_x).
+        Calcule TOUS les mouvements d'aspiration SANS les appliquer.
+
+        Règles officielles :
+        - "Pack" = un ou plusieurs coureurs sans case vide entre eux.
+        - Si exactement UNE case vide (2 files vides) sépare deux packs,
+          le pack arrière avance d'une case et FUSIONNE avec celui de devant.
+        - On traite les packs de l'arrière vers l'avant ; un pack fusionné
+          est IMMÉDIATEMENT revérifié (il peut aspirer plusieurs fois).
+        - Chaque coureur garde sa file (le pack "glisse" d'une case).
+
+        Retourne une liste d'étapes : chaque étape est la liste des
+        mouvements (runner, from_x, from_lane, to_x, to_lane) d'un pack.
+        """
+        all_runners = self.get_all_runners()
+        pos = {r.id: (x, y) for x, y, r in all_runners}
+        runners = {r.id: r for _, _, r in all_runners}
+
+        steps = []
+        packs = self._packs_from_positions(pos)
+        i = 0
+        while i < len(packs):
+            if i + 1 >= len(packs):
+                break  # pas de pack devant : terminé pour celui-ci
+            rear_x = max(pos[rid][0] for rid in packs[i])
+            ahead_x = min(pos[rid][0] for rid in packs[i + 1])
+            if ahead_x - rear_x == 2:  # exactement une case vide entre les packs
+                step = []
+                # Du coureur le plus en avant au plus en arrière : chacun doit
+                # libérer sa case avant que celui derrière ne s'y place.
+                for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
+                    fx, flane = pos[rid]
+                    step.append((runners[rid], fx, flane, fx + 1, flane))
+                    pos[rid] = (fx + 1, flane)
+                steps.append(step)
+                # Le pack a fusionné avec celui de devant : recalculer
+                # et revérifier immédiatement le pack fusionné (index i)
+                packs = self._packs_from_positions(pos)
+            else:
+                i += 1  # pas d'aspiration possible pour ce pack
+        return steps
+
+    def apply_slipstream_step(self, step: List[tuple]) -> None:
+        """Applique une étape d'aspiration calculée par compute_slipstream_steps.
+
+        Les mouvements sont appliqués du coureur le plus en avant au plus
+        en arrière : chacun libère sa case avant que celui derrière ne
+        s'y place.
+        """
+        for runner, from_x, from_lane, to_x, to_lane in sorted(step, key=lambda m: -m[1]):
+            old_cell = self.get_cell(from_x, from_lane)
+            if old_cell:
+                old_cell.remove_runner(from_lane)
+            new_cell = self.get_cell(to_x, to_lane)
+            if new_cell and new_cell.is_empty(to_lane):
+                new_cell.set_runner(runner, to_lane)
+            else:
+                # Ne devrait pas arriver (simulation fidèle) : remettre en place
+                if old_cell:
+                    old_cell.set_runner(runner, from_lane)
+
+    def apply_aspiration(self) -> List[tuple]:
+        """Calcule puis applique toutes les aspirations d'un coup (headless).
+
+        Retourne la liste plate des mouvements (runner, from_x, from_lane, to_x, to_lane).
         """
         movements = []
-        
-        while True:
-            groups = self.get_groups()
-            if len(groups) < 2:
-                break
-            
-            moved = False
-            
-            # Parcourir les groupes de l'arrière vers l'avant
-            # groups[0] = coureurs les plus en arrière (positions les plus basses)
-            # groups[-1] = coureurs les plus en avant (positions les plus hautes)
-            for i in range(len(groups) - 1):
-                group_behind = groups[i]
-                group_ahead = groups[i + 1]
-
-                # Position la plus avancée du groupe derrière
-                x_behind = max(runner.x for runner in group_behind)
-                # Position la moins avancée du groupe devant
-                x_ahead = min(runner.x for runner in group_ahead)
-
-                # Vérifier s'il y a EXACTEMENT 1 case vide entre les groupes
-                if x_ahead - x_behind == 2:
-                    print(f"DEBUG: Aspiration détectée - groupe arrière à {x_behind}, groupe avant à {x_ahead}")
-                    
-                    # Déplacer TOUS les coureurs du groupe derrière de 1 case
-                    # Priorité à la file A (lane 0) pour le déplacement
-                    for runner in sorted(group_behind, key=lambda r: (-r.y, -r.x)):
-                        old_x = runner.x
-                        old_y = runner.y
-                        
-                        # Retirer le coureur
-                        old_cell = self.get_cell(old_x, old_y)
-                        if old_cell:
-                            old_cell.remove_runner(old_y)
-                        
-                        # Avancer de 1 case
-                        new_x = old_x + 1
-                        new_cell = self.get_cell(new_x, 0)
-                        
-                        # Priorité ABSOLUE à la file A (lane 0)
-                        if new_cell and new_cell.is_empty(0):
-                            new_cell.set_runner(runner, 0)
-                            runner.x = new_x
-                            runner.y = 0
-                        elif new_cell and new_cell.is_empty(1):
-                            new_cell.set_runner(runner, 1)
-                            runner.x = new_x
-                            runner.y = 1
-                        else:
-                            # Les deux files sont occupées, remettre à l'ancienne position
-                            runner.x = old_x
-                            runner.y = old_y
-                            if old_cell:
-                                old_cell.set_runner(runner, old_y)
-                            continue
-                        
-                        movements.append((runner, old_x, new_x))
-                        moved = True
-                        print(f"DEBUG: {runner.id} déplacé de {old_x} à {new_x}, lane {old_y}->{runner.y}")
-
-                    # Recalculer les groupes après ce mouvement
-                    break
-            
-            if not moved:
-                break
-
-        print(f"DEBUG: Aspiration terminée - {len(movements)} mouvements")
+        for step in self.compute_slipstream_steps():
+            self.apply_slipstream_step(step)
+            movements.extend(step)
         return movements

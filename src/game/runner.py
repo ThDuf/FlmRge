@@ -21,31 +21,43 @@ class Runner:
     # Cartes
     energy_deck: List[Card] = field(default_factory=list)
     fatigue_deck: List[Card] = field(default_factory=list)
-    discard_pile: List[Card] = field(default_factory=list)
+    discard_pile: List[Card] = field(default_factory=list)  # cartes recyclées (non jouées + fatigue reçue)
     hand: List[Card] = field(default_factory=list)
+    played_card: Optional[Card] = None  # carte jouée ce tour (retirée du jeu à la fin du tour)
 
     def draw_cards(self, count: int) -> List[Card]:
-        """Pioche `count` cartes Énergie."""
-        drawn = self.energy_deck[:count]
-        self.energy_deck = self.energy_deck[count:]
+        """Pioche `count` cartes Énergie.
+
+        Règles officielles : si le deck épuisé, mélanger les cartes
+        recyclées et continuer à piocher jusqu'à avoir `count` cartes
+        (ou épuisement total).
+        """
+        drawn = []
+        while len(drawn) < count:
+            if not self.energy_deck and self.discard_pile:
+                self.reshuffle_deck()
+            if not self.energy_deck:
+                break
+            drawn.append(self.energy_deck.pop(0))
         self.hand.extend(drawn)
         return drawn
 
     def play_card(self, card: Card) -> None:
-        """Joue une carte (la place dans la défausse)."""
+        """Joue une carte (elle sera retirée du jeu à la fin du tour)."""
         if card in self.hand:
             self.hand.remove(card)
-            self.discard_pile.append(card)
+            self.played_card = card
 
     def is_tired(self, track: 'Track') -> bool:
-        """Vérifie si le coureur est fatigué (case devant vide)."""
+        """Vérifie si le coureur est fatigué (CASE devant vide, 2 files)."""
         from .track import Track
-        return track.is_cell_empty(self.x + 1, self.y)
+        return track.is_square_empty(self.x + 1)
 
     def reset_hand(self) -> None:
-        """Remet toutes les cartes de la main dans la défausse."""
+        """Recycle les cartes non jouées ; la carte jouée quitte le jeu."""
         self.discard_pile.extend(self.hand)
         self.hand = []
+        self.played_card = None
 
     def reshuffle_deck(self) -> None:
         """Mélange la défausse pour reformer le deck Énergie."""

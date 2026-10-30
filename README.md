@@ -15,8 +15,10 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 - **Phase Terminale** : Application de l'**aspiration** et de la **fatigue**.
 
 ### Mécaniques spéciales
-- **Aspiration** : Si une case vide sépare deux groupes de coureurs, le groupe derrière avance d'une case.
-- **Fatigue** : Un coureur reçoit une carte Fatigue (valeur 2) si la case devant lui est vide.
+- **Aspiration** : Si exactement une case vide (2 files) sépare deux packs, le pack arrière avance d'une case et fusionne ; le pack fusionné est revérifié immédiatement (aspirations en cascade possibles). Les coureurs gardent leur file.
+- **Fatigue** : Chaque coureur dont la CASE devant lui est vide (2 files) reçoit une carte Fatigue (valeur 2). Une simple file libre ne suffit pas.
+- **Mouvement** : Un coureur traverse les autres coureurs ; il ne peut pas finir son mouvement sur une case pleine (il s'arrête derrière sur la première file libre). Case d'arrivée vide → file de droite (file A).
+- **Decks** : Les cartes jouées sont retirées du jeu ; les cartes non jouées sont recyclées. Les decks s'épuisent au fil de la course.
 - **Montées/Descentes** : Les montées limitent le déplacement à 5 cases max, les descentes imposent un minimum de 5 cases.
 
 ---
@@ -160,8 +162,8 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
-- [x] **Implémentation complète de l'aspiration** (vérifiée par `tests/test_aspiration.py`)
-- [ ] **Implémentation complète de la fatigue** (bug connu : seuls les leaders de groupe reçoivent une carte Fatigue)
+- [x] **Implémentation complète de l'aspiration** (packs arrière→avant, fusion + revérification, pas-à-pas animé — vérifiée par `tests/test_aspiration.py`)
+- [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)
 - [ ] **Ajout des montées/descentes**
 - [ ] **Amélioration de l'UI** (boutons, animations)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)

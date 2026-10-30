@@ -1,8 +1,8 @@
 """Test headless du flux UI de main.py (pilotage clavier simulé).
 
 Vérifie le cycle complet d'un tour via la logique de FlammeRougeGame :
-énergie -> mouvement -> aspiration (pas-à-pas visuel) -> phase terminale,
-avec contrôle de cohérence du plateau à chaque étape.
+énergie -> mouvement -> aspiration (pas-à-pas APPLIQUÉ sur le plateau)
+-> fatigue -> nouveau tour, avec contrôle de cohérence à chaque étape.
 """
 import os
 import sys
@@ -22,6 +22,10 @@ def assert_board_consistent(testcase, ui):
         testcase.assertNotIn(runner.id, seen, f"{runner.id} dupliqué sur la piste")
         seen.add(runner.id)
         testcase.assertEqual((runner.x, runner.y), (x, y))
+
+
+def sum_positions(ui):
+    return sum(r.x for _x, _y, r in ui.game.track.get_all_runners())
 
 
 class TestUiFlow(unittest.TestCase):
@@ -47,29 +51,32 @@ class TestUiFlow(unittest.TestCase):
         game.resolve_movement_phase()
         assert_board_consistent(self, ui)
 
-        # Phase d'aspiration : le moteur applique, l'UI ne fait qu'afficher
-        movements = game.resolve_aspiration_phase()
-        if movements:
-            ui.aspiration_movements = movements
+        # Phase d'aspiration : le moteur CALCULE, l'UI applique pas-à-pas
+        steps = game.resolve_aspiration_phase()
+        if steps:
+            ui.aspiration_movements = steps
             ui._initialize_aspiration()
             self.assertTrue(ui.showing_aspiration)
-            self.assertEqual(ui.aspiration_total, len(movements))
-            # On déroule le pas-à-pas : le plateau ne doit PAS changer
-            snapshot = {(r.id, r.x, r.y) for _x, _y, r in game.track.get_all_runners()}
-            steps = 0
-            while not ui._next_aspiration_step():
-                steps += 1
-                self.assertLess(steps, 100, "pas-à-pas d'aspiration sans fin")
-                now = {(r.id, r.x, r.y) for _x, _y, r in game.track.get_all_runners()}
-                self.assertEqual(now, snapshot, "le pas-à-pas visuel a modifié le plateau !")
-            assert_board_consistent(self, ui)
+            self.assertEqual(ui.aspiration_total, len(steps))
+            expected_total_moves = sum(len(s) for s in steps)
+
+            before = sum_positions(ui)
+            done = False
+            guard = 0
+            while not done:
+                done = ui._next_aspiration_step()
+                guard += 1
+                self.assertLess(guard, 100, "pas-à-pas d'aspiration sans fin")
+                assert_board_consistent(self, ui)
+            # Chaque mouvement d'étape avance un coureur d'exactement 1 case
+            self.assertEqual(sum_positions(ui), before + expected_total_moves)
+            # Tout est appliqué : plus aucune aspiration possible
+            self.assertEqual(game.track.compute_slipstream_steps(), [])
             ui._finish_aspiration_phase()
         else:
             ui._finish_aspiration_phase()
 
-        # Après l'aspiration : fatigue + victoire éventuelle + nouveau tour direct
-        # (la phase TERMINALE est transitoire : _finish_aspiration_phase
-        #  enchaîne immédiatement sur start_turn si personne n'a gagné)
+        # Fatigue + victoire éventuelle + nouveau tour direct
         self.assertFalse(ui.showing_aspiration)
         assert_board_consistent(self, ui)
         if not game.game_over:
@@ -78,14 +85,14 @@ class TestUiFlow(unittest.TestCase):
             for player in game.players:
                 for runner in player.get_runners():
                     self.assertEqual(len(runner.hand), 4)
-        assert_board_consistent(self, ui)
+                    self.assertIsNone(runner.played_card)
 
     def test_finish_aspiration_resets_display_state(self):
         ui = self.ui
         ui.showing_aspiration = True
         ui.aspiration_step = 2
         ui.aspiration_total = 3
-        ui.aspiration_movements = [(None, 1, 2)]
+        ui.aspiration_movements = [(None, 1, 0, 2, 0)]
         ui._finish_aspiration_phase()
         self.assertFalse(ui.showing_aspiration)
         self.assertEqual(ui.aspiration_step, 0)
