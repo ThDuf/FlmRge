@@ -109,7 +109,7 @@ class Track:
         """
         Déplace un coureur de `steps` cases.
         - Avance case par case
-        - Si la file est occupée, essaie l'autre file
+        - Priorité à la droite (file 1) si la file actuelle est bloquée
         - Si les 2 files sont occupées, s'arrête
         """
         if steps <= 0:
@@ -135,7 +135,11 @@ class Track:
                 runner.x = new_x
                 continue
             else:
-                other_y = 1 - runner.y
+                # Priorité à la droite (file 1) selon les règles officielles
+                other_y = 1  # Toujours essayer la droite en premier
+                if runner.y == 1:
+                    other_y = 0  # Si déjà à droite, essayer la gauche
+                
                 if new_cell.is_empty(other_y):
                     runner.y = other_y
                     runner.x = new_x
@@ -153,6 +157,7 @@ class Track:
         Un groupe = coureurs dans des cases consécutives (même case ou case suivante).
         """
         all_runners = self.get_all_runners()
+        # Trier par position x, puis par file (gauche avant droite pour même x)
         all_runners.sort(key=lambda r: (r[0], r[1]))
 
         groups = []
@@ -207,7 +212,8 @@ class Track:
                     print(f"DEBUG: Aspiration détectée - groupe arrière à {x_behind}, groupe avant à {x_ahead}")
                     
                     # Déplacer TOUS les coureurs du groupe derrière de 1 case
-                    for runner in group_behind:
+                    # Priorité à la droite (file 1) pour le déplacement
+                    for runner in sorted(group_behind, key=lambda r: (r.x, r.y)):
                         old_x = runner.x
                         old_y = runner.y
                         
@@ -219,19 +225,23 @@ class Track:
                         # Avancer de 1 case
                         new_x = old_x + 1
                         
-                        # Essayer de garder la même file
-                        new_cell = self.get_cell(new_x, old_y)
-                        if new_cell and new_cell.is_empty(old_y):
-                            new_cell.set_runner(runner, old_y)
+                        # Priorité à la droite (file 1)
+                        preferred_y = 1
+                        if old_y == 1:
+                            preferred_y = 0
+                        
+                        new_cell = self.get_cell(new_x, preferred_y)
+                        if new_cell and new_cell.is_empty(preferred_y):
+                            new_cell.set_runner(runner, preferred_y)
                             runner.x = new_x
-                            runner.y = old_y
+                            runner.y = preferred_y
                         else:
                             # Essayer l'autre file
-                            new_y = 1 - old_y
-                            if new_cell and new_cell.is_empty(new_y):
-                                new_cell.set_runner(runner, new_y)
+                            other_y = 1 - preferred_y
+                            if new_cell and new_cell.is_empty(other_y):
+                                new_cell.set_runner(runner, other_y)
                                 runner.x = new_x
-                                runner.y = new_y
+                                runner.y = other_y
                             else:
                                 # Remettre à l'ancienne position
                                 runner.x = old_x
@@ -242,7 +252,7 @@ class Track:
                         
                         movements.append((runner, old_x, new_x))
                         moved = True
-                        print(f"DEBUG: {runner.id} déplacé de {old_x} à {new_x}")
+                        print(f"DEBUG: {runner.id} déplacé de {old_x} à {new_x}, file {old_y}->{runner.y}")
 
                     # Recalculer les groupes après ce mouvement
                     break

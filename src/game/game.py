@@ -102,14 +102,18 @@ class Game:
         return track
 
     def _place_runner_at_start(self, runner: Runner) -> None:
-        """Place un coureur à la ligne de départ."""
-        start_cell = self.track.get_cell(0, 0)
-        if start_cell and start_cell.is_empty(0):
-            start_cell.set_runner(runner, 0)
+        """Place un coureur à la ligne de départ.
+        
+        Règle : Priorité à la droite (file 1) pour tous les coureurs.
+        """
+        # Priorité à la droite (file 1) selon les règles officielles
+        start_cell = self.track.get_cell(0, 1)
+        if start_cell and start_cell.is_empty(1):
+            start_cell.set_runner(runner, 1)
         else:
-            start_cell = self.track.get_cell(0, 1)
+            start_cell = self.track.get_cell(0, 0)
             if start_cell:
-                start_cell.set_runner(runner, 1)
+                start_cell.set_runner(runner, 0)
 
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
@@ -242,15 +246,37 @@ class Game:
         """
         Attribue les cartes Fatigue selon les règles officielles.
         
-        Règle : Un coureur est fatigué si la case devant lui est vide.
+        Règle : Seuls les premiers coureurs de chaque groupe reçoivent une carte Fatigue
+        si la case devant eux est vide.
         """
+        # Obtenir tous les coureurs triés par position
+        all_runners = []
         for player in self.players:
-            for runner in player.get_runners():
-                if runner.is_tired(self.track):
-                    if runner.fatigue_deck:
-                        fatigue_card = runner.fatigue_deck.pop()
-                        runner.discard_pile.append(fatigue_card)
-                        print(f"  {runner.id} est fatigué -> reçoit une carte Fatigue (valeur 2)")
+            all_runners.extend(player.get_runners())
+        
+        # Trouver les groupes
+        groups = self.track.get_groups()
+        print(f"  Groupes pour la fatigue: {len(groups)} groupes")
+        
+        # Pour chaque groupe, seul le premier coureur (celui le plus en avant) peut être fatigué
+        for group in groups:
+            if not group:
+                continue
+            
+            # Le premier du groupe est celui avec la position x la plus élevée
+            leader = max(group, key=lambda r: (r.x, r.y))
+            print(f"  Premier du groupe: {leader.id} à position {leader.x}, file {leader.y}")
+            
+            # Vérifier si la case devant le leader est vide
+            if self.track.is_cell_empty(leader.x + 1, leader.y):
+                if leader.fatigue_deck:
+                    fatigue_card = leader.fatigue_deck.pop()
+                    leader.discard_pile.append(fatigue_card)
+                    print(f"  {leader.id} (premier du groupe) est fatigué -> reçoit une carte Fatigue (valeur 2)")
+                else:
+                    print(f"  {leader.id} devrait recevoir une fatigue mais n'a plus de cartes Fatigue")
+            else:
+                print(f"  {leader.id} (premier du groupe) n'est pas fatigué (case devant occupée)")
 
     def _cleanup_hands(self) -> None:
         """Nettoie les mains des coureurs pour le prochain tour."""
