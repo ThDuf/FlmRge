@@ -20,7 +20,6 @@ class Runner:
 
     # Cartes
     energy_deck: List[Card] = field(default_factory=list)
-    fatigue_deck: List[Card] = field(default_factory=list)
     discard_pile: List[Card] = field(default_factory=list)  # cartes recyclées (non jouées + fatigue reçue)
     hand: List[Card] = field(default_factory=list)
     played_card: Optional[Card] = None  # carte jouée ce tour (retirée du jeu à la fin du tour)
@@ -47,11 +46,6 @@ class Runner:
         if card in self.hand:
             self.hand.remove(card)
             self.played_card = card
-
-    def is_tired(self, track: 'Track') -> bool:
-        """Vérifie si le coureur est fatigué (CASE devant vide, 2 files)."""
-        from .track import Track
-        return track.is_square_empty(self.x + 1)
 
     def reset_hand(self) -> None:
         """Recycle les cartes non jouées ; la carte jouée quitte le jeu."""

@@ -88,7 +88,6 @@ class TestMovement(unittest.TestCase):
     def test_frontmost_moves_first_lane_a_tiebreak(self):
         """À égalité de position, la file A (droite) est en tête et bouge en premier.
         Vérifié via la place finale : le coureur de la file A doit garder la file A."""
-        from game.game import Game
         game = Game(stage="test", player_count=2)
         track = game.track
         # Vider la piste
@@ -116,7 +115,6 @@ class TestDecks(unittest.TestCase):
 
     def test_played_card_removed_from_game(self):
         """Règle officielle : les cartes jouées quittent le jeu (deck s'épuisant)."""
-        from game.game import Game
         game = Game(stage="test", player_count=2)
         runner = game.players[0].sprinter
         self.assertEqual(self._total_cards(runner), 15)
@@ -128,7 +126,6 @@ class TestDecks(unittest.TestCase):
         self.assertEqual(self._total_cards(runner), 14)  # carte jouée retirée du jeu
 
     def test_unplayed_cards_are_recycled(self):
-        from game.game import Game
         game = Game(stage="test", player_count=2)
         runner = game.players[0].sprinter
         game.play_card(game.players[0], runner, runner.hand[0])
@@ -138,7 +135,6 @@ class TestDecks(unittest.TestCase):
         self.assertEqual(len(runner.hand), 0)
 
     def test_draw_reshuffles_recycled_when_deck_empty(self):
-        from game.game import Game
         game = Game(stage="test", player_count=2)
         runner = game.players[0].sprinter
         runner.energy_deck = [Card(2, CardType.ENERGY, "S"), Card(3, CardType.ENERGY, "S")]
@@ -149,7 +145,6 @@ class TestDecks(unittest.TestCase):
         self.assertEqual(len(runner.hand), 4)
 
     def test_draw_all_when_not_enough_cards(self):
-        from game.game import Game
         game = Game(stage="test", player_count=2)
         runner = game.players[0].sprinter
         runner.energy_deck = [Card(2, CardType.ENERGY, "S")]

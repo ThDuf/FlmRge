@@ -4,11 +4,6 @@ from enum import Enum, auto
 from .runner import Runner
 
 
-class Lane(Enum):
-    A = 0  # File A = file de DROITE (double ligne, prioritaire selon les règles officielles)
-    B = 1  # File B = file de gauche
-
-
 class TileType(Enum):
     START = auto()      # Départ
     FINISH = auto()     # Arrivée

@@ -1,8 +1,7 @@
 import pygame
 import sys
-from typing import Optional, List
+from typing import List
 from game.game import Game, Phase
-from game.runner import Runner
 from game.card import Card, CardType
 
 # Initialiser Pygame

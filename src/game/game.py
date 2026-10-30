@@ -22,7 +22,6 @@ class Game:
         self.players: List[Player] = []
         self.track = self._build_track(stage)
         self.current_phase: Phase = Phase.ENERGY
-        self.current_player_index: int = 0
         self.turn_count: int = 0
         self.game_over: bool = False
         self.winner: Optional[Player] = None
@@ -86,14 +85,6 @@ class Game:
 
         random.shuffle(values)
         return [Card(value, CardType.ENERGY, runner_str) for value in values]
-
-    def _generate_fatigue_deck(self, runner_type: RunnerType) -> List[Card]:
-        """Génère un deck Fatigue de 10 cartes pour un coureur.
-        
-        Règles officielles : 10 cartes Fatigue par type (toutes valent 2)
-        """
-        runner_str = "S" if runner_type == RunnerType.SPRINTER else "R"
-        return [Card(2, CardType.FATIGUE, runner_str) for _ in range(10)]
 
     def _build_track(self, stage: str) -> Track:
         """Construit la piste selon l'étape choisie."""
@@ -245,35 +236,6 @@ class Game:
         for step in steps:
             self.track.apply_slipstream_step(step)
 
-    def resolve_terminal_phase(self) -> None:
-        """
-        Résout la phase terminale selon les règles officielles.
-        
-        1. Retirer les cartes jouées (déjà fait)
-        2. Appliquer la fatigue
-        3. Vérifier la victoire
-        """
-        if self.current_phase != Phase.ASPIRATION:
-            return
-
-        print("\n--- PHASE TERMINALE ---")
-
-        # 1. Attribuer les cartes Fatigue
-        print("Vérification de la fatigue...")
-        self._assign_fatigue_cards()
-
-        # 2. Vérifier la condition de victoire
-        if self._check_win_condition():
-            self.game_over = True
-            print(f"\nVICTOIRE : {self.winner.color} a gagné !\n")
-        else:
-            # 3. Préparer le prochain tour
-            print("Préparation du prochain tour...")
-            self._cleanup_hands()
-            self.start_turn()
-
-        print("--- Fin de la phase terminale ---\n")
-
     def _assign_fatigue_cards(self) -> None:
         """
         Attribue les cartes Fatigue selon les règles officielles.
@@ -323,10 +285,6 @@ class Game:
             self.winner = best[1]
             return True
         return False
-
-    def get_current_player(self) -> Player:
-        """Retourne le joueur actuel."""
-        return self.players[self.current_player_index]
 
     def get_current_phase_name(self) -> str:
         """Retourne le nom de la phase actuelle."""

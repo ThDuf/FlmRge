@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.track import Track, TileType  # noqa: E402
 from game.runner import Runner, RunnerType  # noqa: E402
+from game.game import Game  # noqa: E402
 
 
 def make_track(min_cells):
@@ -228,7 +229,6 @@ class TestFatigue(unittest.TestCase):
     def test_two_leaders_both_get_fatigue(self):
         """Deux coureurs côte à côte en tête d'un pack, case devant vide :
         les DEUX reçoivent une carte Fatigue (pas seulement un leader)."""
-        from game.game import Game
         game = Game(stage="test", player_count=2)
         # Vider la piste puis replacer : sprinteur_0 et roller_0 côte à côte,
         # tous les autres loin derrière.
