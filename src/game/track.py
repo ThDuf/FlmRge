@@ -211,7 +211,7 @@ class Track:
                     
                     # Déplacer TOUS les coureurs du groupe derrière de 1 case
                     # Priorité à la file A (lane 0) pour le déplacement
-                    for runner in sorted(group_behind, key=lambda r: (r.x, -r.y)):
+                    for runner in sorted(group_behind, key=lambda r: (-r.y, r.x)):
                         old_x = runner.x
                         old_y = runner.y
                         
