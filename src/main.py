@@ -290,7 +290,7 @@ class FlammeRougeGame:
 
         # Phase d'aspiration
         if self.showing_aspiration:
-            aspiration_text = self.big_font.render(f"\ud83c\udf2a\ufe0f Aspiration: {self.aspiration_step}/{len(self.aspiration_movements)}", True, ORANGE)
+            aspiration_text = self.big_font.render(f"Aspiration: {self.aspiration_step}/{len(self.aspiration_movements)}", True, ORANGE)
             self.screen.blit(aspiration_text, (MARGIN, 90))
 
         # Cartes jouées
