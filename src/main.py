@@ -163,6 +163,8 @@ class FlammeRougeGame:
                         elif self.showing_aspiration:
                             if self._apply_next_aspiration_step():
                                 self.showing_aspiration = False
+                                self.aspiration_step = 0
+                                self.aspiration_movements = []
                                 self.game.current_phase = Phase.TERMINAL
                                 self.game._assign_fatigue_cards()
                                 if not self.game._check_win_condition():
@@ -172,9 +174,10 @@ class FlammeRougeGame:
                                 else:
                                     self.game.game_over = True
                         elif self.game.current_phase == Phase.TERMINAL:
-                            self.game._cleanup_hands()
-                            self.game.start_turn()
-                            self.selected_cards_display = []
+                            if not self.game.game_over:
+                                self.game._cleanup_hands()
+                                self.game.start_turn()
+                                self.selected_cards_display = []
                     elif event.key == pygame.K_LEFT:
                         self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
                     elif event.key == pygame.K_RIGHT:
