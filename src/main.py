@@ -367,63 +367,49 @@ class FlammeRougeGame:
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
 
-        # Affichage des decks (à droite)
+        # Affichage des decks (en bas à droite, format compact)
         if self.show_decks:
-            deck_y_start = 100
-            deck_width = 280
+            small_font = pygame.font.SysFont("Arial", 16)
+            deck_x = SCREEN_WIDTH - 250
+            deck_y = SCREEN_HEIGHT - 200
             
             for player_idx, player in enumerate(self.game.players):
-                deck_y = deck_y_start + player_idx * 220
                 color = PLAYER_COLORS.get(player.color, BLACK)
                 
                 # Titre joueur
-                title = self.big_font.render(f"{player.color} - Decks", True, color)
-                self.screen.blit(title, (DECKS_X, deck_y))
+                title = small_font.render(f"{player.color}:", True, color)
+                self.screen.blit(title, (deck_x, deck_y + player_idx * 100))
                 
-                # Deck Énergie Sprinteur
-                deck_y += 30
-                sprinter_energy_title = self.font.render("Sprinteur Énergie:", True, BLACK)
-                self.screen.blit(sprinter_energy_title, (DECKS_X, deck_y))
-                deck_y += 25
+                # Fonction pour compter les cartes par valeur
+                def count_cards(deck, is_fatigue=False):
+                    counts = {}
+                    for card in deck:
+                        if is_fatigue:
+                            key = "2F"  # Cartes fatigue valent toujours 2
+                        else:
+                            key = str(card.value)
+                        counts[key] = counts.get(key, 0) + 1
+                    return counts
                 
-                energy_cards = [f"{c.value}{c.runner_type or ''}" for c in player.sprinter.energy_deck]
-                fatigue_cards = [f"{c.value}{c.runner_type or ''}" for c in player.sprinter.fatigue_deck]
+                # Sprinteur
+                sprinter_energy_counts = count_cards(player.sprinter.energy_deck)
+                sprinter_fatigue_counts = count_cards(player.sprinter.fatigue_deck, is_fatigue=True)
                 
-                # Afficher cartes énergie (max 10 visibles)
-                energy_text = self.font.render(", ".join(energy_cards[:10]) + ("..." if len(energy_cards) > 10 else ""), True, BLACK)
-                self.screen.blit(energy_text, (DECKS_X, deck_y))
-                deck_y += 25
+                sprinter_text = small_font.render(
+                    f"S: {', '.join([f'{k}:{v}' for k, v in sorted(sprinter_energy_counts.items())])} | F:{sprinter_fatigue_counts.get('2F', 0)}",
+                    True, BLACK
+                )
+                self.screen.blit(sprinter_text, (deck_x + 30, deck_y + 20 + player_idx * 100))
                 
-                # Deck Fatigue Sprinteur
-                fatigue_title = self.font.render("Sprinteur Fatigue:", True, BLACK)
-                self.screen.blit(fatigue_title, (DECKS_X, deck_y))
-                deck_y += 25
-                fatigue_text = self.font.render(", ".join(fatigue_cards[:10]) + ("..." if len(fatigue_cards) > 10 else ""), True, BLACK)
-                self.screen.blit(fatigue_text, (DECKS_X, deck_y))
-                deck_y += 25
+                # Rouleur
+                roller_energy_counts = count_cards(player.roller.energy_deck)
+                roller_fatigue_counts = count_cards(player.roller.fatigue_deck, is_fatigue=True)
                 
-                # Deck Énergie Rouleur
-                roller_energy_title = self.font.render("Rouleur Énergie:", True, BLACK)
-                self.screen.blit(roller_energy_title, (DECKS_X, deck_y))
-                deck_y += 25
-                
-                energy_cards_r = [f"{c.value}{c.runner_type or ''}" for c in player.roller.energy_deck]
-                fatigue_cards_r = [f"{c.value}{c.runner_type or ''}" for c in player.roller.fatigue_deck]
-                
-                energy_text_r = self.font.render(", ".join(energy_cards_r[:10]) + ("..." if len(energy_cards_r) > 10 else ""), True, BLACK)
-                self.screen.blit(energy_text_r, (DECKS_X, deck_y))
-                deck_y += 25
-                
-                # Deck Fatigue Rouleur
-                fatigue_title_r = self.font.render("Rouleur Fatigue:", True, BLACK)
-                self.screen.blit(fatigue_title_r, (DECKS_X, deck_y))
-                deck_y += 25
-                fatigue_text_r = self.font.render(", ".join(fatigue_cards_r[:10]) + ("..." if len(fatigue_cards_r) > 10 else ""), True, BLACK)
-                self.screen.blit(fatigue_text_r, (DECKS_X, deck_y))
-                
-                # Séparateur
-                deck_y += 10
-                pygame.draw.line(self.screen, GRAY, (DECKS_X, deck_y), (DECKS_X + deck_width, deck_y), 1)
+                roller_text = small_font.render(
+                    f"R: {', '.join([f'{k}:{v}' for k, v in sorted(roller_energy_counts.items())])} | F:{roller_fatigue_counts.get('2F', 0)}",
+                    True, BLACK
+                )
+                self.screen.blit(roller_text, (deck_x + 30, deck_y + 40 + player_idx * 100))
 
         # Gagnant
         if self.game.game_over:
