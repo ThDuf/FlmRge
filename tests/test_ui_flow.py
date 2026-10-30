@@ -102,5 +102,52 @@ class TestUiFlow(unittest.TestCase):
         self.assertEqual(ui.game.turn_count, 2)
 
 
+class TestHandLayout(unittest.TestCase):
+    def setUp(self):
+        self.ui = main.FlammeRougeGame()
+
+    def test_panels_fit_window(self):
+        layout = self.ui._hand_layout()
+        self.assertEqual(len(layout), len(self.ui.game.players))
+        for player, panel, rows in layout:
+            self.assertLessEqual(panel.right, self.ui.width, "panneau hors écran à droite")
+            self.assertLessEqual(panel.bottom, self.ui.height, "panneau hors écran en bas")
+            self.assertGreaterEqual(panel.x, 0)
+            for runner, label, rects in rows:
+                self.assertEqual(len(rects), len(runner.hand))
+                for rect in rects:
+                    self.assertTrue(panel.contains(rect), "carte hors du panneau")
+
+    def test_panels_do_not_overlap(self):
+        layout = self.ui._hand_layout()
+        for i in range(len(layout) - 1):
+            self.assertFalse(layout[i][1].colliderect(layout[i + 1][1]),
+                             "les panneaux de joueurs se chevauchent")
+
+    def test_resize_updates_layout(self):
+        self.ui.width, self.ui.height = 1600, 1000
+        layout = self.ui._hand_layout()
+        for player, panel, rows in layout:
+            self.assertLessEqual(panel.right, 1600)
+            self.assertLessEqual(panel.bottom, 1000)
+        # piste repositionnée sans sortir de l'écran
+        self.assertGreaterEqual(self.ui._track_top(), 120)
+
+    def test_click_zone_matches_displayed_cards(self):
+        """Le clic sur une carte affichée joue bien CETTE carte."""
+        ui = self.ui
+        self.assertEqual(ui.game.current_phase, Phase.ENERGY)
+        layout = ui._hand_layout()
+        player, panel, rows = layout[0]
+        runner, label, rects = rows[0]
+        card = runner.hand[0]
+        ui._handle_click((rects[0].centerx, rects[0].centery))
+        self.assertEqual(ui.game.cards_played_per_runner[runner.id], 1)
+        self.assertIs(runner.played_card, card)
+        # un second clic sur le même coureur ne fait rien
+        ui._handle_click((rects[1].centerx, rects[1].centery))
+        self.assertEqual(ui.game.cards_played_per_runner[runner.id], 1)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

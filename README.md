@@ -53,10 +53,14 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 
 | Touche | Action |
 |--------|--------|
-| **Souris** | Sélectionner une carte pour la jouer |
+| **Souris** | Sélectionner une carte pour la jouer (surbrillance au survol) |
+| **ENTRÉE** | Passer à la phase suivante (mouvement, aspiration pas-à-pas, tour suivant) |
+| **Molette / Flèches / Glisser** | Scroller le long de la piste |
 | **H** | Masquer/Afficher les mains des coureurs |
+| **D** | Afficher/Masquer les decks |
 | **R** | Recommencer la partie |
-| **ESPACE** | Forcer le passage à la phase suivante (debug) |
+
+La fenêtre est **redimensionnable** (taille minimale 900x600) : la piste, les panneaux de sélection des cartes et les affichages s'adaptent automatiquement.
 
 ---
 

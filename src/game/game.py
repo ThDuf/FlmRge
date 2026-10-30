@@ -248,7 +248,7 @@ class Game:
         # 2. Vérifier la condition de victoire
         if self._check_win_condition():
             self.game_over = True
-            print(f"\n🏆 VICTOIRE : {self.winner.color} a gagné !\n")
+            print(f"\nVICTOIRE : {self.winner.color} a gagné !\n")
         else:
             # 3. Préparer le prochain tour
             print("Préparation du prochain tour...")
