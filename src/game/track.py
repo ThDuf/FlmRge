@@ -104,10 +104,10 @@ class Track:
         runners = []
         for x in range(self.length):
             cell = self.get_cell(x, 0)
-            if cell and cell.left:
-                runners.append((x, 0, cell.left))
-            if cell and cell.right:
-                runners.append((x, 1, cell.right))
+            if cell and cell.a:
+                runners.append((x, 0, cell.a))
+            if cell and cell.b:
+                runners.append((x, 1, cell.b))
         return runners
 
     def move_runner(self, runner: Runner, steps: int) -> None:
