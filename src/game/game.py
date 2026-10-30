@@ -143,64 +143,114 @@ class Game:
         return self.cards_played_this_turn >= self.total_cards_to_play
 
     def resolve_movement_phase(self) -> None:
-        """Résout la phase de mouvement."""
+        """
+        Résout la phase de mouvement selon les règles officielles.
+        
+        Règle : Les coureurs se déplacent dans l'ordre inverse de leur position
+        (du plus proche de l'arrivée au plus loin).
+        """
         if self.current_phase != Phase.ENERGY:
             return
 
         self.current_phase = Phase.MOVEMENT
+        print("\n--- PHASE DE MOUVEMENT ---")
 
-        # Récupérer tous les coureurs triés par position (du plus proche au plus loin)
+        # Récupérer tous les coureurs triés par position (du plus proche au plus loin de l'arrivée)
         all_runners = []
         for player in self.players:
             all_runners.extend(player.get_runners())
-        # Trier du plus proche de l'arrivée au plus loin (pour respecter les règles)
         all_runners.sort(key=lambda r: r.x, reverse=True)
+
+        print(f"Ordre de déplacement (du plus proche au plus loin) : {[r.id for r in all_runners]}")
 
         # Déplacer les coureurs un par un
         for runner in all_runners:
             if runner.discard_pile:
                 card = runner.discard_pile[-1]
-                print(f"  Déplacement: {runner.id} avance de {card.value} cases (position initiale: {runner.x})")
+                print(f"  {runner.id} (pos {runner.x}) joue carte {card.value}")
+                old_x = runner.x
                 self.track.move_runner(runner, card.value)
-                print(f"    -> Nouvelle position: {runner.x}")
+                print(f"    -> Déplacé à {runner.x} (déplacement de {card.value} cases)")
 
-        print("🚀 Phase de mouvement terminée.")
+        print("--- Fin de la phase de mouvement ---\n")
 
     def resolve_aspiration_phase(self) -> List:
-        """Résout la phase d'aspiration."""
+        """
+        Résout la phase d'aspiration selon les règles officielles.
+        
+        Règle : "Si exactement une case vide sépare deux groupes, 
+        le groupe derrière avance d'une case."
+        
+        Retourne la liste des mouvements effectués.
+        """
         if self.current_phase != Phase.MOVEMENT:
             return []
 
-        movements = self.track.apply_aspiration()
         self.current_phase = Phase.ASPIRATION
-        print(f"🌪️ Phase d'aspiration: {len(movements)} mouvements effectués")
+        print("\n--- PHASE D'ASPIRATION ---")
+
+        # Afficher les groupes avant aspiration
+        groups = self.track.get_groups()
+        print(f"Groupes avant aspiration : {len(groups)} groupes")
+        for i, group in enumerate(groups):
+            positions = [r.x for r in group]
+            print(f"  Groupe {i}: coureurs à positions {positions}")
+
+        # Appliquer l'aspiration
+        movements = self.track.apply_aspiration()
+
+        # Afficher les groupes après aspiration
+        groups = self.track.get_groups()
+        print(f"Groupes après aspiration : {len(groups)} groupes")
+        for i, group in enumerate(groups):
+            positions = [r.x for r in group]
+            print(f"  Groupe {i}: coureurs à positions {positions}")
+
+        print(f"--- Fin de la phase d'aspiration ({len(movements)} mouvements) ---\n")
         return movements
 
     def resolve_terminal_phase(self) -> None:
-        """Résout la phase terminale."""
+        """
+        Résout la phase terminale selon les règles officielles.
+        
+        1. Retirer les cartes jouées (déjà fait)
+        2. Appliquer la fatigue
+        3. Vérifier la victoire
+        """
         if self.current_phase != Phase.ASPIRATION:
             return
 
+        print("\n--- PHASE TERMINALE ---")
+
         # 1. Attribuer les cartes Fatigue
+        print("Vérification de la fatigue...")
         self._assign_fatigue_cards()
 
         # 2. Vérifier la condition de victoire
         if self._check_win_condition():
             self.game_over = True
+            print(f"\n🏆 VICTOIRE : {self.winner.color} a gagné !\n")
         else:
             # 3. Préparer le prochain tour
+            print("Préparation du prochain tour...")
             self._cleanup_hands()
             self.start_turn()
 
+        print("--- Fin de la phase terminale ---\n")
+
     def _assign_fatigue_cards(self) -> None:
-        """Attribue les cartes Fatigue aux coureurs fatigués."""
+        """
+        Attribue les cartes Fatigue selon les règles officielles.
+        
+        Règle : Un coureur est fatigué si la case devant lui est vide.
+        """
         for player in self.players:
             for runner in player.get_runners():
                 if runner.is_tired(self.track):
                     if runner.fatigue_deck:
                         fatigue_card = runner.fatigue_deck.pop()
                         runner.discard_pile.append(fatigue_card)
-                        print(f"  Fatigue: {runner.id} a reçu une carte Fatigue")
+                        print(f"  {runner.id} est fatigué -> reçoit une carte Fatigue (valeur 2)")
 
     def _cleanup_hands(self) -> None:
         """Nettoie les mains des coureurs pour le prochain tour."""
@@ -217,7 +267,6 @@ class Game:
             for runner in player.get_runners():
                 if runner.x >= finish_x:
                     self.winner = player
-                    print(f"🏆 Victoire: {player.color} a gagné avec {runner.id} !")
                     return True
         return False
 

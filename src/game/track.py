@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Optional
 from enum import Enum, auto
 from .runner import Runner
 
@@ -33,13 +33,16 @@ class Cell:
         """Retourne le coureur dans une file (ou None)."""
         return self.left if lane == 0 else self.right
 
-    def set_runner(self, runner: Runner, lane: int) -> None:
-        """Place un coureur dans une file."""
+    def set_runner(self, runner: Runner, lane: int) -> bool:
+        """Place un coureur dans une file. Retourne True si succès."""
+        if not self.is_empty(lane):
+            return False
         if lane == 0:
             self.left = runner
         else:
             self.right = runner
-        runner.x, runner.y = self.x, lane  # Met à jour la position du coureur
+        runner.x, runner.y = self.x, lane
+        return True
 
     def remove_runner(self, lane: int) -> Optional[Runner]:
         """Retire un coureur d'une file."""
@@ -56,31 +59,29 @@ class Tile:
     """Représente une tuile de piste (composée de 2 cases)."""
     type: TileType
     cells: List[Cell] = field(default_factory=lambda: [Cell(), Cell()])
-    x: int = 0  # Position X de la tuile (pour le rendu)
+    x: int = 0  # Position X de la tuile
 
     def __post_init__(self):
         for i, cell in enumerate(self.cells):
-            cell.x = self.x * 2 + i  # Chaque tuile = 2 cases
+            cell.x = self.x * 2 + i
 
 
 @dataclass
 class Track:
     """Représente la piste complète."""
     tiles: List[Tile] = field(default_factory=list)
-    length: int = 0  # Nombre total de cases
+    length: int = 0
 
     def __post_init__(self):
-        self.length = len(self.tiles) * 2  # Chaque tuile = 2 cases
+        self.length = len(self.tiles) * 2
 
     def add_tile(self, tile_type: TileType) -> None:
-        """Ajoute une tuile à la piste."""
         x = len(self.tiles)
         tile = Tile(tile_type, x=x)
         self.tiles.append(tile)
         self.length = len(self.tiles) * 2
 
     def get_cell(self, x: int, lane: int) -> Optional[Cell]:
-        """Retourne la case à la position (x, lane)."""
         if x < 0 or x >= self.length:
             return None
         tile_index = x // 2
@@ -90,84 +91,72 @@ class Track:
         return None
 
     def is_cell_empty(self, x: int, lane: int) -> bool:
-        """Vérifie si une case est vide dans une file."""
         cell = self.get_cell(x, lane)
         return cell is not None and cell.is_empty(lane)
 
+    def get_all_runners(self) -> List[Tuple[int, int, Runner]]:
+        """Retourne tous les coureurs avec leur position (x, lane, runner)."""
+        runners = []
+        for x in range(self.length):
+            cell = self.get_cell(x, 0)
+            if cell and cell.left:
+                runners.append((x, 0, cell.left))
+            if cell and cell.right:
+                runners.append((x, 1, cell.right))
+        return runners
+
     def move_runner(self, runner: Runner, steps: int) -> None:
         """
-        Déplace un coureur de `steps` cases.
-        Gère les collisions : si une case est occupée, on s'arrête avant.
+        Déplace un coureur de `steps` cases selon les règles officielles.
+        - On avance case par case
+        - Si une case est occupée dans la file actuelle, on essaie l'autre file
+        - Si les 2 files sont occupées, on s'arrête
         """
         if steps <= 0:
             return
 
-        new_x = runner.x
-        current_y = runner.y
+        # Sauvegarder la position initiale
+        start_x = runner.x
+        start_y = runner.y
 
         # Retirer le coureur de sa position actuelle
-        old_cell = self.get_cell(runner.x, current_y)
+        old_cell = self.get_cell(start_x, start_y)
         if old_cell:
-            old_cell.remove_runner(current_y)
+            old_cell.remove_runner(start_y)
 
         # Avancer case par case
-        for step in range(steps):
-            new_x += 1
+        for _ in range(steps):
+            new_x = runner.x + 1
             if new_x >= self.length:
                 new_x = self.length - 1
                 break
 
-            new_cell = self.get_cell(new_x, current_y)
-            if new_cell is None:
-                break
-
-            # Si la case est libre dans la file actuelle, on y va
-            if new_cell.is_empty(current_y):
+            # Essayer de garder la même file
+            if self.is_cell_empty(new_x, runner.y):
+                runner.x = new_x
                 continue
-            # Sinon, essayer l'autre file
+            # Sinon essayer l'autre file
             else:
-                other_y = 1 - current_y
-                if new_cell.is_empty(other_y):
-                    current_y = other_y
+                other_y = 1 - runner.y
+                if self.is_cell_empty(new_x, other_y):
+                    runner.y = other_y
+                    runner.x = new_x
                     continue
-                # Si les deux files sont occupées, on s'arrête
+                # Si les deux files sont occupées, s'arrêter
                 else:
-                    new_x -= 1
                     break
 
         # Placer le coureur à sa nouvelle position
-        runner.x = new_x
-        runner.y = current_y
-        final_cell = self.get_cell(new_x, current_y)
+        final_cell = self.get_cell(runner.x, runner.y)
         if final_cell:
-            final_cell.set_runner(runner, current_y)
-
-    def get_runners_in_cell(self, x: int) -> List[Runner]:
-        """Retourne tous les coureurs dans une case (les 2 files)."""
-        cell = self.get_cell(x, 0)
-        if cell is None:
-            return []
-        runners = []
-        if cell.left:
-            runners.append(cell.left)
-        if cell.right:
-            runners.append(cell.right)
-        return runners
+            final_cell.set_runner(runner, runner.y)
 
     def get_groups(self) -> List[List[Runner]]:
         """
-        Retourne les groupes de coureurs (collés sans case vide entre eux).
-        Un groupe = coureurs consécutifs dans les mêmes cases ou cases adjacentes.
+        Retourne les groupes de coureurs selon les règles officielles.
+        Un groupe = coureurs consécutifs (même case ou cases adjacentes).
         """
-        # Collecter tous les coureurs avec leur position
-        all_runners = []
-        for x in range(self.length):
-            cell = self.get_cell(x, 0)
-            if cell and cell.left:
-                all_runners.append((x, 0, cell.left))
-            if cell and cell.right:
-                all_runners.append((x, 1, cell.right))
-
+        all_runners = self.get_all_runners()
         # Trier par position x, puis par file
         all_runners.sort(key=lambda r: (r[0], r[1]))
 
@@ -178,21 +167,14 @@ class Track:
             if not current_group:
                 current_group.append(runner)
             else:
-                # Vérifier si ce coureur est adjacent au dernier du groupe
                 last_runner = current_group[-1]
-                last_x = last_runner.x
-                last_y = last_runner.y
-
-                # Même case ou case suivante adjacente
-                if x == last_x or (x == last_x + 1 and abs(y - last_y) <= 1):
+                # Si le coureur est dans la même case ou la case suivante, il fait partie du groupe
+                if x == last_runner.x or x == last_runner.x + 1:
                     current_group.append(runner)
                 else:
-                    # Vérifier s'il y a une case vide entre les groupes
-                    if x > last_x + 1:
-                        groups.append(current_group)
-                        current_group = [runner]
-                    else:
-                        current_group.append(runner)
+                    # Sinon, nouveau groupe
+                    groups.append(current_group)
+                    current_group = [runner]
 
         if current_group:
             groups.append(current_group)
@@ -201,17 +183,24 @@ class Track:
 
     def apply_aspiration(self) -> List:
         """
-        Applique la règle d'aspiration :
-        Si exactement 1 case vide sépare 2 groupes, le groupe derrière avance de 1 case.
+        Applique la règle officielle d'aspiration :
+        "Si exactement une case vide sépare deux groupes, le groupe derrière avance d'une case."
+        
+        Processus :
+        1. Trouver tous les groupes
+        2. Parcourir de l'arrière vers l'avant
+        3. Si groupe A est à x et groupe B est à x+2 (1 case vide entre eux), 
+           alors groupe B avance à x+1
+        4. Recommencer jusqu'à ce qu'aucun mouvement ne soit plus possible
+        
         Retourne la liste des mouvements effectués (runner, old_x, new_x).
         """
-        movements = []
+        all_movements = []
         
-        # Continuer jusqu'à ce qu'aucun mouvement ne soit plus possible
         while True:
             groups = self.get_groups()
             if len(groups) < 2:
-                break
+                break  # Pas d'aspiration possible
             
             moved = False
             
@@ -220,51 +209,58 @@ class Track:
                 group_behind = groups[i]
                 group_ahead = groups[i - 1]
 
-                # Position du groupe devant (la plus proche de l'arrivée)
-                x_ahead = min(runner.x for runner in group_ahead)
-                # Position du groupe derrière (la plus éloignée de l'arrivée)
+                # Position la plus avancée du groupe derrière (plus proche de l'arrivée)
                 x_behind = max(runner.x for runner in group_behind)
+                # Position la moins avancée du groupe devant (plus proche du départ)
+                x_ahead = min(runner.x for runner in group_ahead)
 
                 # Vérifier s'il y a exactement 1 case vide entre les groupes
                 if x_ahead - x_behind == 2:
+                    print(f"  Aspiration trouvée: groupe derrière à {x_behind}, groupe devant à {x_ahead}")
+                    
                     # Déplacer TOUS les coureurs du groupe derrière de 1 case
                     for runner in group_behind:
                         old_x = runner.x
                         old_y = runner.y
-
+                        
                         # Retirer le coureur
                         old_cell = self.get_cell(old_x, old_y)
                         if old_cell:
                             old_cell.remove_runner(old_y)
-
+                        
                         # Avancer de 1 case
                         new_x = old_x + 1
-                        runner.x = new_x
-
-                        # Placer dans la même file si possible, sinon l'autre file
+                        
+                        # Essayer de garder la même file
                         new_cell = self.get_cell(new_x, old_y)
                         if new_cell and new_cell.is_empty(old_y):
                             new_cell.set_runner(runner, old_y)
+                            runner.x = new_x
+                            runner.y = old_y
                         else:
                             # Essayer l'autre file
                             new_y = 1 - old_y
                             if new_cell and new_cell.is_empty(new_y):
-                                runner.y = new_y
                                 new_cell.set_runner(runner, new_y)
+                                runner.x = new_x
+                                runner.y = new_y
                             else:
                                 # Remettre à l'ancienne position
                                 runner.x = old_x
+                                runner.y = old_y
                                 if old_cell:
                                     old_cell.set_runner(runner, old_y)
                                 continue
-
-                        movements.append((runner, old_x, new_x))
+                        
+                        all_movements.append((runner, old_x, new_x))
                         moved = True
+                        print(f"    {runner.id} : {old_x} → {new_x}")
 
                     # Recalculer les groupes après ce mouvement
                     break
             
             if not moved:
-                break
+                break  # Aucun mouvement effectué, fin de l'aspiration
 
-        return movements
+        print(f"  Aspiration terminée: {len(all_movements)} mouvements effectués")
+        return all_movements
