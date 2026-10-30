@@ -132,28 +132,39 @@ class Track:
                 new_x = self.length - 1
                 break
 
-            new_cell = self.get_cell(new_x, runner.y)
+            new_cell = self.get_cell(new_x, 0)  # Essayer file A (lane 0) EN PREMIER
             if new_cell is None:
                 break
 
-            if new_cell.is_empty(runner.y):
+            # Priorité ABSOLUE à la file A (lane 0) - toujours essayer A d'abord
+            if new_cell.is_empty(0):
+                # Retirer de l'ancienne position
+                old_cell = self.get_cell(runner.x, runner.y)
+                if old_cell:
+                    old_cell.remove_runner(runner.y)
+                # Placer en file A
+                new_cell.set_runner(runner, 0)
                 runner.x = new_x
+                runner.y = 0
                 continue
             else:
-                # Priorité à la file A (lane 0) selon les règles
-                other_y = 0  # Toujours essayer la file A en premier
-                if runner.y == 0:
-                    other_y = 1  # Si déjà en A, essayer B
-                
-                if new_cell.is_empty(other_y):
-                    runner.y = other_y
+                # Si A est occupée, essayer B
+                if new_cell.is_empty(1):
+                    # Retirer de l'ancienne position
+                    old_cell = self.get_cell(runner.x, runner.y)
+                    if old_cell:
+                        old_cell.remove_runner(runner.y)
+                    # Placer en file B
+                    new_cell.set_runner(runner, 1)
                     runner.x = new_x
+                    runner.y = 1
                     continue
                 else:
+                    # Les deux files sont occupées, s'arrêter
                     break
 
         final_cell = self.get_cell(runner.x, runner.y)
-        if final_cell:
+        if final_cell and not final_cell.get_runner(runner.y):
             final_cell.set_runner(runner, runner.y)
 
     def get_groups(self) -> List[List[Runner]]:
@@ -229,31 +240,24 @@ class Track:
                         
                         # Avancer de 1 case
                         new_x = old_x + 1
+                        new_cell = self.get_cell(new_x, 0)
                         
-                        # Priorité à la file A (lane 0)
-                        preferred_y = 0
-                        if old_y == 0:
-                            preferred_y = 1
-                        
-                        new_cell = self.get_cell(new_x, preferred_y)
-                        if new_cell and new_cell.is_empty(preferred_y):
-                            new_cell.set_runner(runner, preferred_y)
+                        # Priorité ABSOLUE à la file A (lane 0)
+                        if new_cell and new_cell.is_empty(0):
+                            new_cell.set_runner(runner, 0)
                             runner.x = new_x
-                            runner.y = preferred_y
+                            runner.y = 0
+                        elif new_cell and new_cell.is_empty(1):
+                            new_cell.set_runner(runner, 1)
+                            runner.x = new_x
+                            runner.y = 1
                         else:
-                            # Essayer l'autre file
-                            other_y = 1 - preferred_y
-                            if new_cell and new_cell.is_empty(other_y):
-                                new_cell.set_runner(runner, other_y)
-                                runner.x = new_x
-                                runner.y = other_y
-                            else:
-                                # Remettre à l'ancienne position
-                                runner.x = old_x
-                                runner.y = old_y
-                                if old_cell:
-                                    old_cell.set_runner(runner, old_y)
-                                continue
+                            # Les deux files sont occupées, remettre à l'ancienne position
+                            runner.x = old_x
+                            runner.y = old_y
+                            if old_cell:
+                                old_cell.set_runner(runner, old_y)
+                            continue
                         
                         movements.append((runner, old_x, new_x))
                         moved = True
