@@ -50,14 +50,14 @@ class Game:
                 type=RunnerType.SPRINTER,
                 color=color,
                 energy_deck=self._generate_energy_deck(RunnerType.SPRINTER),
-                fatigue_deck=self._generate_fatigue_deck(RunnerType.SPRINTER),
+                fatigue_deck=[],  # Les decks Fatigue sont gérés séparément
             )
             roller = Runner(
                 id=f"roller_{i}",
                 type=RunnerType.ROLLER,
                 color=color,
                 energy_deck=self._generate_energy_deck(RunnerType.ROLLER),
-                fatigue_deck=self._generate_fatigue_deck(RunnerType.ROLLER),
+                fatigue_deck=[],  # Les decks Fatigue sont gérés séparément
             )
             player = Player(id=f"player_{i}", color=color, sprinter=sprinter, roller=roller)
             self.players.append(player)
@@ -276,12 +276,11 @@ class Game:
             
             # Vérifier si la case devant le leader est vide
             if self.track.is_cell_empty(leader.x + 1, leader.y):
-                if leader.fatigue_deck:
-                    fatigue_card = leader.fatigue_deck.pop()
-                    leader.discard_pile.append(fatigue_card)
-                    print(f"  {leader.id} (premier du groupe) est fatigué -> reçoit une carte Fatigue (valeur 2)")
-                else:
-                    print(f"  {leader.id} devrait recevoir une fatigue mais n'a plus de cartes Fatigue")
+                # Créer une nouvelle carte Fatigue (les coureurs ne commencent pas avec des Fatigue dans leur deck)
+                from .card import Card, CardType
+                fatigue_card = Card(2, CardType.FATIGUE, "S" if leader.type == RunnerType.SPRINTER else "R")
+                leader.discard_pile.append(fatigue_card)
+                print(f"  {leader.id} (premier du groupe) est fatigué -> reçoit une carte Fatigue (valeur 2)")
             else:
                 print(f"  {leader.id} (premier du groupe) n'est pas fatigué (case devant occupée)")
 
