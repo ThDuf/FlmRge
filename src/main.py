@@ -68,14 +68,10 @@ class FlammeRougeGame:
         self.aspiration_step = 0
         self.aspiration_movements = []
         
-        # Simuler l'aspiration pour obtenir les mouvements
-        temp_movements = self.game.track.apply_aspiration()
-        # Inverser les mouvements pour les appliquer dans le bon ordre
-        self.aspiration_movements = temp_movements[::-1]
-        
-        # Réinitialiser la piste à son état avant l'aspiration
-        # (car apply_aspiration a déjà modifié la piste)
-        # On va donc appliquer les mouvements un par un dans _apply_next_aspiration_step
+        # L'aspiration a déjà été calculée dans resolve_aspiration_phase
+        # On inverse juste l'ordre pour l'affichage
+        self.aspiration_movements = self.aspiration_movements[::-1]
+        print(f"DEBUG: _initialize_aspiration avec {len(self.aspiration_movements)} mouvements")
 
     def _apply_next_aspiration_step(self) -> bool:
         """Applique une étape d'aspiration. Retourne True si terminé."""
@@ -150,6 +146,7 @@ class FlammeRougeGame:
                             self.aspiration_movements = self.game.resolve_aspiration_phase()
                             self._initialize_aspiration()
                             if not self.aspiration_movements:
+                                print("DEBUG: Aucune aspiration possible, passage en phase terminale")
                                 self.game.current_phase = Phase.TERMINAL
                                 self.game._assign_fatigue_cards()
                                 if not self.game._check_win_condition():
@@ -158,6 +155,8 @@ class FlammeRougeGame:
                                     self.selected_cards_display = []
                                 else:
                                     self.game.game_over = True
+                            else:
+                                print(f"DEBUG: {len(self.aspiration_movements)} mouvements d'aspiration à appliquer")
                         elif self.showing_aspiration:
                             if self._apply_next_aspiration_step():
                                 self.showing_aspiration = False

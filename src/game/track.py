@@ -107,57 +107,52 @@ class Track:
 
     def move_runner(self, runner: Runner, steps: int) -> None:
         """
-        Déplace un coureur de `steps` cases selon les règles officielles.
-        - On avance case par case
-        - Si une case est occupée dans la file actuelle, on essaie l'autre file
-        - Si les 2 files sont occupées, on s'arrête
+        Déplace un coureur de `steps` cases.
+        - Avance case par case
+        - Si la file est occupée, essaie l'autre file
+        - Si les 2 files sont occupées, s'arrête
         """
         if steps <= 0:
             return
 
-        # Sauvegarder la position initiale
-        start_x = runner.x
-        start_y = runner.y
-
-        # Retirer le coureur de sa position actuelle
-        old_cell = self.get_cell(start_x, start_y)
+        old_x = runner.x
+        old_y = runner.y
+        old_cell = self.get_cell(old_x, old_y)
         if old_cell:
-            old_cell.remove_runner(start_y)
+            old_cell.remove_runner(old_y)
 
-        # Avancer case par case
         for _ in range(steps):
             new_x = runner.x + 1
             if new_x >= self.length:
                 new_x = self.length - 1
                 break
 
-            # Essayer de garder la même file
-            if self.is_cell_empty(new_x, runner.y):
+            new_cell = self.get_cell(new_x, runner.y)
+            if new_cell is None:
+                break
+
+            if new_cell.is_empty(runner.y):
                 runner.x = new_x
                 continue
-            # Sinon essayer l'autre file
             else:
                 other_y = 1 - runner.y
-                if self.is_cell_empty(new_x, other_y):
+                if new_cell.is_empty(other_y):
                     runner.y = other_y
                     runner.x = new_x
                     continue
-                # Si les deux files sont occupées, s'arrêter
                 else:
                     break
 
-        # Placer le coureur à sa nouvelle position
         final_cell = self.get_cell(runner.x, runner.y)
         if final_cell:
             final_cell.set_runner(runner, runner.y)
 
     def get_groups(self) -> List[List[Runner]]:
         """
-        Retourne les groupes de coureurs selon les règles officielles.
-        Un groupe = coureurs consécutifs (même case ou cases adjacentes).
+        Retourne les groupes de coureurs.
+        Un groupe = coureurs dans des cases consécutives (même case ou case suivante).
         """
         all_runners = self.get_all_runners()
-        # Trier par position x, puis par file
         all_runners.sort(key=lambda r: (r[0], r[1]))
 
         groups = []
@@ -172,51 +167,44 @@ class Track:
                 if x == last_runner.x or x == last_runner.x + 1:
                     current_group.append(runner)
                 else:
-                    # Sinon, nouveau groupe
                     groups.append(current_group)
                     current_group = [runner]
 
         if current_group:
             groups.append(current_group)
-
         return groups
 
     def apply_aspiration(self) -> List:
         """
-        Applique la règle officielle d'aspiration :
+        Applique la règle d'aspiration :
         "Si exactement une case vide sépare deux groupes, le groupe derrière avance d'une case."
-        
-        Processus :
-        1. Trouver tous les groupes
-        2. Parcourir de l'arrière vers l'avant
-        3. Si groupe A est à x et groupe B est à x+2 (1 case vide entre eux), 
-           alors groupe B avance à x+1
-        4. Recommencer jusqu'à ce qu'aucun mouvement ne soit plus possible
         
         Retourne la liste des mouvements effectués (runner, old_x, new_x).
         """
-        all_movements = []
+        movements = []
         
         while True:
             groups = self.get_groups()
             if len(groups) < 2:
-                break  # Pas d'aspiration possible
+                break
             
             moved = False
             
             # Parcourir les groupes de l'arrière vers l'avant
-            for i in range(len(groups) - 1, 0, -1):
+            # groups[0] = coureurs les plus en arrière (positions les plus basses)
+            # groups[-1] = coureurs les plus en avant (positions les plus hautes)
+            for i in range(len(groups) - 1):
                 group_behind = groups[i]
-                group_ahead = groups[i - 1]
+                group_ahead = groups[i + 1]
 
-                # Position la plus avancée du groupe derrière (plus proche de l'arrivée)
+                # Position la plus avancée du groupe derrière
                 x_behind = max(runner.x for runner in group_behind)
-                # Position la moins avancée du groupe devant (plus proche du départ)
+                # Position la moins avancée du groupe devant
                 x_ahead = min(runner.x for runner in group_ahead)
 
-                # Vérifier s'il y a exactement 1 case vide entre les groupes
+                # Vérifier s'il y a EXACTEMENT 1 case vide entre les groupes
                 if x_ahead - x_behind == 2:
-                    print(f"  Aspiration trouvée: groupe derrière à {x_behind}, groupe devant à {x_ahead}")
+                    print(f"DEBUG: Aspiration détectée - groupe arrière à {x_behind}, groupe avant à {x_ahead}")
                     
                     # Déplacer TOUS les coureurs du groupe derrière de 1 case
                     for runner in group_behind:
@@ -252,15 +240,15 @@ class Track:
                                     old_cell.set_runner(runner, old_y)
                                 continue
                         
-                        all_movements.append((runner, old_x, new_x))
+                        movements.append((runner, old_x, new_x))
                         moved = True
-                        print(f"    {runner.id} : {old_x} → {new_x}")
+                        print(f"DEBUG: {runner.id} déplacé de {old_x} à {new_x}")
 
                     # Recalculer les groupes après ce mouvement
                     break
             
             if not moved:
-                break  # Aucun mouvement effectué, fin de l'aspiration
+                break
 
-        print(f"  Aspiration terminée: {len(all_movements)} mouvements effectués")
-        return all_movements
+        print(f"DEBUG: Aspiration terminée - {len(movements)} mouvements")
+        return movements
