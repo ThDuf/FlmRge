@@ -63,8 +63,9 @@ class Game:
             self.players.append(player)
 
             # Placer les coureurs au départ
-            self._place_runner_at_start(sprinter)
-            self._place_runner_at_start(roller)
+            # Sprinter sur file A (lane 0), Rouleur sur file B (lane 1)
+            self._place_runner_at_start(sprinter, lane=0)
+            self._place_runner_at_start(roller, lane=1)
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:
         """Génère un deck Énergie pour un coureur."""
@@ -101,19 +102,16 @@ class Game:
 
         return track
 
-    def _place_runner_at_start(self, runner: Runner) -> None:
+    def _place_runner_at_start(self, runner: Runner, lane: int = 0) -> None:
         """Place un coureur à la ligne de départ.
         
-        Règle : Priorité à la file A (lane 0) pour tous les coureurs.
+        Args:
+            runner: Le coureur à placer
+            lane: 0 pour file A (sprinter), 1 pour file B (roller)
         """
-        # Priorité à la file A (lane 0) selon les règles
-        start_cell = self.track.get_cell(0, 0)
-        if start_cell and start_cell.is_empty(0):
-            start_cell.set_runner(runner, 0)
-        else:
-            start_cell = self.track.get_cell(0, 1)
-            if start_cell:
-                start_cell.set_runner(runner, 1)
+        start_cell = self.track.get_cell(0, lane)
+        if start_cell:
+            start_cell.set_runner(runner, lane)
 
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
