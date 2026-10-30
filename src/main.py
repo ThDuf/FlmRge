@@ -15,6 +15,7 @@ CELL_SIZE = 60
 LANE_HEIGHT = CELL_SIZE // 2
 MARGIN = 50
 INSTRUCTIONS_X = SCREEN_WIDTH - 350
+DECKS_X = SCREEN_WIDTH - 300  # Position pour afficher les decks
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -48,7 +49,7 @@ class FlammeRougeGame:
         self.selected_runner = None
         self.selected_card = None
         self.show_hands = True
-        self.show_decks = False  # Option pour afficher les decks
+        self.show_decks = False  # Afficher les decks à droite
         self.scroll_x = 0
         self.scroll_speed = 30
         self.dragging = False
@@ -100,7 +101,6 @@ class FlammeRougeGame:
                 if old_cell:
                     old_cell.set_runner(runner, runner.y)
         
-        self.aspiration_step += 1
         return len(self.aspiration_movements) == 0
 
     def run(self):
@@ -201,28 +201,28 @@ class FlammeRougeGame:
         hand_y_roller = SCREEN_HEIGHT - 60
 
         for player_idx, player in enumerate(self.game.players):
-            base_x = MARGIN + player_idx * 250
+            base_x = MARGIN + player_idx * 300  # Plus d'espace entre joueurs (300 au lieu de 250)
 
             if self.game.cards_played_per_runner[player.sprinter.id] < 1:
                 for card_idx, card in enumerate(player.sprinter.hand):
-                    card_rect = pygame.Rect(base_x + card_idx * 40, hand_y_sprinter, 40, 60)
+                    card_rect = pygame.Rect(base_x + card_idx * 45, hand_y_sprinter, 40, 60)  # 45px d'espacement
                     if card_rect.collidepoint(x, y):
                         if self.game.play_card(player, player.sprinter, card):
-                            print(f"✅ {player.color} Sprinteur: carte {card.value} jouée")
-                            self.selected_cards_display.append((player.color, "Sprinteur", card.value, base_x + card_idx * 40 + 40, hand_y_sprinter))
+                            print(f"\u2705 {player.color} Sprinteur: carte {card.value} jou\u00e9e")
+                            self.selected_cards_display.append((player.color, "Sprinteur", card.value, base_x + card_idx * 45 + 45, hand_y_sprinter))
                             if self.game.all_players_ready():
-                                print("⏳ Appuyez sur ENTRÉE pour lancer la phase de mouvement...")
+                                print("\u23f3 Appuyez sur ENTR\u00c9E pour lancer la phase de mouvement...")
                         return
 
             if self.game.cards_played_per_runner[player.roller.id] < 1:
                 for card_idx, card in enumerate(player.roller.hand):
-                    card_rect = pygame.Rect(base_x + card_idx * 40, hand_y_roller, 40, 60)
+                    card_rect = pygame.Rect(base_x + card_idx * 45, hand_y_roller, 40, 60)  # 45px d'espacement
                     if card_rect.collidepoint(x, y):
                         if self.game.play_card(player, player.roller, card):
-                            print(f"✅ {player.color} Rouleur: carte {card.value} jouée")
-                            self.selected_cards_display.append((player.color, "Rouleur", card.value, base_x + card_idx * 40 + 40, hand_y_roller))
+                            print(f"\u2705 {player.color} Rouleur: carte {card.value} jou\u00e9e")
+                            self.selected_cards_display.append((player.color, "Rouleur", card.value, base_x + card_idx * 45 + 45, hand_y_roller))
                             if self.game.all_players_ready():
-                                print("⏳ Appuyez sur ENTRÉE pour lancer la phase de mouvement...")
+                                print("\u23f3 Appuyez sur ENTR\u00c9E pour lancer la phase de mouvement...")
                         return
 
     def _draw_track(self):
@@ -290,7 +290,7 @@ class FlammeRougeGame:
 
         # Phase d'aspiration
         if self.showing_aspiration:
-            aspiration_text = self.big_font.render(f"🌪️ Aspiration: {self.aspiration_step}/{len(self.aspiration_movements)}", True, ORANGE)
+            aspiration_text = self.big_font.render(f"\ud83c\udf2a\ufe0f Aspiration: {self.aspiration_step}/{len(self.aspiration_movements)}", True, ORANGE)
             self.screen.blit(aspiration_text, (MARGIN, 90))
 
         # Cartes jouées
@@ -300,22 +300,22 @@ class FlammeRougeGame:
 
         # Cartes sélectionnées
         for (color, runner_type, card_value, x, y) in self.selected_cards_display:
-            card_text = self.font.render(f"→{card_value}", True, PLAYER_COLORS.get(color, BLACK))
+            card_text = self.font.render(f"\u2192{card_value}", True, PLAYER_COLORS.get(color, BLACK))
             self.screen.blit(card_text, (x + 10, y))
 
         # Instructions (haut à droite)
         instructions_y = 10
         if self.game.current_phase == Phase.ENERGY:
             if self.game.all_players_ready():
-                instructions = ["⏳ Appuyez sur ENTRÉE", "    pour lancer", "    la phase de mouvement"]
+                instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour lancer", "    la phase de mouvement"]
             else:
                 instructions = [f"Jouez 1 carte par", f"    coureur ({self.game.total_cards_to_play} total)"]
         elif self.game.current_phase == Phase.MOVEMENT:
-            instructions = ["⏳ Appuyez sur ENTRÉE", "    pour lancer", "    l'aspiration"]
+            instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour lancer", "    l'aspiration"]
         elif self.showing_aspiration:
-            instructions = ["⏳ Appuyez sur ENTRÉE", "    pour continuer", "    l'aspiration"]
+            instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour continuer", "    l'aspiration"]
         elif self.game.current_phase == Phase.TERMINAL:
-            instructions = ["⏳ Appuyez sur ENTRÉE", "    pour un nouveau", "    tour"]
+            instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour un nouveau", "    tour"]
         else:
             instructions = [f"Phase: {self.game.get_current_phase_name()}"]
         
@@ -325,7 +325,7 @@ class FlammeRougeGame:
 
         # Contrôles
         controls_y = instructions_y + len(instructions) * 25 + 10
-        controls = ["Molette/flèches: scroller", "H: masquer mains", "D: afficher decks", "R: recommencer"]
+        controls = ["Molette/fl\u00e8ches: scroller", "H: masquer mains", "D: afficher decks", "R: recommencer"]
         for i, text in enumerate(controls):
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (INSTRUCTIONS_X, controls_y + i * 25))
@@ -336,67 +336,94 @@ class FlammeRougeGame:
             hand_y_roller = SCREEN_HEIGHT - 60
 
             for player_idx, player in enumerate(self.game.players):
-                base_x = MARGIN + player_idx * 250
+                base_x = MARGIN + player_idx * 300  # Plus d'espace entre joueurs
                 color = PLAYER_COLORS.get(player.color, BLACK)
 
-                pygame.draw.rect(self.screen, color, (base_x - 10, hand_y_sprinter - 10, 200, 70), width=2, border_radius=5)
-                sprinter_status = "✅" if self.game.cards_played_per_runner[player.sprinter.id] >= 1 else "❌"
+                # Sprinteur
+                pygame.draw.rect(self.screen, color, (base_x - 10, hand_y_sprinter - 10, 260, 70), width=2, border_radius=5)
+                sprinter_status = "\u2705" if self.game.cards_played_per_runner[player.sprinter.id] >= 1 else "\u274c"
                 sprinter_text = self.font.render(f"{player.color} Sprinteur {sprinter_status}:", True, color)
                 self.screen.blit(sprinter_text, (base_x, hand_y_sprinter - 30))
 
                 for card_idx, card in enumerate(player.sprinter.hand):
-                    card_rect = pygame.Rect(base_x + card_idx * 40, hand_y_sprinter, 40, 60)
+                    card_rect = pygame.Rect(base_x + card_idx * 45, hand_y_sprinter, 40, 60)  # 45px d'espacement
                     card_color = GRAY if self.game.cards_played_per_runner[player.sprinter.id] >= 1 else WHITE
                     pygame.draw.rect(self.screen, card_color, card_rect, width=2)
                     card_text = self.font.render(str(card.value), True, BLACK)
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
 
-                pygame.draw.rect(self.screen, color, (base_x - 10, hand_y_roller - 10, 200, 70), width=2, border_radius=5)
-                roller_status = "✅" if self.game.cards_played_per_runner[player.roller.id] >= 1 else "❌"
+                # Rouleur (en dessous, avec plus d'espace)
+                pygame.draw.rect(self.screen, color, (base_x - 10, hand_y_roller - 10, 260, 70), width=2, border_radius=5)
+                roller_status = "\u2705" if self.game.cards_played_per_runner[player.roller.id] >= 1 else "\u274c"
                 roller_text = self.font.render(f"{player.color} Rouleur {roller_status}:", True, color)
                 self.screen.blit(roller_text, (base_x, hand_y_roller - 30))
 
                 for card_idx, card in enumerate(player.roller.hand):
-                    card_rect = pygame.Rect(base_x + card_idx * 40, hand_y_roller, 40, 60)
+                    card_rect = pygame.Rect(base_x + card_idx * 45, hand_y_roller, 40, 60)  # 45px d'espacement
                     card_color = GRAY if self.game.cards_played_per_runner[player.roller.id] >= 1 else WHITE
                     pygame.draw.rect(self.screen, card_color, card_rect, width=2)
                     card_text = self.font.render(str(card.value), True, BLACK)
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
 
-        # Affichage des decks (optionnel)
+        # Affichage des decks (à droite)
         if self.show_decks:
-            deck_y = SCREEN_HEIGHT - 200
+            deck_y_start = 100
+            deck_width = 280
+            
             for player_idx, player in enumerate(self.game.players):
-                base_x = MARGIN + player_idx * 250
+                deck_y = deck_y_start + player_idx * 220
                 color = PLAYER_COLORS.get(player.color, BLACK)
-
+                
+                # Titre joueur
+                title = self.big_font.render(f"{player.color} - Decks", True, color)
+                self.screen.blit(title, (DECKS_X, deck_y))
+                
                 # Deck Énergie Sprinteur
-                pygame.draw.rect(self.screen, color, (base_x - 10, deck_y - 10, 200, 80), width=2, border_radius=5)
-                sprinter_deck_text = self.font.render(f"{player.color} Sprinter Deck Énergie ({len(player.sprinter.energy_deck)}):", True, color)
-                self.screen.blit(sprinter_deck_text, (base_x, deck_y - 30))
+                deck_y += 30
+                sprinter_energy_title = self.font.render("Sprinteur Énergie:", True, BLACK)
+                self.screen.blit(sprinter_energy_title, (DECKS_X, deck_y))
+                deck_y += 25
                 
-                deck_values = [str(c.value) + (c.runner_type or "") for c in player.sprinter.energy_deck[:10]]
-                deck_text = self.font.render(", ".join(deck_values), True, BLACK)
-                self.screen.blit(deck_text, (base_x, deck_y))
-
+                energy_cards = [f"{c.value}{c.runner_type or ''}" for c in player.sprinter.energy_deck]
+                fatigue_cards = [f"{c.value}{c.runner_type or ''}" for c in player.sprinter.fatigue_deck]
+                
+                # Afficher cartes énergie (max 10 visibles)
+                energy_text = self.font.render(", ".join(energy_cards[:10]) + ("..." if len(energy_cards) > 10 else ""), True, BLACK)
+                self.screen.blit(energy_text, (DECKS_X, deck_y))
+                deck_y += 25
+                
                 # Deck Fatigue Sprinteur
-                fatigue_text = self.font.render(f"Fatigue ({len(player.sprinter.fatigue_deck)}): " + ", ".join([str(c.value) + (c.runner_type or "") for c in player.sprinter.fatigue_deck]), True, BLACK)
-                self.screen.blit(fatigue_text, (base_x, deck_y + 30))
-
-                # Deck Énergie Rouleur
-                pygame.draw.rect(self.screen, color, (base_x - 10, deck_y + 60, 200, 80), width=2, border_radius=5)
-                roller_deck_text = self.font.render(f"{player.color} Roller Deck Énergie ({len(player.roller.energy_deck)}):", True, color)
-                self.screen.blit(roller_deck_text, (base_x, deck_y + 40))
+                fatigue_title = self.font.render("Sprinteur Fatigue:", True, BLACK)
+                self.screen.blit(fatigue_title, (DECKS_X, deck_y))
+                deck_y += 25
+                fatigue_text = self.font.render(", ".join(fatigue_cards[:10]) + ("..." if len(fatigue_cards) > 10 else ""), True, BLACK)
+                self.screen.blit(fatigue_text, (DECKS_X, deck_y))
+                deck_y += 25
                 
-                deck_values = [str(c.value) + (c.runner_type or "") for c in player.roller.energy_deck[:10]]
-                deck_text = self.font.render(", ".join(deck_values), True, BLACK)
-                self.screen.blit(deck_text, (base_x, deck_y + 70))
-
+                # Deck Énergie Rouleur
+                roller_energy_title = self.font.render("Rouleur Énergie:", True, BLACK)
+                self.screen.blit(roller_energy_title, (DECKS_X, deck_y))
+                deck_y += 25
+                
+                energy_cards_r = [f"{c.value}{c.runner_type or ''}" for c in player.roller.energy_deck]
+                fatigue_cards_r = [f"{c.value}{c.runner_type or ''}" for c in player.roller.fatigue_deck]
+                
+                energy_text_r = self.font.render(", ".join(energy_cards_r[:10]) + ("..." if len(energy_cards_r) > 10 else ""), True, BLACK)
+                self.screen.blit(energy_text_r, (DECKS_X, deck_y))
+                deck_y += 25
+                
                 # Deck Fatigue Rouleur
-                fatigue_text = self.font.render(f"Fatigue ({len(player.roller.fatigue_deck)}): " + ", ".join([str(c.value) + (c.runner_type or "") for c in player.roller.fatigue_deck]), True, BLACK)
-                self.screen.blit(fatigue_text, (base_x, deck_y + 100))
+                fatigue_title_r = self.font.render("Rouleur Fatigue:", True, BLACK)
+                self.screen.blit(fatigue_title_r, (DECKS_X, deck_y))
+                deck_y += 25
+                fatigue_text_r = self.font.render(", ".join(fatigue_cards_r[:10]) + ("..." if len(fatigue_cards_r) > 10 else ""), True, BLACK)
+                self.screen.blit(fatigue_text_r, (DECKS_X, deck_y))
+                
+                # Séparateur
+                deck_y += 10
+                pygame.draw.line(self.screen, GRAY, (DECKS_X, deck_y), (DECKS_X + deck_width, deck_y), 1)
 
         # Gagnant
         if self.game.game_over:
