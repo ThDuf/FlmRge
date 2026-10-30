@@ -159,5 +159,58 @@ class TestDecks(unittest.TestCase):
         self.assertEqual(len(drawn), 1)
 
 
+class TestStartPlacement(unittest.TestCase):
+    """Régression : les coureurs des joueurs > 0 n'étaient PAS placés sur la
+    piste (set_runner échouait silencieusement sur une case déjà occupée),
+    devenant des « fantômes » dont le premier mouvement retirait un autre
+    coureur de sa case."""
+
+    def test_every_runner_is_on_the_track(self):
+        for count in (2, 3, 4):
+            game = Game(stage="test", player_count=count)
+            expected = {r.id for p in game.players for r in p.get_runners()}
+            on_track = {r.id for _x, _y, r in game.track.get_all_runners()}
+            self.assertEqual(on_track, expected, msg=f"{count} joueurs")
+
+    def test_placement_is_fair_between_teams(self):
+        """Round-robin : les équipes démarrent sur des cases équivalentes."""
+        game = Game(stage="test", player_count=2)
+        p0, p1 = game.players
+        self.assertEqual(p0.sprinter.x, p1.sprinter.x)
+        self.assertEqual(p0.roller.x, p1.roller.x)
+
+    def test_four_player_full_turn_consistency(self):
+        """Un tour complet à 4 joueurs ne doit corrompre aucun état."""
+        game = Game(stage="test", player_count=4)
+        for player in game.players:
+            for runner in player.get_runners():
+                self.assertTrue(game.play_card(player, runner, runner.hand[0]))
+        self.assertTrue(game.all_players_ready())
+        game.resolve_movement_phase()
+        game.apply_aspiration_steps(game.resolve_aspiration_phase())
+        game._assign_fatigue_cards()
+        seen = set()
+        for x, y, r in game.track.get_all_runners():
+            self.assertNotIn(r.id, seen, f"{r.id} dupliqué")
+            seen.add(r.id)
+            self.assertEqual((r.x, r.y), (x, y))
+
+
+class TestNoCardsEdgeCase(unittest.TestCase):
+    def test_rider_without_any_cards_is_skipped(self):
+        """Cas limite : un coureur sans plus aucune carte ne doit pas bloquer
+        la partie (marqué comme ayant joué, il n'avance pas)."""
+        game = Game(stage="test", player_count=2)
+        runner = game.players[0].sprinter
+        runner.energy_deck.clear()
+        runner.discard_pile.clear()
+        runner.hand.clear()
+        game.start_turn()
+        self.assertEqual(game.cards_played_per_runner[runner.id], 1)
+        self.assertEqual(game.cards_played_per_runner[game.players[0].roller.id], 0)
+        self.assertEqual(game.total_cards_to_play, 3)
+        self.assertFalse(game.all_players_ready())
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

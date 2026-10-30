@@ -50,22 +50,23 @@ class Game:
                 type=RunnerType.SPRINTER,
                 color=color,
                 energy_deck=self._generate_energy_deck(RunnerType.SPRINTER),
-                fatigue_deck=[],  # Les decks Fatigue sont gérés séparément
             )
             roller = Runner(
                 id=f"roller_{i}",
                 type=RunnerType.ROLLER,
                 color=color,
                 energy_deck=self._generate_energy_deck(RunnerType.ROLLER),
-                fatigue_deck=[],  # Les decks Fatigue sont gérés séparément
             )
             player = Player(id=f"player_{i}", color=color, sprinter=sprinter, roller=roller)
             self.players.append(player)
 
-            # Placer les coureurs au départ
-            # Sprinter sur file A (lane 0), Rouleur sur file B (lane 1)
-            self._place_runner_at_start(sprinter, lane=0)
-            self._place_runner_at_start(roller, lane=1)
+        # Placement au départ en round-robin pour l'équité : tous les
+        # sprinteurs d'abord (à la première file libre), puis tous les
+        # rouleurs. Les équipes démarrent ainsi sur des cases équivalentes.
+        for player in self.players:
+            self._place_runner_at_start(player.sprinter)
+        for player in self.players:
+            self._place_runner_at_start(player.roller)
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:
         """Génère un deck Énergie de 15 cartes pour un coureur.
@@ -111,28 +112,44 @@ class Game:
 
         return track
 
-    def _place_runner_at_start(self, runner: Runner, lane: int = 0) -> None:
-        """Place un coureur à la ligne de départ.
-        
-        Args:
-            runner: Le coureur à placer
-            lane: 0 pour file A (sprinter), 1 pour file B (roller)
+    def _place_runner_at_start(self, runner: Runner) -> None:
+        """Place un coureur au départ dans la première file libre.
+
+        Règle officielle : les coureurs sont placés derrière la ligne de
+        départ dans n'importe quelle file libre. On remplit ici la
+        première file libre (A puis B) à partir de la case 0.
+
+        IMPORTANT : ne jamais laisser un coureur hors piste — un coureur
+        non placé devient un « fantôme » dont le premier mouvement retirerait
+        un autre coureur de sa case.
         """
-        start_cell = self.track.get_cell(0, lane)
-        if start_cell:
-            start_cell.set_runner(runner, lane)
+        for x in range(self.track.length):
+            for lane in (0, 1):
+                cell = self.track.get_cell(x, lane)
+                if cell and cell.is_empty(lane):
+                    cell.set_runner(runner, lane)
+                    return
+        raise RuntimeError(f"Placement impossible : {runner.id} (zone de départ pleine)")
 
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
         self.turn_count += 1
         self.current_phase = Phase.ENERGY
         self.cards_played_this_turn = 0
-        self.total_cards_to_play = len(self.players) * 2
+        self.total_cards_to_play = 0
 
         for player in self.players:
-            for runner in player.get_runners():
-                self.cards_played_per_runner[runner.id] = 0
             player.draw_cards_for_all(4)
+            for runner in player.get_runners():
+                if runner.hand:
+                    self.cards_played_per_runner[runner.id] = 0
+                    self.total_cards_to_play += 1
+                else:
+                    # Cas limite : plus aucune carte nulle part (deck et
+                    # défausse vides). Le coureur est marqué comme ayant
+                    # déjà joué (il n'avance pas ce tour), sinon la partie
+                    # se bloquerait sans jamais être "prête".
+                    self.cards_played_per_runner[runner.id] = 1
 
     def play_card(self, player: Player, runner: Runner, card: Card) -> bool:
         """Joue une carte pour un coureur."""
@@ -141,7 +158,7 @@ class Game:
         if card not in runner.hand:
             return False
         if self.cards_played_per_runner[runner.id] >= 1:
-            print(f"⚠️ {runner.id} a déjà joué sa carte ce tour !")
+            print(f"[ATTENTION] {runner.id} a deja joue sa carte ce tour !")
             return False
 
         runner.play_card(card)

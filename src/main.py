@@ -54,8 +54,6 @@ class FlammeRougeGame:
         self.small_font = pygame.font.SysFont("Arial", 15)
 
         self.game = Game(stage="test", player_count=2)
-        self.selected_runner = None
-        self.selected_card = None
         self.show_hands = True
         self.show_decks = False  # Afficher les decks à droite
         self.scroll_x = 0
@@ -92,7 +90,7 @@ class FlammeRougeGame:
         afin de garantir que les zones cliquables correspondent à l'affichage.
         """
         n = max(1, len(self.game.players))
-        panel_w = min(520, max(380, (self.width - 2 * MARGIN) // n))
+        panel_w = min(520, max(260, (self.width - 2 * MARGIN) // n))
         panel_h = self._hands_height()
         top = self.height - panel_h - 6
         total_w = panel_w * n
@@ -103,7 +101,7 @@ class FlammeRougeGame:
         for idx, player in enumerate(self.game.players):
             panel = pygame.Rect(start_x + idx * panel_w, top, panel_w - 10, panel_h)
             avail = panel.w - label_w - 2 * PANEL_PAD
-            card_w = max(40, min(CARD_W, (avail - 3 * CARD_GAP) // 4))
+            card_w = max(32, min(CARD_W, (avail - 3 * CARD_GAP) // 4))
             rows = []
             for row, (runner, label) in enumerate(
                     [(player.sprinter, "Sprinteur"), (player.roller, "Rouleur")]):
@@ -192,6 +190,9 @@ class FlammeRougeGame:
                         self.game = Game(stage="test", player_count=2)
                         self.scroll_x = 0
                         self.showing_aspiration = False
+                        self.aspiration_step = 0
+                        self.aspiration_total = 0
+                        self.aspiration_movements = []
                     elif event.key == pygame.K_h:
                         self.show_hands = not self.show_hands
                     elif event.key == pygame.K_d:
@@ -367,6 +368,17 @@ class FlammeRougeGame:
         if self.show_decks:
             self._draw_decks()
 
+        # Écran de fin de partie (affiché quelle que soit la phase)
+        if self.game.game_over and self.game.winner:
+            winner_text = self.big_font.render(
+                f"Gagnant: {self.game.winner.color} !", True,
+                PLAYER_COLORS.get(self.game.winner.color, BLACK))
+            text_rect = winner_text.get_rect(center=(self.width // 2, self.height // 2 - 50))
+            self.screen.blit(winner_text, text_rect)
+            restart_text = self.font.render("Appuyez sur R pour recommencer", True, BLACK)
+            restart_rect = restart_text.get_rect(center=(self.width // 2, self.height // 2 + 10))
+            self.screen.blit(restart_text, restart_rect)
+
     def _draw_hands(self):
         """Panneaux de sélection des cartes (phase d'énergie).
 
@@ -460,9 +472,8 @@ class FlammeRougeGame:
             
             sprinter_energy_count = self._format_cards_count(player.sprinter.energy_deck)
             sprinter_hand = self._format_hand(player.sprinter.hand)
-            sprinter_fatigue = len(player.sprinter.fatigue_deck)
             sprinter_discard_count = self._format_cards_count(player.sprinter.discard_pile)
-            
+
             sprinter_text1 = tiny_font.render(
                 f"S: Deck[{len(player.sprinter.energy_deck)}:{sprinter_energy_count}]",
                 True, BLACK
@@ -471,16 +482,15 @@ class FlammeRougeGame:
             sprinter_text2 = tiny_font.render(f"   Hand:[{sprinter_hand}]", True, BLACK)
             self.screen.blit(sprinter_text2, (deck_x + 30, block_y + 40))
             sprinter_text3 = tiny_font.render(
-                f"   Fatigue:{sprinter_fatigue}x2F | Discard[{len(player.sprinter.discard_pile)}:{sprinter_discard_count}]",
+                f"   Discard[{len(player.sprinter.discard_pile)}:{sprinter_discard_count}]",
                 True, BLACK
             )
             self.screen.blit(sprinter_text3, (deck_x + 30, block_y + 60))
-            
+
             roller_energy_count = self._format_cards_count(player.roller.energy_deck)
             roller_hand = self._format_hand(player.roller.hand)
-            roller_fatigue = len(player.roller.fatigue_deck)
             roller_discard_count = self._format_cards_count(player.roller.discard_pile)
-            
+
             roller_text1 = tiny_font.render(
                 f"R: Deck[{len(player.roller.energy_deck)}:{roller_energy_count}]",
                 True, BLACK
@@ -489,7 +499,7 @@ class FlammeRougeGame:
             roller_text2 = tiny_font.render(f"   Hand:[{roller_hand}]", True, BLACK)
             self.screen.blit(roller_text2, (deck_x + 30, block_y + 100))
             roller_text3 = tiny_font.render(
-                f"   Fatigue:{roller_fatigue}x2F | Discard[{len(player.roller.discard_pile)}:{roller_discard_count}]",
+                f"   Discard[{len(player.roller.discard_pile)}:{roller_discard_count}]",
                 True, BLACK
             )
             self.screen.blit(roller_text3, (deck_x + 30, block_y + 120))
@@ -497,15 +507,6 @@ class FlammeRougeGame:
             if player_idx < len(self.game.players) - 1:
                 pygame.draw.line(self.screen, GRAY, (deck_x, block_y + 140),
                                (deck_x + 280, block_y + 140), 1)
-
-        # Gagnant
-        if self.game.game_over:
-            winner_text = self.big_font.render(f"Gagnant: {self.game.winner.color} !", True, PLAYER_COLORS.get(self.game.winner.color, BLACK))
-            text_rect = winner_text.get_rect(center=(self.width // 2, self.height // 2 - 50))
-            self.screen.blit(winner_text, text_rect)
-            restart_text = self.font.render("Appuyez sur R pour recommencer", True, BLACK)
-            restart_rect = restart_text.get_rect(center=(self.width // 2, self.height // 2 + 10))
-            self.screen.blit(restart_text, restart_rect)
 
 
 if __name__ == "__main__":
