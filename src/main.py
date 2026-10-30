@@ -239,9 +239,9 @@ class FlammeRougeGame:
             # Afficher les noms des files
             if x == 0:
                 lane_a_text = self.font.render("A", True, BLACK)
-                self.screen.blit(lane_a_text, (cell_x + 5, track_y + LANE_HEIGHT // 2 - 10))
+                self.screen.blit(lane_a_text, (cell_x - 25, track_y + LANE_HEIGHT // 2 - 10))
                 lane_b_text = self.font.render("B", True, BLACK)
-                self.screen.blit(lane_b_text, (cell_x + 5, track_y + LANE_HEIGHT + LANE_HEIGHT // 2 - 10))
+                self.screen.blit(lane_b_text, (cell_x - 25, track_y + LANE_HEIGHT + LANE_HEIGHT // 2 - 10))
 
             if x == 0:
                 pygame.draw.rect(self.screen, GREEN, (cell_x, track_y, CELL_SIZE, track_height), width=3)

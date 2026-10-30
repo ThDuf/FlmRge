@@ -114,7 +114,7 @@ class Track:
         """
         Déplace un coureur de `steps` cases.
         - Avance case par case
-        - Priorité à la droite (file 1) si la file actuelle est bloquée
+        - Priorité à la file A (lane 0) si la file actuelle est bloquée
         - Si les 2 files sont occupées, s'arrête
         """
         if steps <= 0:
@@ -217,7 +217,7 @@ class Track:
                     print(f"DEBUG: Aspiration détectée - groupe arrière à {x_behind}, groupe avant à {x_ahead}")
                     
                     # Déplacer TOUS les coureurs du groupe derrière de 1 case
-                    # Priorité à la droite (file 1) pour le déplacement
+                    # Priorité à la file A (lane 0) pour le déplacement
                     for runner in sorted(group_behind, key=lambda r: (r.x, r.y)):
                         old_x = runner.x
                         old_y = runner.y
@@ -257,7 +257,7 @@ class Track:
                         
                         movements.append((runner, old_x, new_x))
                         moved = True
-                        print(f"DEBUG: {runner.id} déplacé de {old_x} à {new_x}, file {old_y}->{runner.y}")
+                        print(f"DEBUG: {runner.id} déplacé de {old_x} à {new_x}, lane {old_y}->{runner.y}")
 
                     # Recalculer les groupes après ce mouvement
                     break
