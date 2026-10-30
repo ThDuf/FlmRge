@@ -367,49 +367,83 @@ class FlammeRougeGame:
                     card_text_rect = card_text.get_rect(center=card_rect.center)
                     self.screen.blit(card_text, card_text_rect)
 
-        # Affichage des decks (en bas à droite, format compact)
+    def _format_cards_count(self, cards: List[Card]) -> str:
+        """Formate une liste de cartes en affichant le nombre de cartes par valeur."""
+        from game.card import CardType
+        counts = {}
+        for card in cards:
+            if card.type == CardType.FATIGUE:
+                key = "2F"
+            else:
+                key = str(card.value)
+            counts[key] = counts.get(key, 0) + 1
+        if not counts:
+            return "-"
+        sorted_keys = sorted(counts.keys(), key=lambda k: (0 if k == "2F" else int(k), k))
+        return ",".join(f"{k}x{counts[k]}" for k in sorted_keys)
+
+    def _format_hand(self, cards: List[Card]) -> str:
+        """Formate la main en affichant les valeurs des cartes."""
+        from game.card import CardType
+        values = []
+        for card in cards:
+            if card.type == CardType.FATIGUE:
+                values.append("2F")
+            else:
+                values.append(str(card.value))
+        return ", ".join(values) if values else "-"
+
+        # Affichage des decks (en bas à droite, format complet)
         if self.show_decks:
-            small_font = pygame.font.SysFont("Arial", 16)
-            deck_x = SCREEN_WIDTH - 250
-            deck_y = SCREEN_HEIGHT - 200
+            small_font = pygame.font.SysFont("Arial", 14)
+            tiny_font = pygame.font.SysFont("Arial", 12)
+            deck_x = SCREEN_WIDTH - 300
+            deck_y = SCREEN_HEIGHT - 220
             
             for player_idx, player in enumerate(self.game.players):
                 color = PLAYER_COLORS.get(player.color, BLACK)
-                
-                # Titre joueur
                 title = small_font.render(f"{player.color}:", True, color)
-                self.screen.blit(title, (deck_x, deck_y + player_idx * 100))
+                self.screen.blit(title, (deck_x, deck_y + player_idx * 110))
                 
-                # Fonction pour compter les cartes par valeur
-                def count_cards(deck, is_fatigue=False):
-                    counts = {}
-                    for card in deck:
-                        if is_fatigue:
-                            key = "2F"  # Cartes fatigue valent toujours 2
-                        else:
-                            key = str(card.value)
-                        counts[key] = counts.get(key, 0) + 1
-                    return counts
+                sprinter_energy_count = self._format_cards_count(player.sprinter.energy_deck)
+                sprinter_hand = self._format_hand(player.sprinter.hand)
+                sprinter_fatigue = len(player.sprinter.fatigue_deck)
+                sprinter_discard_count = self._format_cards_count(player.sprinter.discard_pile)
                 
-                # Sprinteur
-                sprinter_energy_counts = count_cards(player.sprinter.energy_deck)
-                sprinter_fatigue_counts = count_cards(player.sprinter.fatigue_deck, is_fatigue=True)
-                
-                sprinter_text = small_font.render(
-                    f"S: {', '.join([f'{k}:{v}' for k, v in sorted(sprinter_energy_counts.items())])} | F:{sprinter_fatigue_counts.get('2F', 0)}",
+                sprinter_text1 = tiny_font.render(
+                    f"S: Deck[{len(player.sprinter.energy_deck)}:{sprinter_energy_count}]",
                     True, BLACK
                 )
-                self.screen.blit(sprinter_text, (deck_x + 30, deck_y + 20 + player_idx * 100))
-                
-                # Rouleur
-                roller_energy_counts = count_cards(player.roller.energy_deck)
-                roller_fatigue_counts = count_cards(player.roller.fatigue_deck, is_fatigue=True)
-                
-                roller_text = small_font.render(
-                    f"R: {', '.join([f'{k}:{v}' for k, v in sorted(roller_energy_counts.items())])} | F:{roller_fatigue_counts.get('2F', 0)}",
+                self.screen.blit(sprinter_text1, (deck_x + 30, deck_y + 20 + player_idx * 110))
+                sprinter_text2 = tiny_font.render(f"   Hand:[{sprinter_hand}]", True, BLACK)
+                self.screen.blit(sprinter_text2, (deck_x + 30, deck_y + 40 + player_idx * 110))
+                sprinter_text3 = tiny_font.render(
+                    f"   Fatigue:{sprinter_fatigue}x2F | Discard[{len(player.sprinter.discard_pile)}:{sprinter_discard_count}]",
                     True, BLACK
                 )
-                self.screen.blit(roller_text, (deck_x + 30, deck_y + 40 + player_idx * 100))
+                self.screen.blit(sprinter_text3, (deck_x + 30, deck_y + 60 + player_idx * 110))
+                
+                roller_energy_count = self._format_cards_count(player.roller.energy_deck)
+                roller_hand = self._format_hand(player.roller.hand)
+                roller_fatigue = len(player.roller.fatigue_deck)
+                roller_discard_count = self._format_cards_count(player.roller.discard_pile)
+                
+                roller_text1 = tiny_font.render(
+                    f"R: Deck[{len(player.roller.energy_deck)}:{roller_energy_count}]",
+                    True, BLACK
+                )
+                self.screen.blit(roller_text1, (deck_x + 30, deck_y + 80 + player_idx * 110))
+                roller_text2 = tiny_font.render(f"   Hand:[{roller_hand}]", True, BLACK)
+                self.screen.blit(roller_text2, (deck_x + 30, deck_y + 100 + player_idx * 110))
+                roller_text3 = tiny_font.render(
+                    f"   Fatigue:{roller_fatigue}x2F | Discard[{len(player.roller.discard_pile)}:{roller_discard_count}]",
+                    True, BLACK
+                )
+                self.screen.blit(roller_text3, (deck_x + 30, deck_y + 120 + player_idx * 110))
+                
+                if player_idx < len(self.game.players) - 1:
+                    pygame.draw.line(self.screen, GRAY, (deck_x, deck_y + 140 + player_idx * 110),
+                                   (deck_x + 280, deck_y + 140 + player_idx * 110), 1)
 
         # Gagnant
         if self.game.game_over:
