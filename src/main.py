@@ -150,6 +150,7 @@ class FlammeRougeGame:
                             self._initialize_aspiration()
                             if not self.aspiration_movements:
                                 print("DEBUG: Aucune aspiration possible, passage en phase terminale")
+                                self.showing_aspiration = False
                                 self.game.current_phase = Phase.TERMINAL
                                 self.game._assign_fatigue_cards()
                                 if not self.game._check_win_condition():
