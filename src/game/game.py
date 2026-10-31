@@ -100,6 +100,31 @@ class Game:
             for _ in range(13):
                 track.add_tile(TileType.STRAIGHT)
             track.add_tile(TileType.FINISH)
+        elif stage == "circuit":
+            # Circuit long avec virages (légers = jaune, serrés = orange) :
+            # 30 tuiles = 60 cases. Les virages sont visuels pour l'instant
+            # (aucune règle officielle ne leur est associée, contrairement
+            # aux montées/descentes).
+            spec = [
+                (TileType.START, 1),
+                (TileType.STRAIGHT, 3),
+                (TileType.LIGHT_TURN, 1),
+                (TileType.STRAIGHT, 3),
+                (TileType.SHARP_TURN, 1),
+                (TileType.STRAIGHT, 4),
+                (TileType.LIGHT_TURN, 1),
+                (TileType.STRAIGHT, 2),
+                (TileType.SHARP_TURN, 1),
+                (TileType.STRAIGHT, 3),
+                (TileType.LIGHT_TURN, 1),
+                (TileType.STRAIGHT, 4),
+                (TileType.SHARP_TURN, 1),
+                (TileType.STRAIGHT, 3),
+                (TileType.FINISH, 1),
+            ]
+            for tile_type, count in spec:
+                for _ in range(count):
+                    track.add_tile(tile_type)
 
         return track
 

@@ -2,6 +2,7 @@ import pygame
 import sys
 from game.game import Game, Phase
 from game.card import CardType
+from game.track import TileType
 
 # Initialiser Pygame
 pygame.init()
@@ -11,16 +12,22 @@ SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 800
 MIN_WIDTH = 900    # taille minimale de la fenêtre
 MIN_HEIGHT = 600
-CELL_SIZE = 60
+CELL_SIZE = 44     # taille d'une case (réduite pour voir plus de circuit)
 LANE_HEIGHT = CELL_SIZE // 2
-MARGIN = 50
-CARD_W = 54        # taille des cartes en main
-CARD_H = 68
-CARD_GAP = 8       # espace entre cartes
-PANEL_PAD = 12     # padding des panneaux de joueur
-PANEL_HEADER = 32  # hauteur de l'en-tête des panneaux (nom + progression)
+ROW_GAP = 14       # espace vertical entre les rangées du circuit serpentin
+INFO_H = 170       # hauteur réservée en haut pour la barre d'infos
+
+CARD_W = 44        # taille des cartes en main
+CARD_H = 58
+CARD_GAP = 6       # espace entre cartes
+PANEL_PAD = 10     # padding des panneaux de joueur
+PANEL_HEADER = 30  # hauteur de l'en-tête des panneaux (nom + progression)
+PANEL_H = 170      # hauteur d'un panneau de joueur (colonne de gauche)
 GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
+
+LIGHT_TURN_FILL = (255, 250, 205)    # virage léger
+SHARP_TURN_FILL = (255, 224, 178)     # virage serré
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -43,6 +50,13 @@ PLAYER_COLORS = {
 
 
 class FlammeRougeGame:
+    """Interface Pygame : colonne de cartes à gauche, circuit serpentin à droite.
+
+    Le circuit complet est affiché sans scrolling : les cases déroulent
+    en serpentin (rangées gauche->droite puis droite->gauche), ce qui
+    permet de voir toute la course d'un coup d'œil.
+    """
+
     def __init__(self):
         self.width, self.height = SCREEN_WIDTH, SCREEN_HEIGHT
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
@@ -50,17 +64,14 @@ class FlammeRougeGame:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Arial", 20)
         self.big_font = pygame.font.SysFont("Arial", 30)
-        self.card_font = pygame.font.SysFont("Arial", 24)
-        self.small_font = pygame.font.SysFont("Arial", 15)
+        self.card_font = pygame.font.SysFont("Arial", 18)
+        self.label_font = pygame.font.SysFont("Arial", 16)
+        self.small_font = pygame.font.SysFont("Arial", 12)
 
-        self.game = Game(stage="test", player_count=2)
+        self.game = Game(stage="circuit", player_count=2)
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
-        self.show_decks = False  # Afficher les decks à droite
-        self.scroll_x = 0
-        self.scroll_speed = 30
-        self.dragging = False
-        self.last_mouse_pos = (0, 0)
+        self.show_decks = False  # Panneau des cartes restantes (touche D)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -70,19 +81,53 @@ class FlammeRougeGame:
         self.aspiration_total = 0
         self.aspiration_movements = []
 
-    def _calculate_max_scroll(self) -> int:
-        track_width = self.game.track.length * CELL_SIZE
-        visible_width = self.width - 2 * MARGIN
-        return max(0, track_width - visible_width)
+    # ------------------------------------------------------------------
+    # Géométrie : colonne de gauche / circuit serpentin à droite
+    # ------------------------------------------------------------------
 
-    def _hands_height(self) -> int:
-        """Hauteur réservée en bas pour les panneaux de sélection des cartes."""
-        return PANEL_HEADER + 2 * CARD_H + 26
+    def _left_w(self) -> int:
+        """Largeur de la colonne de gauche (panneaux de cartes des joueurs)."""
+        return min(340, max(280, self.width // 2))
+
+    def _cells_per_row(self) -> int:
+        """Nombre de cases par rangée du circuit serpentin."""
+        area = self.width - self._left_w() - 24
+        return max(6, area // CELL_SIZE)
+
+    def _row_height(self) -> int:
+        return LANE_HEIGHT * 2 + ROW_GAP
 
     def _track_top(self) -> int:
-        """Position Y du haut de la piste (stable quel que soit la phase)."""
-        track_height = LANE_HEIGHT * 2 + 10
-        return max(120, (self.height - self._hands_height() - track_height) // 2)
+        """Position Y de la première rangée (centrée sous la barre d'infos)."""
+        per_row = self._cells_per_row()
+        rows = (self.game.track.length + per_row - 1) // per_row
+        total = rows * self._row_height() - ROW_GAP
+        return INFO_H + max(0, (self.height - INFO_H - 20 - total) // 2)
+
+    def _cell_pos(self, x: int):
+        """Position écran (px, py) de la case x du circuit serpentin.
+
+        Les rangées paires déroulent de gauche à droite, les impaires de
+        droite à gauche : le circuit "serpente" et tient tout entier
+        dans la zone de droite.
+        """
+        per_row = self._cells_per_row()
+        row, col = divmod(x, per_row)
+        if row % 2 == 0:
+            cx = self._left_w() + 12 + col * CELL_SIZE
+        else:
+            cx = self.width - 12 - (col + 1) * CELL_SIZE
+        cy = self._track_top() + row * self._row_height()
+        return cx, cy
+
+    # ------------------------------------------------------------------
+    # Géométrie : panneaux de cartes (colonne de gauche)
+    # ------------------------------------------------------------------
+
+    def _panel_h(self) -> int:
+        """Hauteur d'un panneau de joueur, réduite si beaucoup de joueurs."""
+        n = max(1, len(self.game.players))
+        return min(PANEL_H, (self.height - 16 - (n - 1) * 8) // n)
 
     def _row_items(self, runner):
         """Cartes affichées d'un coureur : [(carte, jouée), ...].
@@ -98,39 +143,40 @@ class FlammeRougeGame:
         return items
 
     def _hand_layout(self):
-        """Géométrie des panneaux de mains : un panneau par joueur, adapté à la fenêtre.
+        """Géométrie des panneaux de mains, empilés en colonne à GAUCHE.
 
-        Panneau compact : en-tête d'une ligne (nom du joueur + progression x/2),
-        puis 2 lignes (Sprinteur / Rouleur) avec le libellé à GAUCHE et les
-        cartes à droite du libellé (carte jouée incluse, en vert).
+        Un panneau compact par joueur : en-tête (nom + progression x/2),
+        2 lignes (Sprinteur / Rouleur) avec libellé à gauche et cartes
+        (carte jouée incluse, en vert) à droite.
         Retourne [(player, panel_rect, [(runner, label, items, [card_rects]), ...]), ...].
         Utilisé à la fois pour le dessin et pour la détection des clics,
         afin de garantir que les zones cliquables correspondent à l'affichage.
         """
-        n = max(1, len(self.game.players))
-        panel_w = min(520, max(260, (self.width - 2 * MARGIN) // n))
-        panel_h = self._hands_height()
-        top = self.height - panel_h - 6
-        total_w = panel_w * n
-        start_x = max(MARGIN // 2, (self.width - total_w) // 2)
+        panel_h = self._panel_h()
+        panel_w = self._left_w() - 16
+        card_h = max(36, (panel_h - PANEL_HEADER - 26) // 2)
+        label_w = 88  # zone réservée au libellé ("Sprinteur" / "Rouleur")
+        avail = panel_w - label_w - 2 * PANEL_PAD
+        card_w = max(28, min(CARD_W, (avail - 3 * CARD_GAP) // 4))
 
-        label_w = 104  # zone réservée au libellé ("Sprinteur" / "Rouleur")
         layout = []
         for idx, player in enumerate(self.game.players):
-            panel = pygame.Rect(start_x + idx * panel_w, top, panel_w - 10, panel_h)
-            avail = panel.w - label_w - 2 * PANEL_PAD
-            card_w = max(32, min(CARD_W, (avail - 3 * CARD_GAP) // 4))
+            panel = pygame.Rect(8, 8 + idx * (panel_h + 8), panel_w, panel_h)
             rows = []
             for row, (runner, label) in enumerate(
                     [(player.sprinter, "Sprinteur"), (player.roller, "Rouleur")]):
-                row_y = panel.y + PANEL_HEADER + 8 + row * (CARD_H + 10)
+                row_y = panel.y + PANEL_HEADER + 8 + row * (card_h + 10)
                 items = self._row_items(runner)
                 cards_x = panel.x + label_w + PANEL_PAD
-                rects = [pygame.Rect(cards_x + i * (card_w + CARD_GAP), row_y, card_w, CARD_H)
+                rects = [pygame.Rect(cards_x + i * (card_w + CARD_GAP), row_y, card_w, card_h)
                          for i in range(len(items))]
                 rows.append((runner, label, items, rects))
             layout.append((player, panel, rows))
         return layout
+
+    # ------------------------------------------------------------------
+    # Déroulé du tour (bouton ou ENTRÉE)
+    # ------------------------------------------------------------------
 
     def _start_movement_phase(self):
         """Calcule les mouvements (sans les appliquer) et démarre le pas-à-pas."""
@@ -152,9 +198,10 @@ class FlammeRougeGame:
         return len(self.movement_movements) == 0
 
     def _button_rect(self) -> pygame.Rect:
-        """Position du bouton d'action (au-dessus des panneaux de mains)."""
-        hands_top = self.height - self._hands_height() - 6
-        return pygame.Rect(self.width // 2 - 115, hands_top - 70, 230, 52)
+        """Position du bouton d'action (sous la colonne de panneaux, à gauche)."""
+        n = max(1, len(self.game.players))
+        y = 8 + n * (self._panel_h() + 8) + 6
+        return pygame.Rect(8, min(y, self.height - 58), self._left_w() - 16, 48)
 
     def _button_info(self):
         """(libellé, couleur) du bouton d'action, ou None s'il n'y en a pas.
@@ -243,6 +290,10 @@ class FlammeRougeGame:
         else:
             self.game.game_over = True
 
+    # ------------------------------------------------------------------
+    # Boucle principale
+    # ------------------------------------------------------------------
+
     def run(self):
         running = True
         while running:
@@ -255,36 +306,16 @@ class FlammeRougeGame:
                     self.width = max(MIN_WIDTH, event.w)
                     self.height = max(MIN_HEIGHT, event.h)
                     self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
-                    self.scroll_x = min(self.scroll_x, self._calculate_max_scroll())
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if self._try_button_click(event.pos):
-                            pass  # clic sur le bouton d'action : pas de drag
-                        else:
+                        if not self._try_button_click(event.pos):
                             if self.game.current_phase == Phase.ENERGY and self.show_hands:
                                 self._handle_click(event.pos)
-                            self.dragging = True
-                            self.last_mouse_pos = event.pos
-                    elif event.button == 4:
-                        self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
-                    elif event.button == 5:
-                        self.scroll_x = min(self._calculate_max_scroll(), self.scroll_x + self.scroll_speed)
-
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    if event.button == 1:
-                        self.dragging = False
-
-                elif event.type == pygame.MOUSEMOTION:
-                    if self.dragging and self.game.current_phase != Phase.ENERGY:
-                        dx = event.pos[0] - self.last_mouse_pos[0]
-                        self.scroll_x = max(0, min(self._calculate_max_scroll(), self.scroll_x - dx))
-                        self.last_mouse_pos = event.pos
 
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
-                        self.game = Game(stage="test", player_count=2)
-                        self.scroll_x = 0
+                        self.game = Game(stage="circuit", player_count=2)
                         self.showing_movement = False
                         self.movement_step = 0
                         self.movement_total = 0
@@ -300,10 +331,6 @@ class FlammeRougeGame:
                         self.show_decks = not self.show_decks
                     elif event.key == pygame.K_RETURN:
                         self._advance_step()
-                    elif event.key == pygame.K_LEFT:
-                        self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
-                    elif event.key == pygame.K_RIGHT:
-                        self.scroll_x = min(self._calculate_max_scroll(), self.scroll_x + self.scroll_speed)
 
             self.screen.fill(WHITE)
             self._draw_track()
@@ -339,96 +366,129 @@ class FlammeRougeGame:
                                 print("Appuyez sur ENTREE pour lancer la phase de mouvement...")
                         return
 
+    # ------------------------------------------------------------------
+    # Dessin : circuit serpentin
+    # ------------------------------------------------------------------
+
     def _draw_track(self):
-        track_height = LANE_HEIGHT * 2 + 10
-        track_y = self._track_top()
-        visible_start = self.scroll_x // CELL_SIZE
-        visible_end = min(self.game.track.length, (self.scroll_x + self.width - MARGIN) // CELL_SIZE)
-        visible_width = (visible_end - visible_start) * CELL_SIZE
-        
-        pygame.draw.rect(self.screen, LIGHT_GRAY, (MARGIN - self.scroll_x % CELL_SIZE, track_y, visible_width + CELL_SIZE, track_height), border_radius=5)
+        track = self.game.track
+        per_row = self._cells_per_row()
+        rows = (track.length + per_row - 1) // per_row
+        road_h = LANE_HEIGHT * 2
 
-        for x in range(visible_start, visible_end):
-            cell_x = MARGIN + x * CELL_SIZE - self.scroll_x
-            pygame.draw.rect(self.screen, WHITE, (cell_x, track_y, CELL_SIZE, LANE_HEIGHT), width=1)
-            pygame.draw.rect(self.screen, WHITE, (cell_x, track_y + LANE_HEIGHT, CELL_SIZE, LANE_HEIGHT), width=1)
+        # Route de chaque rangée
+        for row in range(rows):
+            start = row * per_row
+            count = min(per_row, track.length - start)
+            y = self._track_top() + row * self._row_height()
+            if row % 2 == 0:
+                x = self._left_w() + 12
+            else:
+                x = self.width - 12 - count * CELL_SIZE
+            pygame.draw.rect(self.screen, LIGHT_GRAY,
+                             (x, y, count * CELL_SIZE, road_h), border_radius=6)
 
-            # Afficher les noms des files
-            if x == 0:
-                lane_a_text = self.font.render("A", True, BLACK)
-                self.screen.blit(lane_a_text, (cell_x - 25, track_y + LANE_HEIGHT // 2 - 10))
-                lane_b_text = self.font.render("B", True, BLACK)
-                self.screen.blit(lane_b_text, (cell_x - 25, track_y + LANE_HEIGHT + LANE_HEIGHT // 2 - 10))
+        # Cases : teinte des virages, files, départ/arrivée, numéros, flèches
+        for x_cell in range(track.length):
+            cx, cy = self._cell_pos(x_cell)
+            tile_type = track.tiles[x_cell // 2].type
 
-            if x == 0:
-                pygame.draw.rect(self.screen, GREEN, (cell_x, track_y, CELL_SIZE, track_height), width=3)
-            elif x == self.game.track.length - 1:
-                pygame.draw.rect(self.screen, RED, (cell_x, track_y, CELL_SIZE, track_height), width=3)
+            # Teinte des virages (tuile entière = 2 cases)
+            if tile_type == TileType.LIGHT_TURN:
+                pygame.draw.rect(self.screen, LIGHT_TURN_FILL,
+                                 (cx, cy, CELL_SIZE, road_h))
+            elif tile_type == TileType.SHARP_TURN:
+                pygame.draw.rect(self.screen, SHARP_TURN_FILL,
+                                 (cx, cy, CELL_SIZE, road_h))
 
-            if x % 5 == 0:
-                text = self.font.render(str(x), True, BLACK)
-                self.screen.blit(text, (cell_x + 5, track_y + 5))
+            # Quadrillage des files A et B
+            pygame.draw.rect(self.screen, WHITE, (cx, cy, CELL_SIZE, LANE_HEIGHT), width=1)
+            pygame.draw.rect(self.screen, WHITE, (cx, cy + LANE_HEIGHT, CELL_SIZE, LANE_HEIGHT), width=1)
+
+            # Flèche de virage entre deux rangées du serpentin
+            is_row_end = (x_cell + 1) % per_row == 0
+            if is_row_end and x_cell != track.length - 1:
+                if (x_cell // per_row) % 2 == 0:
+                    ax = cx + CELL_SIZE - 12
+                    pts = [(ax, cy + 4), (ax + 8, cy + 4), (ax + 4, cy + 14)]
+                else:
+                    ax = cx + 4
+                    pts = [(ax, cy + 4), (ax + 8, cy + 4), (ax + 4, cy + 14)]
+                pygame.draw.polygon(self.screen, PURPLE, pts)
+
+            if x_cell == 0:
+                # Départ : bordure verte + noms des files
+                pygame.draw.rect(self.screen, GREEN, (cx, cy, CELL_SIZE, road_h), width=3)
+                lane_a = self.small_font.render("A", True, BLACK)
+                self.screen.blit(lane_a, (cx - 14, cy + LANE_HEIGHT // 2 - 6))
+                lane_b = self.small_font.render("B", True, BLACK)
+                self.screen.blit(lane_b, (cx - 14, cy + LANE_HEIGHT + LANE_HEIGHT // 2 - 6))
+            elif x_cell == track.length - 1:
+                # Arrivée : bordure rouge
+                pygame.draw.rect(self.screen, RED, (cx, cy, CELL_SIZE, road_h), width=3)
+
+            if x_cell % 5 == 0:
+                num = self.small_font.render(str(x_cell), True, GRAY)
+                self.screen.blit(num, (cx + 2, cy + 2))
 
     def _draw_runners(self):
-        track_y = self._track_top()
-
         for player in self.game.players:
             for runner in player.get_runners():
-                cell_x = MARGIN + runner.x * CELL_SIZE - self.scroll_x
-                cell_y = track_y + runner.y * LANE_HEIGHT
-
-                if cell_x + CELL_SIZE < MARGIN or cell_x > self.width - MARGIN:
-                    continue
-
+                cx, cy = self._cell_pos(runner.x)
+                center = (cx + CELL_SIZE // 2, cy + runner.y * LANE_HEIGHT + LANE_HEIGHT // 2)
                 color = PLAYER_COLORS.get(player.color, BLACK)
-                center = (cell_x + CELL_SIZE // 2, cell_y + LANE_HEIGHT // 2)
                 pygame.draw.circle(self.screen, color, center, CELL_SIZE // 3)
 
-                # Type du coureur au-dessus du centre, carte jouée en dessous :
-                # 2 textes petits, sans chevauchement dans le cercle
+                # Type du coureur au-dessus du centre, carte jouée en dessous
                 type_text = "S" if runner.type.name == "SPRINTER" else "R"
                 type_surf = self.small_font.render(f"{type_text}{runner.id[-1]}", True, WHITE)
-                self.screen.blit(type_surf, type_surf.get_rect(center=(center[0], center[1] - 9)))
+                self.screen.blit(type_surf, type_surf.get_rect(center=(center[0], center[1] - 6)))
 
                 if self.game.current_phase in [Phase.MOVEMENT, Phase.TERMINAL, Phase.ASPIRATION] and runner.played_card:
                     val_surf = self.small_font.render(str(runner.played_card.value), True, WHITE)
-                    self.screen.blit(val_surf, val_surf.get_rect(center=(center[0], center[1] + 9)))
+                    self.screen.blit(val_surf, val_surf.get_rect(center=(center[0], center[1] + 7)))
+
+    # ------------------------------------------------------------------
+    # Dessin : interface
+    # ------------------------------------------------------------------
 
     def _draw_ui(self):
-        # Barre d'infos en haut à gauche (espacée pour éviter tout chevauchement)
+        info_x = self._left_w() + 16
+
+        # Barre d'infos en haut de la zone circuit (espacée, sans chevauchement)
         phase_text = self.big_font.render(f"Phase: {self.game.get_current_phase_name()}", True, BLACK)
-        self.screen.blit(phase_text, (MARGIN, 8))
+        self.screen.blit(phase_text, (info_x, 8))
 
         turn_text = self.big_font.render(f"Tour: {self.game.turn_count}", True, BLACK)
-        self.screen.blit(turn_text, (MARGIN, 50))
+        self.screen.blit(turn_text, (info_x, 50))
 
         # Pas-à-pas du mouvement (un coureur à la fois)
         if self.showing_movement:
             movement_text = self.big_font.render(
                 f"Mouvement: {self.movement_step}/{self.movement_total} coureurs", True, BLACK)
-            self.screen.blit(movement_text, (MARGIN, 94))
+            self.screen.blit(movement_text, (info_x, 94))
             if self.movement_movements:
                 runner, value = self.movement_movements[0]
                 next_text = self.font.render(
                     f"Suivant: {runner.id} joue {value}", True, BLACK)
-                self.screen.blit(next_text, (MARGIN, 138))
+                self.screen.blit(next_text, (info_x, 138))
 
         # Phase d'aspiration (pas-à-pas appliqué sur le plateau)
         if self.showing_aspiration:
             aspiration_text = self.big_font.render(
                 f"Aspiration: {self.aspiration_step}/{self.aspiration_total} packs", True, ORANGE)
-            self.screen.blit(aspiration_text, (MARGIN, 94))
+            self.screen.blit(aspiration_text, (info_x, 94))
             if self.aspiration_movements:
                 step = self.aspiration_movements[0]
                 desc = ", ".join(f"{r.id}:{fx}->{tx}" for r, fx, _fl, tx, _tl in step)
                 next_text = self.font.render(f"Pack: {desc}", True, ORANGE)
-                self.screen.blit(next_text, (MARGIN, 138))
+                self.screen.blit(next_text, (info_x, 138))
 
         # Cartes jouées ce tour
         if self.game.current_phase == Phase.ENERGY:
             cards_text = self.big_font.render(
                 f"Cartes: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}", True, BLACK)
-            self.screen.blit(cards_text, (MARGIN, 94))
+            self.screen.blit(cards_text, (info_x, 94))
 
         # Instructions (haut à droite)
         instructions_y = 10
@@ -448,14 +508,14 @@ class FlammeRougeGame:
             instructions = ["ENTR\u00c9E ou bouton", "    pour un nouveau", "    tour"]
         else:
             instructions = [f"Phase: {self.game.get_current_phase_name()}"]
-        
+
         for i, text in enumerate(instructions):
             text_surface = self.font.render(text, True, BLACK)
             self.screen.blit(text_surface, (instructions_x, instructions_y + i * 25))
 
         # Contrôles
         controls_y = instructions_y + len(instructions) * 25 + 10
-        controls = ["Molette/fl\u00e8ches: scroller", "H: masquer mains", "D: afficher decks", "R: recommencer"]
+        controls = ["H: masquer mains", "D: afficher decks", "R: recommencer"]
         for i, text in enumerate(controls):
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (instructions_x, controls_y + i * 25))
@@ -474,11 +534,11 @@ class FlammeRougeGame:
             self.screen.blit(button_text, button_text.get_rect(center=rect.center))
 
         # Mains des coureurs : visibles dans toutes les phases (cartes jouées
-        # grisées, progression x/2) ; cliquables uniquement en phase d'énergie
+        # en vert, progression x/2) ; cliquables uniquement en phase d'énergie
         if self.show_hands:
             self._draw_hands()
 
-        # Affichage des decks
+        # Affichage des cartes restantes
         if self.show_decks:
             self._draw_decks()
 
@@ -494,12 +554,12 @@ class FlammeRougeGame:
             self.screen.blit(restart_text, restart_rect)
 
     def _draw_hands(self):
-        """Panneaux de cartes des joueurs (toutes phases tant que H n'a pas masqué).
+        """Panneaux de cartes des joueurs, empilés en colonne à gauche.
 
         Panneau compact par joueur : en-tête avec nom + progression x/2,
-        libellés à gauche des cartes, surbrillance au survol, cartes grisées
-        une fois jouées. Les cartes ne sont cliquables qu'en phase d'énergie
-        (cf. _handle_click).
+        libellés à gauche des cartes, surbrillance au survol, carte jouée
+        en vert, cartes restantes grisées. Les cartes ne sont cliquables
+        qu'en phase d'énergie (cf. _handle_click).
         """
         mouse = pygame.mouse.get_pos()
         for player, panel, rows in self._hand_layout():
@@ -510,22 +570,22 @@ class FlammeRougeGame:
             pygame.draw.rect(self.screen, color, panel, width=2, border_radius=8)
 
             # En-tête : nom du joueur à gauche, progression à droite
-            name = self.font.render(player.color.capitalize(), True, color)
+            name = self.label_font.render(player.color.capitalize(), True, color)
             self.screen.blit(name, (panel.x + PANEL_PAD, panel.y + 6))
             played_count = sum(1 for r in (player.sprinter, player.roller)
                                if self.game.cards_played_per_runner[r.id] >= 1)
-            prog = self.font.render(f"{played_count}/2", True,
-                                    GREEN if played_count == 2 else GRAY)
+            prog = self.label_font.render(f"{played_count}/2", True,
+                                          GREEN if played_count == 2 else GRAY)
             self.screen.blit(prog, (panel.right - PANEL_PAD - prog.get_width(), panel.y + 6))
             pygame.draw.line(self.screen, color,
-                            (panel.x + 6, panel.y + PANEL_HEADER),
-                            (panel.right - 6, panel.y + PANEL_HEADER), 1)
+                             (panel.x + 6, panel.y + PANEL_HEADER),
+                             (panel.right - 6, panel.y + PANEL_HEADER), 1)
 
             for runner, label, items, rects in rows:
                 played = self.game.cards_played_per_runner[runner.id] >= 1
-                label_surf = self.font.render(label, True, GRAY if played else BLACK)
+                label_surf = self.label_font.render(label, True, GRAY if played else BLACK)
                 self.screen.blit(label_surf, (panel.x + PANEL_PAD,
-                                             rects[0].y + CARD_H // 2 - 10))
+                                             rects[0].y + rects[0].h // 2 - 8))
 
                 can_play = not played and self.game.current_phase == Phase.ENERGY
                 for (card, is_played), rect in zip(items, rects):
@@ -578,23 +638,22 @@ class FlammeRougeGame:
         Pour chaque coureur : une rangée de mini-cartes (valeurs 2 à 8 +
         Fatigue en orange) affichant le nombre de cartes de cette valeur
         encore dans le jeu, les valeurs épuisées en gris, plus les
-        effectifs Pioche/Main/Défausse. On voit ainsi le deck s'épuiser
-        au fil de la course.
+        effectifs Pioche/Main/Défausse. Empilé en bas à droite.
         """
         tiny_font = pygame.font.SysFont("Arial", 10)
         small_font = pygame.font.SysFont("Arial", 14)
         count_font = pygame.font.SysFont("Arial", 12)
 
         panel_w = 300
-        deck_x = self.width - panel_w - 10
-        deck_y = 205  # sous les instructions/contrôles
-        hands_top = self.height - self._hands_height() - 6
         block_h = 104
+        n = len(self.game.players)
+        deck_x = self.width - panel_w - 8
 
         for player_idx, player in enumerate(self.game.players):
-            block_y = deck_y + player_idx * (block_h + 6)
-            if block_y + block_h > hands_top:
-                break  # plus de place : ne pas dessiner sur les panneaux de mains
+            # Empilement depuis le bas de l'écran
+            block_y = self.height - (n - player_idx) * (block_h + 6) - 8
+            if block_y < INFO_H:
+                break  # plus de place au-dessus de la barre d'infos
             color = PLAYER_COLORS.get(player.color, BLACK)
 
             panel = pygame.Rect(deck_x, block_y, panel_w, block_h)
@@ -613,8 +672,8 @@ class FlammeRougeGame:
 
                 x = deck_x + 42
                 for v in ("2", "3", "4", "5", "6", "7", "8", "2F"):
-                    n = counts.get(v, 0)
-                    if n == 0:
+                    cnt = counts.get(v, 0)
+                    if cnt == 0:
                         fill, border, txt = (238, 238, 238), (210, 210, 210), (185, 185, 185)
                     elif v == "2F":
                         fill, border, txt = (255, 224, 178), ORANGE, (180, 90, 0)
@@ -625,7 +684,7 @@ class FlammeRougeGame:
                     pygame.draw.rect(self.screen, border, rect, width=1, border_radius=4)
                     val_surf = tiny_font.render(v, True, txt)
                     self.screen.blit(val_surf, val_surf.get_rect(center=(rect.centerx, row_y + 9)))
-                    cnt_surf = count_font.render(str(n), True, txt)
+                    cnt_surf = count_font.render(str(cnt), True, txt)
                     self.screen.blit(cnt_surf, cnt_surf.get_rect(center=(rect.centerx, row_y + 22)))
                     x += 22
 

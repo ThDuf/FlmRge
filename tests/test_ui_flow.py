@@ -262,5 +262,55 @@ class TestRemainingCounts(unittest.TestCase):
         self.assertEqual(ui._remaining_counts(runner).get("2F"), 1)
 
 
+class TestTrackLayout(unittest.TestCase):
+    """Circuit serpentin : tout est visible à l'écran, sans scrolling."""
+
+    def setUp(self):
+        self.ui = main.FlammeRougeGame()
+
+    def test_all_cells_fit_on_screen(self):
+        ui = self.ui
+        self.assertGreater(ui.game.track.length, 30)  # circuit long
+        for x in range(ui.game.track.length):
+            cx, cy = ui._cell_pos(x)
+            self.assertGreaterEqual(cx, ui._left_w() - 12,
+                                    f"case {x} empiète sur la colonne de gauche")
+            self.assertLessEqual(cx + main.CELL_SIZE, ui.width,
+                                 f"case {x} hors écran à droite")
+            self.assertGreaterEqual(cy, 0)
+            self.assertLessEqual(cy + 2 * main.LANE_HEIGHT, ui.height,
+                                 f"case {x} hors écran en bas")
+
+    def test_all_cells_fit_at_minimum_window_size(self):
+        ui = self.ui
+        ui.width, ui.height = main.MIN_WIDTH, main.MIN_HEIGHT
+        for x in range(ui.game.track.length):
+            cx, cy = ui._cell_pos(x)
+            self.assertLessEqual(cx + main.CELL_SIZE, ui.width)
+            self.assertLessEqual(cy + 2 * main.LANE_HEIGHT, ui.height)
+
+    def test_snake_alternates_direction(self):
+        """Rangées paires gauche->droite, impaires droite->gauche."""
+        ui = self.ui
+        per_row = ui._cells_per_row()
+        first, last = ui._cell_pos(0), ui._cell_pos(per_row - 1)
+        self.assertLess(first[0], last[0])
+        next_row = ui._cell_pos(per_row)
+        self.assertGreater(next_row[0], first[0])
+
+    def test_panels_and_button_stay_left_of_track(self):
+        ui = self.ui
+        track_left = ui._left_w() + 12
+        for player, panel, rows in ui._hand_layout():
+            self.assertLessEqual(panel.right, track_left)
+        self.assertLessEqual(ui._button_rect().right, track_left)
+
+    def test_track_has_turns(self):
+        from game.track import TileType
+        tiles = [t.type for t in self.ui.game.track.tiles]
+        self.assertIn(TileType.LIGHT_TURN, tiles)
+        self.assertIn(TileType.SHARP_TURN, tiles)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
