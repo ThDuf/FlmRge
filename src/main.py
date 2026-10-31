@@ -59,6 +59,10 @@ class FlammeRougeGame:
         self.scroll_speed = 30
         self.dragging = False
         self.last_mouse_pos = (0, 0)
+        self.showing_movement = False
+        self.movement_step = 0
+        self.movement_total = 0
+        self.movement_movements = []
         self.showing_aspiration = False
         self.aspiration_step = 0
         self.aspiration_total = 0
@@ -111,6 +115,80 @@ class FlammeRougeGame:
                 rows.append((runner, label, rects))
             layout.append((player, panel, rows))
         return layout
+
+    def _start_movement_phase(self):
+        """Calcule les mouvements (sans les appliquer) et démarre le pas-à-pas."""
+        self.movement_movements = self.game.resolve_movement_phase()
+        self.movement_step = 0
+        self.movement_total = len(self.movement_movements)
+        self.showing_movement = bool(self.movement_movements)
+
+    def _next_movement_step(self) -> bool:
+        """Applique UN mouvement de coureur sur le plateau.
+
+        Retourne True si tous les mouvements ont été appliqués.
+        """
+        if not self.movement_movements:
+            return True
+        move = self.movement_movements.pop(0)
+        self.game.apply_movement_step(move)
+        self.movement_step += 1
+        return len(self.movement_movements) == 0
+
+    def _button_rect(self) -> pygame.Rect:
+        """Position du bouton d'action (au-dessus des panneaux de mains)."""
+        hands_top = self.height - self._hands_height() - 6
+        return pygame.Rect(self.width // 2 - 115, hands_top - 70, 230, 52)
+
+    def _button_info(self):
+        """(libellé, couleur) du bouton d'action, ou None s'il n'y en a pas.
+
+        Le bouton est l'équivalent cliquable de la touche ENTRÉE :
+        lancer le mouvement, puis avancer un coureur / un pack à la fois.
+        """
+        if self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
+            return ("Lancer le mouvement", (25, 118, 210))
+        if self.showing_movement:
+            return (f"Mouvement suivant  {self.movement_step}/{self.movement_total}", (46, 125, 50))
+        if self.game.current_phase == Phase.MOVEMENT:
+            return ("Lancer l'aspiration", (25, 118, 210))
+        if self.showing_aspiration:
+            return (f"Aspiration suivante  {self.aspiration_step}/{self.aspiration_total}", (230, 126, 0))
+        return None
+
+    def _try_button_click(self, pos) -> bool:
+        """Gère un clic sur le bouton d'action. Retourne True si consommé."""
+        info = self._button_info()
+        if info is None or not self._button_rect().collidepoint(pos):
+            return False
+        self._advance_step()
+        return True
+
+    def _advance_step(self):
+        """Avance d'une étape (bouton ou ENTRÉE) selon l'état courant."""
+        if self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
+            self._start_movement_phase()
+        elif self.showing_movement:
+            if self._next_movement_step():
+                self.showing_movement = False
+        elif self.game.current_phase == Phase.MOVEMENT:
+            # Le moteur CALCULE toutes les étapes d'aspiration
+            # sans les appliquer : l'UI les applique pas-à-pas.
+            self.aspiration_movements = self.game.resolve_aspiration_phase()
+            if not self.aspiration_movements:
+                print("DEBUG: Aucune aspiration possible, passage en phase terminale")
+                self._finish_aspiration_phase()
+            else:
+                print(f"DEBUG: {len(self.aspiration_movements)} étapes d'aspiration à appliquer")
+                self._initialize_aspiration()
+        elif self.showing_aspiration:
+            # Applique réellement UNE étape (un pack) sur le plateau
+            if self._next_aspiration_step():
+                self._finish_aspiration_phase()
+        elif self.game.current_phase == Phase.TERMINAL:
+            if not self.game.game_over:
+                self.game._cleanup_hands()
+                self.game.start_turn()
 
     def _initialize_aspiration(self):
         """Prépare l'affichage pas-à-pas de l'aspiration.
@@ -165,10 +243,13 @@ class FlammeRougeGame:
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:
-                        if self.game.current_phase == Phase.ENERGY and self.show_hands:
-                            self._handle_click(event.pos)
-                        self.dragging = True
-                        self.last_mouse_pos = event.pos
+                        if self._try_button_click(event.pos):
+                            pass  # clic sur le bouton d'action : pas de drag
+                        else:
+                            if self.game.current_phase == Phase.ENERGY and self.show_hands:
+                                self._handle_click(event.pos)
+                            self.dragging = True
+                            self.last_mouse_pos = event.pos
                     elif event.button == 4:
                         self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
                     elif event.button == 5:
@@ -188,6 +269,10 @@ class FlammeRougeGame:
                     if event.key == pygame.K_r:
                         self.game = Game(stage="test", player_count=2)
                         self.scroll_x = 0
+                        self.showing_movement = False
+                        self.movement_step = 0
+                        self.movement_total = 0
+                        self.movement_movements = []
                         self.showing_aspiration = False
                         self.aspiration_step = 0
                         self.aspiration_total = 0
@@ -197,26 +282,7 @@ class FlammeRougeGame:
                     elif event.key == pygame.K_d:
                         self.show_decks = not self.show_decks
                     elif event.key == pygame.K_RETURN:
-                        if self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
-                            self.game.resolve_movement_phase()
-                        elif self.game.current_phase == Phase.MOVEMENT:
-                            # Le moteur CALCULE toutes les étapes d'aspiration
-                            # sans les appliquer : l'UI les applique pas-à-pas.
-                            self.aspiration_movements = self.game.resolve_aspiration_phase()
-                            if not self.aspiration_movements:
-                                print("DEBUG: Aucune aspiration possible, passage en phase terminale")
-                                self._finish_aspiration_phase()
-                            else:
-                                print(f"DEBUG: {len(self.aspiration_movements)} étapes d'aspiration à appliquer")
-                                self._initialize_aspiration()
-                        elif self.showing_aspiration:
-                            # Applique réellement UNE étape (un pack) sur le plateau
-                            if self._next_aspiration_step():
-                                self._finish_aspiration_phase()
-                        elif self.game.current_phase == Phase.TERMINAL:
-                            if not self.game.game_over:
-                                self.game._cleanup_hands()
-                                self.game.start_turn()
+                        self._advance_step()
                     elif event.key == pygame.K_LEFT:
                         self.scroll_x = max(0, self.scroll_x - self.scroll_speed)
                     elif event.key == pygame.K_RIGHT:
@@ -314,6 +380,17 @@ class FlammeRougeGame:
         turn_text = self.big_font.render(f"Tour: {self.game.turn_count}", True, BLACK)
         self.screen.blit(turn_text, (MARGIN, 50))
 
+        # Pas-à-pas du mouvement (un coureur à la fois)
+        if self.showing_movement:
+            movement_text = self.big_font.render(
+                f"Mouvement: {self.movement_step}/{self.movement_total} coureurs", True, BLACK)
+            self.screen.blit(movement_text, (MARGIN, 94))
+            if self.movement_movements:
+                runner, value = self.movement_movements[0]
+                next_text = self.font.render(
+                    f"Suivant: {runner.id} joue {value}", True, BLACK)
+                self.screen.blit(next_text, (MARGIN, 138))
+
         # Phase d'aspiration (pas-à-pas appliqué sur le plateau)
         if self.showing_aspiration:
             aspiration_text = self.big_font.render(
@@ -336,15 +413,17 @@ class FlammeRougeGame:
         instructions_x = self.width - 350
         if self.game.current_phase == Phase.ENERGY:
             if self.game.all_players_ready():
-                instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour lancer", "    la phase de mouvement"]
+                instructions = ["ENTR\u00c9E ou bouton", "    pour lancer", "    la phase de mouvement"]
             else:
                 instructions = [f"Jouez 1 carte par", f"    coureur ({self.game.total_cards_to_play} total)"]
+        elif self.showing_movement:
+            instructions = ["Un coureur \u00e0 la fois :", "    ENTR\u00c9E ou bouton", "    pour le suivant"]
         elif self.game.current_phase == Phase.MOVEMENT:
-            instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour lancer", "    l'aspiration"]
+            instructions = ["ENTR\u00c9E ou bouton", "    pour lancer", "    l'aspiration"]
         elif self.showing_aspiration:
-            instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour continuer", "    l'aspiration"]
+            instructions = ["Un pack \u00e0 la fois :", "    ENTR\u00c9E ou bouton", "    pour continuer"]
         elif self.game.current_phase == Phase.TERMINAL:
-            instructions = ["\u23f3 Appuyez sur ENTR\u00c9E", "    pour un nouveau", "    tour"]
+            instructions = ["ENTR\u00c9E ou bouton", "    pour un nouveau", "    tour"]
         else:
             instructions = [f"Phase: {self.game.get_current_phase_name()}"]
         
@@ -358,6 +437,19 @@ class FlammeRougeGame:
         for i, text in enumerate(controls):
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (instructions_x, controls_y + i * 25))
+
+        # Bouton d'action (équivalent cliquable de ENTRÉE) :
+        # lancer le mouvement, puis avancer coureur par coureur / pack par pack
+        button_info = self._button_info()
+        if button_info is not None:
+            label, button_color = button_info
+            rect = self._button_rect()
+            hovered = rect.collidepoint(pygame.mouse.get_pos())
+            fill = tuple(min(255, c + 35) for c in button_color) if hovered else button_color
+            pygame.draw.rect(self.screen, fill, rect, border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=10)
+            button_text = self.font.render(label, True, WHITE)
+            self.screen.blit(button_text, button_text.get_rect(center=rect.center))
 
         # Mains des coureurs
         if self.show_hands and self.game.current_phase == Phase.ENERGY:

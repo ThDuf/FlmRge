@@ -48,7 +48,19 @@ class TestUiFlow(unittest.TestCase):
         # Phase d'énergie
         self.assertEqual(game.current_phase, Phase.ENERGY)
         self._play_energy_phase()
-        game.resolve_movement_phase()
+
+        # Phase de mouvement : le moteur CALCULE, l'UI applique pas-à-pas
+        ui._start_movement_phase()
+        self.assertTrue(ui.showing_movement)
+        self.assertEqual(ui.movement_total, 4)  # 2 joueurs x 2 coureurs
+        done = False
+        guard = 0
+        while not done:
+            done = ui._next_movement_step()
+            guard += 1
+            self.assertLess(guard, 100, "pas-à-pas de mouvement sans fin")
+            assert_board_consistent(self, ui)
+        ui.showing_movement = False
         assert_board_consistent(self, ui)
 
         # Phase d'aspiration : le moteur CALCULE, l'UI applique pas-à-pas
@@ -86,6 +98,48 @@ class TestUiFlow(unittest.TestCase):
                 for runner in player.get_runners():
                     self.assertEqual(len(runner.hand), 4)
                     self.assertIsNone(runner.played_card)
+
+    def test_button_drives_full_turn(self):
+        """Le bouton cliquable doit piloter un tour complet comme ENTRÉE."""
+        ui = self.ui
+        game = ui.game
+        rect = ui._button_rect()
+        center = (rect.centerx, rect.centery)
+
+        # Avant d'avoir joué : pas de bouton
+        self.assertIsNone(ui._button_info())
+        self.assertFalse(ui._try_button_click(center))
+
+        # Cartes jouées -> bouton "Lancer le mouvement"
+        self._play_energy_phase()
+        label, _color = ui._button_info()
+        self.assertEqual(label, "Lancer le mouvement")
+        self.assertTrue(ui._try_button_click(center))
+        self.assertTrue(ui.showing_movement)
+        assert_board_consistent(self, ui)
+
+        # Un clic = un coureur déplacé
+        label, _color = ui._button_info()
+        self.assertIn("Mouvement suivant", label)
+        clicks = 0
+        while ui.showing_movement:
+            self.assertTrue(ui._try_button_click(center))
+            clicks += 1
+            self.assertLess(clicks, 100)
+            assert_board_consistent(self, ui)
+        self.assertEqual(clicks, 4)
+
+        # Clic pour lancer l'aspiration puis la dérouler
+        clicks = 0
+        while not game.game_over and game.current_phase != Phase.ENERGY:
+            if ui._button_info() is None:
+                break
+            ui._try_button_click(center)
+            clicks += 1
+            self.assertLess(clicks, 100)
+            assert_board_consistent(self, ui)
+        # soit la partie est finie, soit on est revenu en phase d'énergie
+        self.assertTrue(game.game_over or game.current_phase == Phase.ENERGY)
 
     def test_finish_aspiration_resets_display_state(self):
         ui = self.ui

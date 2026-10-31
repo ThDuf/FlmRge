@@ -100,7 +100,7 @@ class TestMovement(unittest.TestCase):
         ra.played_card = Card(3, CardType.ENERGY, "S")
         rb.played_card = Card(3, CardType.ENERGY, "R")
         game.current_phase = Phase.ENERGY
-        game.resolve_movement_phase()
+        game.apply_movement_steps(game.resolve_movement_phase())
         # Les deux arrivent sur la case 6 (vide au départ) :
         # le premier arrivé prend la file A, l'autre la file B.
         # La file A (ra) ayant bougé en premier, il doit être en file A.
@@ -181,7 +181,7 @@ class TestStartPlacement(unittest.TestCase):
             for runner in player.get_runners():
                 self.assertTrue(game.play_card(player, runner, runner.hand[0]))
         self.assertTrue(game.all_players_ready())
-        game.resolve_movement_phase()
+        game.apply_movement_steps(game.resolve_movement_phase())
         game.apply_aspiration_steps(game.resolve_aspiration_phase())
         game._assign_fatigue_cards()
         seen = set()

@@ -22,19 +22,32 @@ for w, h in [(900, 600), (1200, 800), (1600, 1000), (1920, 1080)]:
     render_all()
 print("ENERGY: rendu OK a 4 tailles")
 
-# Jouer les cartes puis mouvement
+# Jouer les cartes puis mouvement PAS-À-PAS (bouton "Mouvement suivant" affiché)
 for player in ui.game.players:
     for runner in player.get_runners():
         ui.game.play_card(player, runner, runner.hand[0])
-ui.game.resolve_movement_phase()
-render_all()
-print("MOVEMENT: rendu OK")
-
-# Aspiration pas-à-pas complète
-steps = ui.game.resolve_aspiration_phase()
-for step in steps:
-    ui.game.apply_slipstream_step(step)
+ui._start_movement_phase()
+while ui.showing_movement:
     render_all()
+    assert ui._button_info() is not None, "bouton absent pendant le pas-a-pas mouvement"
+    if ui._next_movement_step():
+        ui.showing_movement = False
+render_all()
+print("MOVEMENT pas-a-pas: rendu OK")
+
+# Aspiration pas-à-pas complète (bouton "Aspiration suivante" affiché)
+steps = ui.game.resolve_aspiration_phase()
+if steps:
+    ui.aspiration_movements = steps
+    ui._initialize_aspiration()
+while ui.showing_aspiration:
+    render_all()
+    assert ui._button_info() is not None, "bouton absent pendant le pas-a-pas aspiration"
+    if ui._next_aspiration_step():
+        ui._finish_aspiration_phase()
+else:
+    ui._finish_aspiration_phase()
+render_all()
 print(f"ASPIRATION: rendu OK ({len(steps)} etapes)")
 
 # Phase terminale + decks affichés

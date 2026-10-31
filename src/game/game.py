@@ -161,37 +161,51 @@ class Game:
         """Vérifie si chaque joueur a joué 2 cartes (1 par coureur)."""
         return self.cards_played_this_turn >= self.total_cards_to_play
 
-    def resolve_movement_phase(self) -> None:
+    def resolve_movement_phase(self) -> List:
         """
-        Résout la phase de mouvement selon les règles officielles.
+        Calcule l'ordre des mouvements de la phase de mouvement SANS les
+        appliquer.
 
-        Règle : on déplace d'abord le coureur le plus en avant ; à égalité
-        de position, la file A (file de droite, double ligne) est
-        considérée en tête et bouge en premier.
+        Règle officielle : on déplace d'abord le coureur le plus en
+        avant ; à égalité de position, la file A (file de droite,
+        double ligne) est considérée en tête et bouge en premier.
+
+        Retourne la liste [(runner, valeur_de_carte), ...], à appliquer
+        un par un via apply_movement_step(). La destination de chaque
+        coureur n'est calculée qu'au moment de SON déplacement, pour
+        tenir compte des coureurs déplacés avant lui (arrêts derrière
+        une case pleine, etc.).
         """
         if self.current_phase != Phase.ENERGY:
-            return
+            return []
 
         self.current_phase = Phase.MOVEMENT
         print("\n--- PHASE DE MOUVEMENT ---")
 
-        # Récupérer tous les coureurs triés du plus proche au plus loin de l'arrivée
         all_runners = []
         for player in self.players:
             all_runners.extend(player.get_runners())
         all_runners.sort(key=lambda r: (-r.x, r.y))
 
-        print(f"Ordre de déplacement (du plus proche au plus loin) : {[r.id for r in all_runners]}")
+        moves = [(runner, runner.played_card.value)
+                 for runner in all_runners if runner.played_card is not None]
 
-        # Déplacer les coureurs un par un
-        for runner in all_runners:
-            if runner.played_card is not None:
-                card = runner.played_card
-                print(f"  {runner.id} (pos {runner.x}) joue carte {card.value}")
-                self.track.move_runner(runner, card.value)
-                print(f"    -> Déplacé à {runner.x}, file {runner.y}")
+        print(f"Ordre de déplacement (du plus proche au plus loin) : "
+              f"{[r.id for r, _v in moves]}")
+        print(f"--- Fin du calcul du mouvement ({len(moves)} coureurs) ---\n")
+        return moves
 
-        print("--- Fin de la phase de mouvement ---\n")
+    def apply_movement_step(self, move) -> None:
+        """Applique UN mouvement de coureur (pour le pas-à-pas UI)."""
+        runner, value = move
+        print(f"  {runner.id} (pos {runner.x}) joue carte {value}")
+        self.track.move_runner(runner, value)
+        print(f"    -> Déplacé à {runner.x}, file {runner.y}")
+
+    def apply_movement_steps(self, moves: List) -> None:
+        """Applique tous les mouvements (usage headless)."""
+        for move in moves:
+            self.apply_movement_step(move)
 
     def resolve_aspiration_phase(self) -> List:
         """

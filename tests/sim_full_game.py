@@ -32,7 +32,7 @@ def play_game(seed):
                 card = random.choice(runner.hand)
                 assert game.play_card(player, runner, card)
         assert game.all_players_ready()
-        game.resolve_movement_phase()
+        game.apply_movement_steps(game.resolve_movement_phase())
         consistency(game)
         steps = game.resolve_aspiration_phase()
         game.apply_aspiration_steps(steps)
