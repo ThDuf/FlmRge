@@ -174,6 +174,9 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 - [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
 - [ ] **Ajout des étapes officielles** (Avenue Corso Paseo, etc.)
+- [ ] **Choix de l'étape** : sélection parmi des terrains proposés (menu au lancement)
+- [ ] **Éditeur de piste** : créer son propre terrain à partir des tuiles (droites, virages, montées, descentes)
+- [ ] **Extensions** : possibilité d'ajouter des extensions (ex. Peloton : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement)
 - [ ] **Système de sauvegarde/reprise**
 
 ---
