@@ -17,7 +17,7 @@ MIN_HEIGHT = 600
 CELLS_PER_ROW = 16  # cases par rangée du circuit (14 droites + virage 180° = 2)
 CELL_MIN = 32       # taille de case (s'adapte à la largeur de la fenêtre)
 CELL_MAX = 60
-INFO_H = 170         # hauteur réservée en haut pour la barre d'infos
+INFO_H = 205         # hauteur réservée en haut pour la barre d'infos
 
 CARD_W = 44        # taille des cartes en main
 CARD_H = 58
@@ -85,6 +85,12 @@ class FlammeRougeGame:
         self.aspiration_step = 0
         self.aspiration_total = 0
         self.aspiration_movements = []
+        self.last_action = None  # (texte, couleur) de la dernière action effectuée
+
+    def _short_id(self, runner) -> str:
+        """Identifiant court pour l'affichage : S0 / R1 (type + index)."""
+        letter = "S" if runner.type.name == "SPRINTER" else "R"
+        return f"{letter}{runner.id[-1]}"
 
     # ------------------------------------------------------------------
     # Géométrie : colonne de gauche / circuit serpentin à droite
@@ -249,14 +255,31 @@ class FlammeRougeGame:
         self.showing_movement = bool(self.movement_movements)
 
     def _next_movement_step(self) -> bool:
-        """Applique UN mouvement de coureur sur le plateau.
+        """Applique UN mouvement de coureur sur le plateau et l'affiche.
 
         Retourne True si tous les mouvements ont été appliqués.
         """
         if not self.movement_movements:
             return True
         move = self.movement_movements.pop(0)
+        runner, value = move
+        eff, reason = self.game.track.effective_steps(runner.x, value)
+        from_x, from_y = runner.x, runner.y
         self.game.apply_movement_step(move)
+        to_x, to_y = runner.x, runner.y
+
+        # Bandeau : ce qui vient de se passer
+        if to_x == from_x:
+            desc = f"{self._short_id(runner)} joue {value} : bloqu\u00e9 (cases pleines devant)"
+        elif reason:
+            desc = (f"{self._short_id(runner)} joue {value} \u2192 {eff} ({reason}) : "
+                    f"case {from_x}\u2192{to_x}")
+        else:
+            desc = f"{self._short_id(runner)} joue {value} : case {from_x}\u2192{to_x}"
+        if from_y != to_y:
+            desc += f", passe en file {'A' if to_y == 0 else 'B'}"
+        self.last_action = (desc, (46, 125, 50))
+
         self.movement_step += 1
         return len(self.movement_movements) == 0
 
@@ -329,7 +352,7 @@ class FlammeRougeGame:
         self.aspiration_total = len(self.aspiration_movements)
 
     def _next_aspiration_step(self) -> bool:
-        """Applique une étape d'aspiration sur le plateau.
+        """Applique une étape d'aspiration sur le plateau et l'affiche.
 
         Retourne True si toutes les étapes ont été appliquées.
         """
@@ -337,6 +360,11 @@ class FlammeRougeGame:
             return True
         step = self.aspiration_movements.pop(0)
         self.game.apply_slipstream_step(step)
+        desc = ", ".join(f"{self._short_id(r)} {fx}\u2192{tx}"
+                         for r, fx, _fl, tx, _tl in step)
+        noun = "coureur" if len(step) == 1 else "coureurs"
+        self.last_action = (f"Aspiration : {len(step)} {noun} +1 case ({desc})",
+                            (230, 126, 0))
         self.aspiration_step += 1
         return len(self.aspiration_movements) == 0
 
@@ -346,7 +374,12 @@ class FlammeRougeGame:
         self.aspiration_step = 0
         self.aspiration_movements = []
         self.game.current_phase = Phase.TERMINAL
-        self.game._assign_fatigue_cards()
+        tired = self.game._assign_fatigue_cards()
+        if tired:
+            names = ", ".join(self._short_id(r) for r in tired)
+            verb = "re\u00e7oit" if len(tired) == 1 else "re\u00e7oivent"
+            self.last_action = (f"Fatigue : {names} {verb} une carte 2F (case devant vide)",
+                                (180, 90, 0))
         if not self.game._check_win_condition():
             self.game._cleanup_hands()
             self.game.start_turn()
@@ -388,6 +421,7 @@ class FlammeRougeGame:
                         self.aspiration_total = 0
                         self.aspiration_movements = []
                         self.played_display_index = {}
+                        self.last_action = None
                     elif event.key == pygame.K_h:
                         self.show_hands = not self.show_hands
                     elif event.key == pygame.K_d:
@@ -571,37 +605,46 @@ class FlammeRougeGame:
         turn_text = self.big_font.render(f"Tour: {self.game.turn_count}", True, BLACK)
         self.screen.blit(turn_text, (info_x, 50))
 
-        # Pas-à-pas du mouvement (un coureur à la fois)
+        # Compteurs du pas-à-pas / de la phase d'énergie
         if self.showing_movement:
-            movement_text = self.big_font.render(
+            counter_text = self.big_font.render(
                 f"Mouvement: {self.movement_step}/{self.movement_total} coureurs", True, BLACK)
-            self.screen.blit(movement_text, (info_x, 94))
-            if self.movement_movements:
-                runner, value = self.movement_movements[0]
-                eff, reason = self.game.track.effective_steps(runner.x, value)
-                if reason:
-                    next_text = f"Suivant: {runner.id} joue {value} \u2192 {eff} ({reason})"
-                else:
-                    next_text = f"Suivant: {runner.id} joue {value}"
-                next_surf = self.font.render(next_text, True, BLACK)
-                self.screen.blit(next_surf, (info_x, 138))
-
-        # Phase d'aspiration (pas-à-pas appliqué sur le plateau)
-        if self.showing_aspiration:
-            aspiration_text = self.big_font.render(
+            self.screen.blit(counter_text, (info_x, 94))
+        elif self.showing_aspiration:
+            counter_text = self.big_font.render(
                 f"Aspiration: {self.aspiration_step}/{self.aspiration_total} packs", True, ORANGE)
-            self.screen.blit(aspiration_text, (info_x, 94))
-            if self.aspiration_movements:
-                step = self.aspiration_movements[0]
-                desc = ", ".join(f"{r.id}:{fx}->{tx}" for r, fx, _fl, tx, _tl in step)
-                next_text = self.font.render(f"Pack: {desc}", True, ORANGE)
-                self.screen.blit(next_text, (info_x, 138))
-
-        # Cartes jouées ce tour
-        if self.game.current_phase == Phase.ENERGY:
+            self.screen.blit(counter_text, (info_x, 94))
+        elif self.game.current_phase == Phase.ENERGY:
             cards_text = self.big_font.render(
                 f"Cartes: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}", True, BLACK)
             self.screen.blit(cards_text, (info_x, 94))
+
+        # Bandeau : ce qui vient d'être fait (mouvement, aspiration, fatigue)
+        if self.last_action:
+            action_text, action_color = self.last_action
+            action_surf = self.label_font.render(action_text, True, action_color)
+            pad = 5
+            bg = pygame.Rect(info_x - pad, 140 - pad,
+                             action_surf.get_width() + 2 * pad,
+                             action_surf.get_height() + 2 * pad)
+            pygame.draw.rect(self.screen, (245, 245, 240), bg, border_radius=6)
+            pygame.draw.rect(self.screen, action_color, bg, width=2, border_radius=6)
+            self.screen.blit(action_surf, (info_x, 140))
+
+        # Prochaine étape (prévisualisation)
+        if self.showing_movement and self.movement_movements:
+            runner, value = self.movement_movements[0]
+            eff, reason = self.game.track.effective_steps(runner.x, value)
+            if reason:
+                text = f"Suivant: {self._short_id(runner)} joue {value} \u2192 {eff} ({reason})"
+            else:
+                text = f"Suivant: {self._short_id(runner)} joue {value}"
+            self.screen.blit(self.font.render(text, True, BLACK), (info_x, 176))
+        elif self.showing_aspiration and self.aspiration_movements:
+            step = self.aspiration_movements[0]
+            desc = ", ".join(f"{self._short_id(r)}:{fx}\u2192{tx}"
+                             for r, fx, _fl, tx, _tl in step)
+            self.screen.blit(self.font.render(f"Pack: {desc}", True, ORANGE), (info_x, 176))
 
         # Instructions (haut à droite)
         instructions_y = 10

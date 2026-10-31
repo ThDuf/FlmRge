@@ -337,5 +337,41 @@ class TestTrackLayout(unittest.TestCase):
                                delta=1.0)
 
 
+    def test_action_banner_describes_each_step(self):
+        """Chaque étape appliquée est décrite à l'écran (bandeau d'action)."""
+        ui = self.ui
+        game = ui.game
+        for player in game.players:
+            for runner in player.get_runners():
+                game.play_card(player, runner, runner.hand[0])
+        ui._start_movement_phase()
+
+        runner, value = ui.movement_movements[0]
+        from_x = runner.x
+        self.assertIsNone(ui.last_action)  # rien n'a encore été appliqué
+        ui._next_movement_step()
+        self.assertIsNotNone(ui.last_action)
+        text, _color = ui.last_action
+        self.assertIn("case", text)
+        self.assertIn(f"{from_x}", text)
+        self.assertIn(str(runner.x), text)
+
+        # Chaque mouvement suivant remplace le bandeau
+        while ui.movement_movements:
+            ui._next_movement_step()
+            self.assertIsNotNone(ui.last_action)
+
+        # La fatigue est annoncée en fin de tour
+        steps = ui.game.resolve_aspiration_phase()
+        ui.apply_steps = steps
+        for step in steps:
+            ui._next_aspiration_step()
+        ui._finish_aspiration_phase()
+        if any(r.discard_pile and r.discard_pile[-1].type == main.CardType.FATIGUE
+               for p in ui.game.players for r in p.get_runners()):
+            self.assertIsNotNone(ui.last_action)
+            self.assertIn("Fatigue", ui.last_action[0])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

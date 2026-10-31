@@ -274,7 +274,7 @@ class Game:
         for step in steps:
             self.track.apply_slipstream_step(step)
 
-    def _assign_fatigue_cards(self) -> None:
+    def _assign_fatigue_cards(self) -> list:
         """
         Attribue les cartes Fatigue selon les règles officielles.
 
@@ -283,14 +283,19 @@ class Game:
         PAS — dans une vraie course, le pack roule au milieu de la route.
         Chaque coureur dans cette situation reçoit une carte Fatigue
         (valeur 2), recyclée dans son deck.
+
+        Retourne la liste des coureurs ayant reçu une carte Fatigue.
         """
+        tired = []
         for player in self.players:
             for runner in player.get_runners():
                 if self.track.is_square_empty(runner.x + 1):
                     fatigue_card = Card(2, CardType.FATIGUE,
                                         "S" if runner.type == RunnerType.SPRINTER else "R")
                     runner.discard_pile.append(fatigue_card)
+                    tired.append(runner)
                     print(f"  {runner.id} est fatigué (case devant vide) -> carte Fatigue (valeur 2)")
+        return tired
 
     def _cleanup_hands(self) -> None:
         """Nettoie les mains des coureurs pour le prochain tour.
