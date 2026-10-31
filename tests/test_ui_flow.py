@@ -161,14 +161,14 @@ class TestHandLayout(unittest.TestCase):
         self.ui = main.FlammeRougeGame()
 
     def test_panels_fit_window(self):
-        layout = self.ui._hand_layout()
+        layout = ui_layout = self.ui._hand_layout()
         self.assertEqual(len(layout), len(self.ui.game.players))
         for player, panel, rows in layout:
             self.assertLessEqual(panel.right, self.ui.width, "panneau hors écran à droite")
             self.assertLessEqual(panel.bottom, self.ui.height, "panneau hors écran en bas")
             self.assertGreaterEqual(panel.x, 0)
-            for runner, label, rects in rows:
-                self.assertEqual(len(rects), len(runner.hand))
+            for runner, label, items, rects in rows:
+                self.assertEqual(len(rects), len(items))
                 for rect in rects:
                     self.assertTrue(panel.contains(rect), "carte hors du panneau")
 
@@ -193,14 +193,39 @@ class TestHandLayout(unittest.TestCase):
         self.assertEqual(ui.game.current_phase, Phase.ENERGY)
         layout = ui._hand_layout()
         player, panel, rows = layout[0]
-        runner, label, rects = rows[0]
-        card = runner.hand[0]
+        runner, label, items, rects = rows[0]
+        card = items[0][0]
         ui._handle_click((rects[0].centerx, rects[0].centery))
         self.assertEqual(ui.game.cards_played_per_runner[runner.id], 1)
         self.assertIs(runner.played_card, card)
         # un second clic sur le même coureur ne fait rien
         ui._handle_click((rects[1].centerx, rects[1].centery))
         self.assertEqual(ui.game.cards_played_per_runner[runner.id], 1)
+
+    def test_played_card_stays_visible_in_green(self):
+        """La carte jouée ne disparait pas : elle reste affichée à sa
+        position d'origine dans le panneau, marquée comme jouée (verte)."""
+        ui = self.ui
+        layout = ui._hand_layout()
+        player, panel, rows = layout[0]
+        runner, label, items, rects = rows[0]
+        self.assertEqual(len(items), 4)
+
+        # Clic sur la 2e carte (index 1)
+        clicked_card = items[1][0]
+        ui._handle_click((rects[1].centerx, rects[1].centery))
+        self.assertIs(runner.played_card, clicked_card)
+
+        # La carte jouée est toujours là, à la même position, marquée jouée
+        runner2, label2, items2, rects2 = ui._hand_layout()[0][2][0]
+        self.assertEqual(len(items2), 4, "la carte jouée doit rester affichée")
+        card_at_index1, played_flag = items2[1]
+        self.assertIs(card_at_index1, clicked_card)
+        self.assertTrue(played_flag)
+        self.assertEqual(len(runner2.hand), 3)
+        # Un clic sur la carte verte ne rejoue rien
+        ui._handle_click((rects2[1].centerx, rects2[1].centery))
+        self.assertEqual(ui.game.cards_played_this_turn, 1)
 
 
 if __name__ == '__main__':

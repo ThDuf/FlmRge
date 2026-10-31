@@ -20,6 +20,8 @@ CARD_H = 68
 CARD_GAP = 8       # espace entre cartes
 PANEL_PAD = 12     # padding des panneaux de joueur
 PANEL_HEADER = 32  # hauteur de l'en-tête des panneaux (nom + progression)
+GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
+GREEN_CARD_BORDER = (46, 125, 50)
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -54,6 +56,7 @@ class FlammeRougeGame:
 
         self.game = Game(stage="test", player_count=2)
         self.show_hands = True
+        self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Afficher les decks à droite
         self.scroll_x = 0
         self.scroll_speed = 30
@@ -82,13 +85,26 @@ class FlammeRougeGame:
         track_height = LANE_HEIGHT * 2 + 10
         return max(120, (self.height - self._hands_height() - track_height) // 2)
 
+    def _row_items(self, runner):
+        """Cartes affichées d'un coureur : [(carte, jouée), ...].
+
+        La carte jouée ce tour ne disparait PAS du panneau : elle est
+        réinsérée à sa position d'origine (mémorisée au clic), marquée
+        « jouée » pour être affichée en vert et non cliquable.
+        """
+        items = [(card, False) for card in runner.hand]
+        if runner.played_card is not None:
+            idx = self.played_display_index.get(runner.id, 0)
+            items.insert(min(idx, len(items)), (runner.played_card, True))
+        return items
+
     def _hand_layout(self):
         """Géométrie des panneaux de mains : un panneau par joueur, adapté à la fenêtre.
 
         Panneau compact : en-tête d'une ligne (nom du joueur + progression x/2),
         puis 2 lignes (Sprinteur / Rouleur) avec le libellé à GAUCHE et les
-        cartes à droite du libellé.
-        Retourne [(player, panel_rect, [(runner, label, [card_rects]), ...]), ...].
+        cartes à droite du libellé (carte jouée incluse, en vert).
+        Retourne [(player, panel_rect, [(runner, label, items, [card_rects]), ...]), ...].
         Utilisé à la fois pour le dessin et pour la détection des clics,
         afin de garantir que les zones cliquables correspondent à l'affichage.
         """
@@ -109,10 +125,11 @@ class FlammeRougeGame:
             for row, (runner, label) in enumerate(
                     [(player.sprinter, "Sprinteur"), (player.roller, "Rouleur")]):
                 row_y = panel.y + PANEL_HEADER + 8 + row * (CARD_H + 10)
+                items = self._row_items(runner)
                 cards_x = panel.x + label_w + PANEL_PAD
                 rects = [pygame.Rect(cards_x + i * (card_w + CARD_GAP), row_y, card_w, CARD_H)
-                         for i in range(len(runner.hand))]
-                rows.append((runner, label, rects))
+                         for i in range(len(items))]
+                rows.append((runner, label, items, rects))
             layout.append((player, panel, rows))
         return layout
 
@@ -277,6 +294,7 @@ class FlammeRougeGame:
                         self.aspiration_step = 0
                         self.aspiration_total = 0
                         self.aspiration_movements = []
+                        self.played_display_index = {}
                     elif event.key == pygame.K_h:
                         self.show_hands = not self.show_hands
                     elif event.key == pygame.K_d:
@@ -306,12 +324,17 @@ class FlammeRougeGame:
             return
 
         for player, panel, rows in self._hand_layout():
-            for runner, label, rects in rows:
+            for runner, label, items, rects in rows:
                 if self.game.cards_played_per_runner[runner.id] >= 1:
                     continue  # ce coureur a déjà joué sa carte
-                for card, rect in zip(runner.hand, rects):
+                for card_idx, ((card, played), rect) in enumerate(zip(items, rects)):
+                    if played:
+                        continue  # carte déjà jouée (affichée en vert)
                     if rect.collidepoint(pos):
                         if self.game.play_card(player, runner, card):
+                            # Mémoriser la position d'origine pour que la carte
+                            # reste affichée là où elle a été cliquée (en vert)
+                            self.played_display_index[runner.id] = card_idx
                             print(f"[OK] {player.color} {label}: carte {card.value} jouee")
                             if self.game.all_players_ready():
                                 print("Appuyez sur ENTREE pour lancer la phase de mouvement...")
@@ -499,26 +522,41 @@ class FlammeRougeGame:
                             (panel.x + 6, panel.y + PANEL_HEADER),
                             (panel.right - 6, panel.y + PANEL_HEADER), 1)
 
-            for runner, label, rects in rows:
+            for runner, label, items, rects in rows:
                 played = self.game.cards_played_per_runner[runner.id] >= 1
                 label_surf = self.font.render(label, True, GRAY if played else BLACK)
                 self.screen.blit(label_surf, (panel.x + PANEL_PAD,
                                              rects[0].y + CARD_H // 2 - 10))
 
-                for card, rect in zip(runner.hand, rects):
-                    hovered = (not played) and rect.collidepoint(mouse)
-                    if played:
+                can_play = not played and self.game.current_phase == Phase.ENERGY
+                for (card, is_played), rect in zip(items, rects):
+                    hovered = can_play and rect.collidepoint(mouse)
+                    if is_played:
+                        # Carte sélectionnée : reste visible, en vert
+                        fill = GREEN_CARD_FILL
+                        border = GREEN_CARD_BORDER
+                        text_color = GREEN_CARD_BORDER
+                        width = 3
+                    elif played:
+                        # Coureur ayant déjà joué : cartes restantes grisées
                         fill = (225, 225, 225)
+                        border = color
+                        text_color = GRAY
+                        width = 2
                     elif hovered:
                         fill = (255, 244, 200)
+                        border = color
+                        text_color = BLACK
+                        width = 3
                     else:
                         fill = WHITE
+                        border = BLACK
+                        text_color = BLACK
+                        width = 2
                     pygame.draw.rect(self.screen, fill, rect, border_radius=6)
-                    border_color = color if (hovered or played) else BLACK
-                    pygame.draw.rect(self.screen, border_color, rect,
-                                     width=3 if hovered else 2, border_radius=6)
+                    pygame.draw.rect(self.screen, border, rect, width=width, border_radius=6)
                     value_text = str(card.value) + ("F" if card.type == CardType.FATIGUE else "")
-                    val_surf = self.card_font.render(value_text, True, GRAY if played else BLACK)
+                    val_surf = self.card_font.render(value_text, True, text_color)
                     self.screen.blit(val_surf, val_surf.get_rect(center=rect.center))
 
     def _format_cards_count(self, cards: List[Card]) -> str:
