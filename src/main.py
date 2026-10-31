@@ -17,7 +17,10 @@ MIN_HEIGHT = 600
 CELLS_PER_ROW = 16  # cases par rangée du circuit (14 droites + virage 180° = 2)
 CELL_MIN = 32       # taille de case (s'adapte à la largeur de la fenêtre)
 CELL_MAX = 60
-INFO_H = 205         # hauteur réservée en haut pour la barre d'infos
+HEADER_H = 60       # bandeau de titre (toute la largeur)
+PHASE_H = 44        # bandeau de phase (toute la largeur)
+TOP_H = HEADER_H + PHASE_H + 8  # début de la zone de jeu sous les bandeaux
+INFO_H = 100        # hauteur du bloc infos (compteur, action, prochain)
 
 CARD_W = 44        # taille des cartes en main
 CARD_H = 58
@@ -53,6 +56,13 @@ PLAYER_COLORS = {
     "yellow": YELLOW,
 }
 
+# Noms d'affichage des étapes
+STAGE_NAMES = {
+    "circuit": "Circuit de montagne",
+    "test": "Piste d'essai",
+    "Avenue Corso Paseo": "Avenue Corso Paseo",
+}
+
 
 class FlammeRougeGame:
     """Interface Pygame : colonne de cartes à gauche, circuit serpentin à droite.
@@ -69,6 +79,8 @@ class FlammeRougeGame:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Arial", 20)
         self.big_font = pygame.font.SysFont("Arial", 30)
+        self.title_font = pygame.font.SysFont("Arial", 30, bold=True)
+        self.phase_font = pygame.font.SysFont("Arial", 20, bold=True)
         self.card_font = pygame.font.SysFont("Arial", 18)
         self.label_font = pygame.font.SysFont("Arial", 16)
         self.small_font = pygame.font.SysFont("Arial", 12)
@@ -132,7 +144,7 @@ class FlammeRougeGame:
 
         rows = -(-length // CELLS_PER_ROW)  # ceil
         rows_h = (rows - 1) * 2 * radius + 2 * half
-        top = INFO_H + max(0, (self.height - INFO_H - 30 - rows_h) // 2)
+        top = TOP_H + INFO_H + max(0, (self.height - TOP_H - INFO_H - 20 - rows_h) // 2)
 
         # Construction du chemin : segments droits + demi-cercles
         points = []
@@ -196,7 +208,7 @@ class FlammeRougeGame:
     def _panel_h(self) -> int:
         """Hauteur d'un panneau de joueur, réduite si beaucoup de joueurs."""
         n = max(1, len(self.game.players))
-        return min(PANEL_H, (self.height - 16 - (n - 1) * 8) // n)
+        return min(PANEL_H, (self.height - TOP_H - 16 - (n - 1) * 8) // n)
 
     def _row_items(self, runner):
         """Cartes affichées d'un coureur : [(carte, jouée), ...].
@@ -230,7 +242,7 @@ class FlammeRougeGame:
 
         layout = []
         for idx, player in enumerate(self.game.players):
-            panel = pygame.Rect(8, 8 + idx * (panel_h + 8), panel_w, panel_h)
+            panel = pygame.Rect(8, TOP_H + 8 + idx * (panel_h + 8), panel_w, panel_h)
             rows = []
             for row, (runner, label) in enumerate(
                     [(player.sprinter, "Sprinteur"), (player.roller, "Rouleur")]):
@@ -286,7 +298,7 @@ class FlammeRougeGame:
     def _button_rect(self) -> pygame.Rect:
         """Position du bouton d'action (sous la colonne de panneaux, à gauche)."""
         n = max(1, len(self.game.players))
-        y = 8 + n * (self._panel_h() + 8) + 6
+        y = TOP_H + 8 + n * (self._panel_h() + 8) + 6
         return pygame.Rect(8, min(y, self.height - 58), self._left_w() - 16, 48)
 
     def _button_info(self):
@@ -595,41 +607,106 @@ class FlammeRougeGame:
     # Dessin : interface
     # ------------------------------------------------------------------
 
+    def _phase_info(self):
+        """(nom, description, couleur) de la phase en cours, pour le bandeau."""
+        if self.game.game_over and self.game.winner:
+            return ("ARRIV\u00c9E !",
+                    f"{self.game.winner.color} remporte la course \u2014 appuyez sur R pour recommencer",
+                    (180, 40, 40))
+        if self.showing_movement:
+            return ("PHASE DE MOUVEMENT",
+                    "Les coureurs avancent un \u00e0 un, du plus en avant vers l'arri\u00e8re (ENTR\u00c9E ou bouton)",
+                    (46, 125, 50))
+        if self.showing_aspiration:
+            return ("ASPIRATION",
+                    "Si exactement une case vide s\u00e9pare deux packs, le pack arri\u00e8re glisse d'une case",
+                    (230, 126, 0))
+        phase = self.game.current_phase
+        if phase == Phase.ENERGY:
+            if self.game.all_players_ready():
+                return ("PHASE D'\u00c9NERGIE",
+                        "Tous les coureurs ont jou\u00e9 \u2014 ENTR\u00c9E ou bouton pour lancer le mouvement",
+                        (25, 118, 210))
+            return ("PHASE D'\u00c9NERGIE",
+                    "Jouez une carte par coureur en cliquant sur elle",
+                    (25, 118, 210))
+        if phase == Phase.MOVEMENT:
+            return ("PHASE DE MOUVEMENT",
+                    "Mouvements termin\u00e9s \u2014 ENTR\u00c9E ou bouton pour lancer l'aspiration",
+                    (46, 125, 50))
+        if phase == Phase.ASPIRATION:
+            return ("ASPIRATION", "Calcul des glissements de packs...", (230, 126, 0))
+        return ("PHASE TERMINALE", "Fatigue puis nouveau tour", (110, 110, 110))
+
+    def _draw_header(self):
+        """Bandeau de titre : fanion, nom du jeu, étape et tour en cours."""
+        pygame.draw.rect(self.screen, (28, 32, 38), (0, 0, self.width, HEADER_H))
+
+        # Fanion rouge (le "flamme rouge" qui donne son nom au jeu)
+        pygame.draw.rect(self.screen, (200, 200, 200), (18, 12, 3, 38))
+        pygame.draw.polygon(self.screen, (215, 45, 45),
+                           ((21, 12), (48, 20), (21, 28)))
+
+        # Titre bicolore
+        flamme = self.title_font.render("FLAMME ", True, WHITE)
+        rouge = self.title_font.render("ROUGE", True, (235, 60, 60))
+        ty = (HEADER_H - max(flamme.get_height(), rouge.get_height())) // 2
+        self.screen.blit(flamme, (58, ty))
+        self.screen.blit(rouge, (58 + flamme.get_width(), ty))
+
+        # Étape et tour, alignés à droite
+        stage_name = STAGE_NAMES.get(self.game.stage, self.game.stage)
+        stage_surf = self.label_font.render(stage_name, True, (175, 180, 190))
+        turn_surf = self.title_font.render(f"Tour {self.game.turn_count}", True, WHITE)
+        turn_x = self.width - 16 - turn_surf.get_width()
+        self.screen.blit(turn_surf, (turn_x, (HEADER_H - turn_surf.get_height()) // 2))
+        self.screen.blit(stage_surf,
+                         (turn_x - 14 - stage_surf.get_width(),
+                          (HEADER_H - stage_surf.get_height()) // 2))
+
+    def _draw_phase_band(self):
+        """Bandeau de phase : nom + description de la phase, coloré."""
+        label, desc, color = self._phase_info()
+        rect = pygame.Rect(0, HEADER_H + 4, self.width, PHASE_H)
+        pygame.draw.rect(self.screen, color, rect)
+        name_surf = self.phase_font.render(label, True, WHITE)
+        self.screen.blit(name_surf, (16, rect.y + (PHASE_H - name_surf.get_height()) // 2))
+        desc_surf = self.label_font.render(desc, True, (250, 250, 250))
+        self.screen.blit(desc_surf,
+                         (16 + name_surf.get_width() + 18,
+                          rect.y + (PHASE_H - desc_surf.get_height()) // 2))
+
     def _draw_ui(self):
+        self._draw_header()
+        self._draw_phase_band()
+
         info_x = self._left_w() + 16
-
-        # Barre d'infos en haut de la zone circuit (espacée, sans chevauchement)
-        phase_text = self.big_font.render(f"Phase: {self.game.get_current_phase_name()}", True, BLACK)
-        self.screen.blit(phase_text, (info_x, 8))
-
-        turn_text = self.big_font.render(f"Tour: {self.game.turn_count}", True, BLACK)
-        self.screen.blit(turn_text, (info_x, 50))
 
         # Compteurs du pas-à-pas / de la phase d'énergie
         if self.showing_movement:
             counter_text = self.big_font.render(
                 f"Mouvement: {self.movement_step}/{self.movement_total} coureurs", True, BLACK)
-            self.screen.blit(counter_text, (info_x, 94))
+            self.screen.blit(counter_text, (info_x, TOP_H + 2))
         elif self.showing_aspiration:
             counter_text = self.big_font.render(
                 f"Aspiration: {self.aspiration_step}/{self.aspiration_total} packs", True, ORANGE)
-            self.screen.blit(counter_text, (info_x, 94))
+            self.screen.blit(counter_text, (info_x, TOP_H + 2))
         elif self.game.current_phase == Phase.ENERGY:
             cards_text = self.big_font.render(
                 f"Cartes: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}", True, BLACK)
-            self.screen.blit(cards_text, (info_x, 94))
+            self.screen.blit(cards_text, (info_x, TOP_H + 2))
 
         # Bandeau : ce qui vient d'être fait (mouvement, aspiration, fatigue)
         if self.last_action:
             action_text, action_color = self.last_action
             action_surf = self.label_font.render(action_text, True, action_color)
             pad = 5
-            bg = pygame.Rect(info_x - pad, 140 - pad,
+            bg = pygame.Rect(info_x - pad, TOP_H + 42 - pad,
                              action_surf.get_width() + 2 * pad,
                              action_surf.get_height() + 2 * pad)
             pygame.draw.rect(self.screen, (245, 245, 240), bg, border_radius=6)
             pygame.draw.rect(self.screen, action_color, bg, width=2, border_radius=6)
-            self.screen.blit(action_surf, (info_x, 140))
+            self.screen.blit(action_surf, (info_x, TOP_H + 42))
 
         # Prochaine étape (prévisualisation)
         if self.showing_movement and self.movement_movements:
@@ -639,15 +716,15 @@ class FlammeRougeGame:
                 text = f"Suivant: {self._short_id(runner)} joue {value} \u2192 {eff} ({reason})"
             else:
                 text = f"Suivant: {self._short_id(runner)} joue {value}"
-            self.screen.blit(self.font.render(text, True, BLACK), (info_x, 176))
+            self.screen.blit(self.font.render(text, True, BLACK), (info_x, TOP_H + 78))
         elif self.showing_aspiration and self.aspiration_movements:
             step = self.aspiration_movements[0]
             desc = ", ".join(f"{self._short_id(r)}:{fx}\u2192{tx}"
                              for r, fx, _fl, tx, _tl in step)
-            self.screen.blit(self.font.render(f"Pack: {desc}", True, ORANGE), (info_x, 176))
+            self.screen.blit(self.font.render(f"Pack: {desc}", True, ORANGE), (info_x, TOP_H + 78))
 
-        # Instructions (haut à droite)
-        instructions_y = 10
+        # Instructions (haut à droite, sous le bandeau de phase)
+        instructions_y = TOP_H + 2
         instructions_x = self.width - 350
         if self.game.current_phase == Phase.ENERGY:
             if self.game.all_players_ready():
@@ -827,8 +904,8 @@ class FlammeRougeGame:
         for player_idx, player in enumerate(self.game.players):
             # Empilement depuis le bas de l'écran
             block_y = self.height - (n - player_idx) * (block_h + 6) - 8
-            if block_y < INFO_H:
-                break  # plus de place au-dessus de la barre d'infos
+            if block_y < TOP_H + INFO_H:
+                break  # plus de place au-dessus du bloc infos
             color = PLAYER_COLORS.get(player.color, BLACK)
 
             panel = pygame.Rect(deck_x, block_y, panel_w, block_h)
