@@ -101,30 +101,21 @@ class Game:
                 track.add_tile(TileType.STRAIGHT)
             track.add_tile(TileType.FINISH)
         elif stage == "circuit":
-            # Circuit long avec virages (légers = jaune, serrés = orange) :
-            # 30 tuiles = 60 cases. Les virages sont visuels pour l'instant
-            # (aucune règle officielle ne leur est associée, contrairement
-            # aux montées/descentes).
-            spec = [
-                (TileType.START, 1),
-                (TileType.STRAIGHT, 3),
-                (TileType.LIGHT_TURN, 1),
-                (TileType.STRAIGHT, 3),
-                (TileType.SHARP_TURN, 1),
-                (TileType.STRAIGHT, 4),
-                (TileType.LIGHT_TURN, 1),
-                (TileType.STRAIGHT, 2),
-                (TileType.SHARP_TURN, 1),
-                (TileType.STRAIGHT, 3),
-                (TileType.LIGHT_TURN, 1),
-                (TileType.STRAIGHT, 4),
-                (TileType.SHARP_TURN, 1),
-                (TileType.STRAIGHT, 3),
-                (TileType.FINISH, 1),
-            ]
-            for tile_type, count in spec:
-                for _ in range(count):
-                    track.add_tile(tile_type)
+            # Circuit "organique" : rangées de 16 cases (14 droites + un
+            # virage à 180° = 2 cases) rendues comme de VRAIS virages par
+            # l'UI (demi-cercles, cases contiguës le long de l'arc).
+            # 3 rangées pleines + rangée finale : 30 tuiles = 60 cases.
+            track.add_tile(TileType.START)
+            for _ in range(6):
+                track.add_tile(TileType.STRAIGHT)
+            track.add_tile(TileType.SHARP_TURN)
+            for _ in range(2):  # rangées 2 et 3
+                for _ in range(7):
+                    track.add_tile(TileType.STRAIGHT)
+                track.add_tile(TileType.SHARP_TURN)
+            for _ in range(5):  # rangée finale (pas de virage avant l'arrivée)
+                track.add_tile(TileType.STRAIGHT)
+            track.add_tile(TileType.FINISH)
 
         return track
 

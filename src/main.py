@@ -1,5 +1,7 @@
 import pygame
 import sys
+import math
+from bisect import bisect_right
 from game.game import Game, Phase
 from game.card import CardType
 from game.track import TileType
@@ -12,10 +14,10 @@ SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 800
 MIN_WIDTH = 900    # taille minimale de la fenêtre
 MIN_HEIGHT = 600
-CELL_SIZE = 44     # taille d'une case (réduite pour voir plus de circuit)
-LANE_HEIGHT = CELL_SIZE // 2
-ROW_GAP = 14       # espace vertical entre les rangées du circuit serpentin
-INFO_H = 170       # hauteur réservée en haut pour la barre d'infos
+CELLS_PER_ROW = 16  # cases par rangée du circuit (14 droites + virage 180° = 2)
+CELL_MIN = 32       # taille de case (s'adapte à la largeur de la fenêtre)
+CELL_MAX = 60
+INFO_H = 170         # hauteur réservée en haut pour la barre d'infos
 
 CARD_W = 44        # taille des cartes en main
 CARD_H = 58
@@ -39,7 +41,6 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
 ORANGE = (255, 165, 0)
-PURPLE = (128, 0, 128)
 
 PLAYER_COLORS = {
     "red": RED,
@@ -90,35 +91,93 @@ class FlammeRougeGame:
         return min(340, max(280, self.width // 2))
 
     def _cells_per_row(self) -> int:
-        """Nombre de cases par rangée du circuit serpentin."""
-        area = self.width - self._left_w() - 24
-        return max(6, area // CELL_SIZE)
+        """Nombre de cases par rangée du circuit (fixe, aligné sur le moteur)."""
+        return CELLS_PER_ROW
 
-    def _row_height(self) -> int:
-        return LANE_HEIGHT * 2 + ROW_GAP
+    def _track_geometry(self) -> dict:
+        """Géométrie du circuit organique (mise en cache).
 
-    def _track_top(self) -> int:
-        """Position Y de la première rangée (centrée sous la barre d'infos)."""
-        per_row = self._cells_per_row()
-        rows = (self.game.track.length + per_row - 1) // per_row
-        total = rows * self._row_height() - ROW_GAP
-        return INFO_H + max(0, (self.height - INFO_H - 20 - total) // 2)
-
-    def _cell_pos(self, x: int):
-        """Position écran (px, py) de la case x du circuit serpentin.
-
-        Les rangées paires déroulent de gauche à droite, les impaires de
-        droite à gauche : le circuit "serpente" et tient tout entier
-        dans la zone de droite.
+        Le circuit serpente : rangées droites reliées par de VRAIS virages
+        à 180° (demi-cercles). L'arc total vaut exactement
+        track.length * cell : chaque case occupe `cell` pixels d'arc, et les
+        2 dernières cases d'une rangée tombent sur le demi-cercle. Les cases
+        sont donc contiguës le long du chemin : AUCUN saut.
         """
-        per_row = self._cells_per_row()
-        row, col = divmod(x, per_row)
-        if row % 2 == 0:
-            cx = self._left_w() + 12 + col * CELL_SIZE
-        else:
-            cx = self.width - 12 - (col + 1) * CELL_SIZE
-        cy = self._track_top() + row * self._row_height()
-        return cx, cy
+        key = (self.width, self.height, self.game.track.length)
+        if getattr(self, "_geo_key", None) == key:
+            return self._geo
+
+        left_w = self._left_w()
+        avail = self.width - left_w - 24
+        # 14 cases droites + les bombés des virages + la largeur de route
+        # doivent tenir de part et d'autre
+        cell = max(CELL_MIN, min(CELL_MAX, int((avail - 80) / 14.7)))
+        radius = 2 * cell / math.pi
+        lane_w = max(16, min(26, cell // 2))
+        half = lane_w
+        # Le bord gauche de la route (bombé du virage - demi-largeur) reste
+        # à 16px de la colonne de panneaux
+        track_left = left_w + 16 + radius + half
+        length = self.game.track.length
+
+        rows = -(-length // CELLS_PER_ROW)  # ceil
+        rows_h = (rows - 1) * 2 * radius + 2 * half
+        top = INFO_H + max(0, (self.height - INFO_H - 30 - rows_h) // 2)
+
+        # Construction du chemin : segments droits + demi-cercles
+        points = []
+        x, y, direction = track_left, top, 1
+        remaining = length
+        while remaining > 0:
+            in_row = min(CELLS_PER_ROW, remaining)
+            hairpin = remaining > CELLS_PER_ROW  # pas de virage sur la rangée finale
+            straight = in_row - (2 if hairpin else 0)
+            points.append((x, y))
+            x += direction * straight * cell
+            points.append((x, y))
+            remaining -= straight
+            if hairpin:
+                cx, cy = x, y + radius
+                for i in range(1, 25):
+                    phi = math.pi * i / 24
+                    points.append((cx + direction * radius * math.sin(phi),
+                                   cy - radius * math.cos(phi)))
+                y += 2 * radius
+                remaining -= 2
+                direction = -direction
+
+        # Longueurs cumulées (abscisse curviligne)
+        cum = [0.0]
+        for (x0, y0), (x1, y1) in zip(points, points[1:]):
+            cum.append(cum[-1] + math.hypot(x1 - x0, y1 - y0))
+
+        geo = {"cell": cell, "radius": radius, "lane_w": lane_w, "half": half,
+               "points": points, "cum": cum, "total": cum[-1], "top": top}
+        self._geo_key = key
+        self._geo = geo
+        return geo
+
+    def _path_at(self, geo: dict, s: float):
+        """Point (x, y) et tangente unitaire (tx, ty) à l'abscisse curviligne s."""
+        cum = geo["cum"]
+        points = geo["points"]
+        s = max(0.0, min(s, geo["total"]))
+        i = max(1, min(bisect_right(cum, s), len(points) - 1))
+        x0, y0 = points[i - 1]
+        x1, y1 = points[i]
+        seg = cum[i] - cum[i - 1]
+        t = 0.0 if seg == 0 else (s - cum[i - 1]) / seg
+        x = x0 + (x1 - x0) * t
+        y = y0 + (y1 - y0) * t
+        d = math.hypot(x1 - x0, y1 - y0)
+        if d == 0:
+            return x, y, 1.0, 0.0
+        return x, y, (x1 - x0) / d, (y1 - y0) / d
+
+    def _cell_anchor(self, x_cell: int):
+        """Centre de la case x_cell sur le circuit : (x, y, tx, ty)."""
+        geo = self._track_geometry()
+        return self._path_at(geo, (x_cell + 0.5) * geo["cell"])
 
     # ------------------------------------------------------------------
     # Géométrie : panneaux de cartes (colonne de gauche)
@@ -371,82 +430,111 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _draw_track(self):
+        """Dessine le circuit organique : un chemin continu sans saut.
+
+        La route suit le chemin (rangées droites + demi-cercles), les cases
+        sont quadrillées le long de l'arc, les virages sont teintés, la ligne
+        médiane blanche sépare les files A (droite) et B (gauche).
+        """
+        geo = self._track_geometry()
         track = self.game.track
-        per_row = self._cells_per_row()
-        rows = (track.length + per_row - 1) // per_row
-        road_h = LANE_HEIGHT * 2
+        cell = geo["cell"]
+        half = geo["half"]
 
-        # Route de chaque rangée
-        for row in range(rows):
-            start = row * per_row
-            count = min(per_row, track.length - start)
-            y = self._track_top() + row * self._row_height()
-            if row % 2 == 0:
-                x = self._left_w() + 12
+        # Échantillons du chemin (point + tangente) pour les bords de route
+        pts = geo["points"]
+        samples = []
+        for i, (x, y) in enumerate(pts):
+            x0, y0 = pts[max(0, i - 1)]
+            x1, y1 = pts[min(len(pts) - 1, i + 1)]
+            d = math.hypot(x1 - x0, y1 - y0)
+            if d == 0:
+                tx, ty = 1.0, 0.0
             else:
-                x = self.width - 12 - count * CELL_SIZE
-            pygame.draw.rect(self.screen, LIGHT_GRAY,
-                             (x, y, count * CELL_SIZE, road_h), border_radius=6)
+                tx, ty = (x1 - x0) / d, (y1 - y0) / d
+            samples.append((x, y, tx, ty))
 
-        # Cases : teinte des virages, files, départ/arrivée, numéros, flèches
+        # Route : polygone entre les bords gauche et droit du sens de marche
+        left_edge = [(x + ty * half, y - tx * half) for x, y, tx, ty in samples]
+        right_edge = [(x - ty * half, y + tx * half) for x, y, tx, ty in samples]
+        road = right_edge + left_edge[::-1]
+        pygame.draw.polygon(self.screen, LIGHT_GRAY, road)
+        pygame.draw.polygon(self.screen, GRAY, road, width=2)
+
+        # Teinte des cases de virage (le demi-cercle de fin de rangée)
         for x_cell in range(track.length):
-            cx, cy = self._cell_pos(x_cell)
             tile_type = track.tiles[x_cell // 2].type
-
-            # Teinte des virages (tuile entière = 2 cases)
             if tile_type == TileType.LIGHT_TURN:
-                pygame.draw.rect(self.screen, LIGHT_TURN_FILL,
-                                 (cx, cy, CELL_SIZE, road_h))
+                color = LIGHT_TURN_FILL
             elif tile_type == TileType.SHARP_TURN:
-                pygame.draw.rect(self.screen, SHARP_TURN_FILL,
-                                 (cx, cy, CELL_SIZE, road_h))
+                color = SHARP_TURN_FILL
+            else:
+                continue
+            sample = []
+            for k in range(9):
+                px, py, _tx, _ty = self._path_at(geo, x_cell * cell + cell * k / 8)
+                sample.append((px, py))
+            pygame.draw.lines(self.screen, color, False, sample, width=2 * half)
 
-            # Quadrillage des files A et B
-            pygame.draw.rect(self.screen, WHITE, (cx, cy, CELL_SIZE, LANE_HEIGHT), width=1)
-            pygame.draw.rect(self.screen, WHITE, (cx, cy + LANE_HEIGHT, CELL_SIZE, LANE_HEIGHT), width=1)
+        # Ligne médiane (séparation des files) + quadrillage des cases
+        pygame.draw.lines(self.screen, WHITE, False, pts, 3)
+        for k in range(track.length + 1):
+            px, py, tx, ty = self._path_at(geo, k * cell)
+            nx, ny = -ty, tx
+            pygame.draw.line(self.screen, WHITE,
+                             (px + nx * half, py + ny * half),
+                             (px - nx * half, py - ny * half), 1)
 
-            # Flèche de virage entre deux rangées du serpentin
-            is_row_end = (x_cell + 1) % per_row == 0
-            if is_row_end and x_cell != track.length - 1:
-                if (x_cell // per_row) % 2 == 0:
-                    ax = cx + CELL_SIZE - 12
-                    pts = [(ax, cy + 4), (ax + 8, cy + 4), (ax + 4, cy + 14)]
-                else:
-                    ax = cx + 4
-                    pts = [(ax, cy + 4), (ax + 8, cy + 4), (ax + 4, cy + 14)]
-                pygame.draw.polygon(self.screen, PURPLE, pts)
+        # Départ (vert) et arrivée (rouge) : traits perpendiculaires à la route
+        for s, color in ((0, GREEN), (geo["total"], RED)):
+            px, py, tx, ty = self._path_at(geo, s)
+            nx, ny = -ty, tx
+            pygame.draw.line(self.screen, color,
+                             (px + nx * half, py + ny * half),
+                             (px - nx * half, py - ny * half), 5)
 
-            if x_cell == 0:
-                # Départ : bordure verte + noms des files
-                pygame.draw.rect(self.screen, GREEN, (cx, cy, CELL_SIZE, road_h), width=3)
-                lane_a = self.small_font.render("A", True, BLACK)
-                self.screen.blit(lane_a, (cx - 14, cy + LANE_HEIGHT // 2 - 6))
-                lane_b = self.small_font.render("B", True, BLACK)
-                self.screen.blit(lane_b, (cx - 14, cy + LANE_HEIGHT + LANE_HEIGHT // 2 - 6))
-            elif x_cell == track.length - 1:
-                # Arrivée : bordure rouge
-                pygame.draw.rect(self.screen, RED, (cx, cy, CELL_SIZE, road_h), width=3)
+        # Numéros de case tous les 5, à l'extérieur de la route
+        for x_cell in range(0, track.length, 5):
+            px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
+            nx, ny = -ty, tx
+            num = self.small_font.render(str(x_cell), True, GRAY)
+            self.screen.blit(num, num.get_rect(
+                center=(px - nx * (half + 11), py - ny * (half + 11))))
 
-            if x_cell % 5 == 0:
-                num = self.small_font.render(str(x_cell), True, GRAY)
-                self.screen.blit(num, (cx + 2, cy + 2))
+        # Lettres des files au départ : A à droite du sens de marche, B à gauche
+        px, py, tx, ty = self._path_at(geo, 1.5 * cell)
+        nx, ny = -ty, tx
+        lane_a = self.small_font.render("A", True, BLACK)
+        self.screen.blit(lane_a, lane_a.get_rect(
+            center=(px + nx * (half + 10), py + ny * (half + 10))))
+        lane_b = self.small_font.render("B", True, BLACK)
+        self.screen.blit(lane_b, lane_b.get_rect(
+            center=(px - nx * (half + 10), py - ny * (half + 10))))
 
     def _draw_runners(self):
+        geo = self._track_geometry()
+        lane_off = geo["lane_w"] / 2
+        radius = int(geo["lane_w"] * 0.55)
+
         for player in self.game.players:
             for runner in player.get_runners():
-                cx, cy = self._cell_pos(runner.x)
-                center = (cx + CELL_SIZE // 2, cy + runner.y * LANE_HEIGHT + LANE_HEIGHT // 2)
+                px, py, tx, ty = self._cell_anchor(runner.x)
+                nx, ny = -ty, tx
+                sign = 1 if runner.y == 0 else -1  # file A = droite du sens de marche
+                cx = px + nx * lane_off * sign
+                cy = py + ny * lane_off * sign
+
                 color = PLAYER_COLORS.get(player.color, BLACK)
-                pygame.draw.circle(self.screen, color, center, CELL_SIZE // 3)
+                pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)
 
                 # Type du coureur au-dessus du centre, carte jouée en dessous
                 type_text = "S" if runner.type.name == "SPRINTER" else "R"
                 type_surf = self.small_font.render(f"{type_text}{runner.id[-1]}", True, WHITE)
-                self.screen.blit(type_surf, type_surf.get_rect(center=(center[0], center[1] - 6)))
+                self.screen.blit(type_surf, type_surf.get_rect(center=(cx, cy - 7)))
 
                 if self.game.current_phase in [Phase.MOVEMENT, Phase.TERMINAL, Phase.ASPIRATION] and runner.played_card:
                     val_surf = self.small_font.render(str(runner.played_card.value), True, WHITE)
-                    self.screen.blit(val_surf, val_surf.get_rect(center=(center[0], center[1] + 7)))
+                    self.screen.blit(val_surf, val_surf.get_rect(center=(cx, cy + 8)))
 
     # ------------------------------------------------------------------
     # Dessin : interface
@@ -541,6 +629,19 @@ class FlammeRougeGame:
         # Affichage des cartes restantes
         if self.show_decks:
             self._draw_decks()
+
+        # Légende des couleurs du circuit (bas de la zone circuit)
+        legend_y = self.height - 26
+        legend_x = self._left_w() + 20
+        for swatch, label in ((GREEN, "D\u00e9part"), (RED, "Arriv\u00e9e"),
+                              (SHARP_TURN_FILL, "Virage"), (LIGHT_TURN_FILL, "Virage l\u00e9ger"),
+                              (WHITE, "Files A|B")):
+            pygame.draw.rect(self.screen, swatch, (legend_x, legend_y, 14, 14), border_radius=3)
+            pygame.draw.rect(self.screen, BLACK, (legend_x, legend_y, 14, 14),
+                             width=1, border_radius=3)
+            text_surf = self.label_font.render(label, True, BLACK)
+            self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
+            legend_x += 18 + text_surf.get_width() + 14
 
         # Écran de fin de partie (affiché quelle que soit la phase)
         if self.game.game_over and self.game.winner:

@@ -184,8 +184,13 @@ class TestHandLayout(unittest.TestCase):
         for player, panel, rows in layout:
             self.assertLessEqual(panel.right, 1600)
             self.assertLessEqual(panel.bottom, 1000)
-        # piste repositionnée sans sortir de l'écran
-        self.assertGreaterEqual(self.ui._track_top(), 120)
+        # géométrie du circuit recalculée : toutes les cases tiennent à l'écran
+        geo = self.ui._track_geometry()
+        half = geo["half"]
+        for x in range(self.ui.game.track.length):
+            ax, ay, _tx, _ty = self.ui._cell_anchor(x)
+            self.assertLessEqual(ax + half, 1600)
+            self.assertLessEqual(ay + half, 1000)
 
     def test_click_zone_matches_displayed_cards(self):
         """Le clic sur une carte affichée joue bien CETTE carte."""
@@ -263,53 +268,73 @@ class TestRemainingCounts(unittest.TestCase):
 
 
 class TestTrackLayout(unittest.TestCase):
-    """Circuit serpentin : tout est visible à l'écran, sans scrolling."""
+    """Circuit organique : chemin continu, cases contiguës, tout visible."""
 
     def setUp(self):
         self.ui = main.FlammeRougeGame()
 
     def test_all_cells_fit_on_screen(self):
         ui = self.ui
-        self.assertGreater(ui.game.track.length, 30)  # circuit long
+        geo = ui._track_geometry()
+        half = geo["half"]
         for x in range(ui.game.track.length):
-            cx, cy = ui._cell_pos(x)
-            self.assertGreaterEqual(cx, ui._left_w() - 12,
+            ax, ay, _tx, _ty = ui._cell_anchor(x)
+            self.assertGreaterEqual(ax - half, ui._left_w() - 12,
                                     f"case {x} empiète sur la colonne de gauche")
-            self.assertLessEqual(cx + main.CELL_SIZE, ui.width,
-                                 f"case {x} hors écran à droite")
-            self.assertGreaterEqual(cy, 0)
-            self.assertLessEqual(cy + 2 * main.LANE_HEIGHT, ui.height,
-                                 f"case {x} hors écran en bas")
+            self.assertLessEqual(ax + half, ui.width, f"case {x} hors écran à droite")
+            self.assertGreaterEqual(ay - half, 0)
+            self.assertLessEqual(ay + half, ui.height, f"case {x} hors écran en bas")
 
     def test_all_cells_fit_at_minimum_window_size(self):
         ui = self.ui
         ui.width, ui.height = main.MIN_WIDTH, main.MIN_HEIGHT
+        geo = ui._track_geometry()
+        half = geo["half"]
         for x in range(ui.game.track.length):
-            cx, cy = ui._cell_pos(x)
-            self.assertLessEqual(cx + main.CELL_SIZE, ui.width)
-            self.assertLessEqual(cy + 2 * main.LANE_HEIGHT, ui.height)
+            ax, ay, _tx, _ty = ui._cell_anchor(x)
+            self.assertLessEqual(ax + half, ui.width)
+            self.assertLessEqual(ay + half, ui.height)
 
-    def test_snake_alternates_direction(self):
-        """Rangées paires gauche->droite, impaires droite->gauche."""
+    def test_no_jump_between_consecutive_cells(self):
+        """Le circuit est CONTINU : deux cases consécutives sont espacées
+        d'exactement une case le long du chemin (aucun saut de rangée)."""
         ui = self.ui
-        per_row = ui._cells_per_row()
-        first, last = ui._cell_pos(0), ui._cell_pos(per_row - 1)
-        self.assertLess(first[0], last[0])
-        next_row = ui._cell_pos(per_row)
-        self.assertGreater(next_row[0], first[0])
+        cell = ui._track_geometry()["cell"]
+        for x in range(ui.game.track.length - 1):
+            ax, ay, _, _ = ui._cell_anchor(x)
+            bx, by, _, _ = ui._cell_anchor(x + 1)
+            dist = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+            self.assertLessEqual(dist, cell * 1.25,
+                                 f"saut entre les cases {x} et {x + 1} ({dist:.0f}px)")
 
-    def test_panels_and_button_stay_left_of_track(self):
+    def test_real_turns_reverse_direction(self):
+        """Les virages à 180° inversent réellement le sens de marche."""
         ui = self.ui
-        track_left = ui._left_w() + 12
-        for player, panel, rows in ui._hand_layout():
-            self.assertLessEqual(panel.right, track_left)
-        self.assertLessEqual(ui._button_rect().right, track_left)
+        _, _, tx0, _ = ui._cell_anchor(10)   # rangée 0 : vers la droite
+        self.assertGreater(tx0, 0.7)
+        _, _, tx1, _ = ui._cell_anchor(20)   # rangée 1 : vers la gauche
+        self.assertLess(tx1, -0.7)
 
     def test_track_has_turns(self):
         from game.track import TileType
         tiles = [t.type for t in self.ui.game.track.tiles]
-        self.assertIn(TileType.LIGHT_TURN, tiles)
         self.assertIn(TileType.SHARP_TURN, tiles)
+
+    def test_panels_and_button_stay_left_of_track(self):
+        ui = self.ui
+        geo = ui._track_geometry()
+        leftmost = min(p[0] for p in geo["points"]) - geo["half"]
+        for player, panel, rows in ui._hand_layout():
+            self.assertLessEqual(panel.right, leftmost)
+        self.assertLessEqual(ui._button_rect().right, leftmost)
+
+    def test_geometry_total_arc_matches_cells(self):
+        """L'arc total vaut exactement nb_cases * taille_de_case :
+        chaque case occupe `cell` pixels de chemin, sans trou ni saut."""
+        ui = self.ui
+        geo = ui._track_geometry()
+        self.assertAlmostEqual(geo["total"], ui.game.track.length * geo["cell"],
+                               delta=1.0)
 
 
 if __name__ == '__main__':
