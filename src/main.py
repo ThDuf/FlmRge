@@ -1,8 +1,7 @@
 import pygame
 import sys
-from typing import List
 from game.game import Game, Phase
-from game.card import Card, CardType
+from game.card import CardType
 
 # Initialiser Pygame
 pygame.init()
@@ -559,85 +558,81 @@ class FlammeRougeGame:
                     val_surf = self.card_font.render(value_text, True, text_color)
                     self.screen.blit(val_surf, val_surf.get_rect(center=rect.center))
 
-    def _format_cards_count(self, cards: List[Card]) -> str:
-        """Formate une liste de cartes en affichant le nombre de cartes par valeur."""
-        from game.card import CardType
-        counts = {}
-        for card in cards:
-            if card.type == CardType.FATIGUE:
-                key = "2F"
-            else:
-                key = str(card.value)
-            counts[key] = counts.get(key, 0) + 1
-        if not counts:
-            return "-"
-        sorted_keys = sorted(counts.keys(), key=lambda k: (0 if k == "2F" else int(k), k))
-        return ",".join(f"{k}x{counts[k]}" for k in sorted_keys)
+    def _remaining_counts(self, runner) -> dict:
+        """Nombre de cartes restantes dans le jeu, par valeur.
 
-    def _format_hand(self, cards: List[Card]) -> str:
-        """Formate la main en affichant les valeurs des cartes."""
-        from game.card import CardType
-        values = []
-        for card in cards:
-            if card.type == CardType.FATIGUE:
-                values.append("2F")
-            else:
-                values.append(str(card.value))
-        return ", ".join(values) if values else "-"
+        Compte la pioche + la main + la défausse (recyclée) ; les cartes
+        jouées sont retirées du jeu et ne comptent pas. Les cartes
+        Fatigue sont regroupées sous la clé "2F".
+        """
+        counts = {}
+        for zone in (runner.energy_deck, runner.hand, runner.discard_pile):
+            for card in zone:
+                key = "2F" if card.type == CardType.FATIGUE else str(card.value)
+                counts[key] = counts.get(key, 0) + 1
+        return counts
 
     def _draw_decks(self):
-        """Affiche les decks à droite, sous les instructions/contrôles."""
+        """Panneau de visualisation des cartes restantes (touche D).
+
+        Pour chaque coureur : une rangée de mini-cartes (valeurs 2 à 8 +
+        Fatigue en orange) affichant le nombre de cartes de cette valeur
+        encore dans le jeu, les valeurs épuisées en gris, plus les
+        effectifs Pioche/Main/Défausse. On voit ainsi le deck s'épuiser
+        au fil de la course.
+        """
+        tiny_font = pygame.font.SysFont("Arial", 10)
         small_font = pygame.font.SysFont("Arial", 14)
-        tiny_font = pygame.font.SysFont("Arial", 12)
-        deck_x = self.width - 300
-        deck_y = 205  # sous les instructions/contrôles (qui finissent vers y=195)
+        count_font = pygame.font.SysFont("Arial", 12)
+
+        panel_w = 300
+        deck_x = self.width - panel_w - 10
+        deck_y = 205  # sous les instructions/contrôles
         hands_top = self.height - self._hands_height() - 6
+        block_h = 104
 
         for player_idx, player in enumerate(self.game.players):
-            block_y = deck_y + player_idx * 110
-            if block_y + 140 > hands_top:
+            block_y = deck_y + player_idx * (block_h + 6)
+            if block_y + block_h > hands_top:
                 break  # plus de place : ne pas dessiner sur les panneaux de mains
             color = PLAYER_COLORS.get(player.color, BLACK)
-            title = small_font.render(f"{player.color}:", True, color)
-            self.screen.blit(title, (deck_x, block_y))
-            
-            sprinter_energy_count = self._format_cards_count(player.sprinter.energy_deck)
-            sprinter_hand = self._format_hand(player.sprinter.hand)
-            sprinter_discard_count = self._format_cards_count(player.sprinter.discard_pile)
 
-            sprinter_text1 = tiny_font.render(
-                f"S: Deck[{len(player.sprinter.energy_deck)}:{sprinter_energy_count}]",
-                True, BLACK
-            )
-            self.screen.blit(sprinter_text1, (deck_x + 30, block_y + 20))
-            sprinter_text2 = tiny_font.render(f"   Hand:[{sprinter_hand}]", True, BLACK)
-            self.screen.blit(sprinter_text2, (deck_x + 30, block_y + 40))
-            sprinter_text3 = tiny_font.render(
-                f"   Discard[{len(player.sprinter.discard_pile)}:{sprinter_discard_count}]",
-                True, BLACK
-            )
-            self.screen.blit(sprinter_text3, (deck_x + 30, block_y + 60))
+            panel = pygame.Rect(deck_x, block_y, panel_w, block_h)
+            pygame.draw.rect(self.screen, (250, 250, 248), panel, border_radius=8)
+            pygame.draw.rect(self.screen, color, panel, width=2, border_radius=8)
+            name_surf = small_font.render(player.color.capitalize(), True, color)
+            self.screen.blit(name_surf, (deck_x + 10, block_y + 4))
 
-            roller_energy_count = self._format_cards_count(player.roller.energy_deck)
-            roller_hand = self._format_hand(player.roller.hand)
-            roller_discard_count = self._format_cards_count(player.roller.discard_pile)
+            for row, (runner, tag) in enumerate(
+                    [(player.sprinter, "S"), (player.roller, "R")]):
+                row_y = block_y + 26 + row * 38
+                counts = self._remaining_counts(runner)
+                total = sum(counts.values())
+                tag_surf = small_font.render(f"{tag} ({total})", True, color)
+                self.screen.blit(tag_surf, (deck_x + 8, row_y + 8))
 
-            roller_text1 = tiny_font.render(
-                f"R: Deck[{len(player.roller.energy_deck)}:{roller_energy_count}]",
-                True, BLACK
-            )
-            self.screen.blit(roller_text1, (deck_x + 30, block_y + 80))
-            roller_text2 = tiny_font.render(f"   Hand:[{roller_hand}]", True, BLACK)
-            self.screen.blit(roller_text2, (deck_x + 30, block_y + 100))
-            roller_text3 = tiny_font.render(
-                f"   Discard[{len(player.roller.discard_pile)}:{roller_discard_count}]",
-                True, BLACK
-            )
-            self.screen.blit(roller_text3, (deck_x + 30, block_y + 120))
-            
-            if player_idx < len(self.game.players) - 1:
-                pygame.draw.line(self.screen, GRAY, (deck_x, block_y + 140),
-                               (deck_x + 280, block_y + 140), 1)
+                x = deck_x + 42
+                for v in ("2", "3", "4", "5", "6", "7", "8", "2F"):
+                    n = counts.get(v, 0)
+                    if n == 0:
+                        fill, border, txt = (238, 238, 238), (210, 210, 210), (185, 185, 185)
+                    elif v == "2F":
+                        fill, border, txt = (255, 224, 178), ORANGE, (180, 90, 0)
+                    else:
+                        fill, border, txt = WHITE, BLACK, BLACK
+                    rect = pygame.Rect(x, row_y, 20, 30)
+                    pygame.draw.rect(self.screen, fill, rect, border_radius=4)
+                    pygame.draw.rect(self.screen, border, rect, width=1, border_radius=4)
+                    val_surf = tiny_font.render(v, True, txt)
+                    self.screen.blit(val_surf, val_surf.get_rect(center=(rect.centerx, row_y + 9)))
+                    cnt_surf = count_font.render(str(n), True, txt)
+                    self.screen.blit(cnt_surf, cnt_surf.get_rect(center=(rect.centerx, row_y + 22)))
+                    x += 22
+
+                zones = tiny_font.render(
+                    f"P:{len(runner.energy_deck)} M:{len(runner.hand)} D:{len(runner.discard_pile)}",
+                    True, GRAY)
+                self.screen.blit(zones, (deck_x + 42 + 8 * 22 + 4, row_y + 10))
 
 
 if __name__ == "__main__":

@@ -228,5 +228,39 @@ class TestHandLayout(unittest.TestCase):
         self.assertEqual(ui.game.cards_played_this_turn, 1)
 
 
+class TestRemainingCounts(unittest.TestCase):
+    def setUp(self):
+        self.ui = main.FlammeRougeGame()
+
+    def test_counts_full_deck_at_start(self):
+        runner = self.ui.game.players[0].sprinter
+        counts = self.ui._remaining_counts(runner)
+        self.assertEqual(sum(counts.values()), 15)  # deck officiel de 15 cartes
+        self.assertEqual(counts.get("8"), 1)
+        self.assertEqual(counts.get("2F", 0), 0)
+        roller = self.ui.game.players[0].roller
+        self.assertEqual(sum(self.ui._remaining_counts(roller).values()), 15)
+
+    def test_played_card_leaves_the_game(self):
+        ui = self.ui
+        runner = ui.game.players[0].sprinter
+        before = ui._remaining_counts(runner)
+        card = runner.hand[0]
+        key = "2F" if card.type == main.CardType.FATIGUE else str(card.value)
+        self.assertTrue(ui.game.play_card(ui.game.players[0], runner, card))
+        after = ui._remaining_counts(runner)
+        self.assertEqual(sum(after.values()), 14)
+        self.assertEqual(after[key], before[key] - 1)
+
+    def test_fatigue_card_adds_to_remaining(self):
+        from game.card import Card, CardType
+        ui = self.ui
+        runner = ui.game.players[0].sprinter
+        before = sum(ui._remaining_counts(runner).values())
+        runner.discard_pile.append(Card(2, CardType.FATIGUE, "S"))
+        self.assertEqual(sum(ui._remaining_counts(runner).values()), before + 1)
+        self.assertEqual(ui._remaining_counts(runner).get("2F"), 1)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
