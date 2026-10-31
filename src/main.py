@@ -451,8 +451,9 @@ class FlammeRougeGame:
             button_text = self.font.render(label, True, WHITE)
             self.screen.blit(button_text, button_text.get_rect(center=rect.center))
 
-        # Mains des coureurs
-        if self.show_hands and self.game.current_phase == Phase.ENERGY:
+        # Mains des coureurs : visibles dans toutes les phases (cartes jouées
+        # grisées, progression x/2) ; cliquables uniquement en phase d'énergie
+        if self.show_hands:
             self._draw_hands()
 
         # Affichage des decks
@@ -471,11 +472,12 @@ class FlammeRougeGame:
             self.screen.blit(restart_text, restart_rect)
 
     def _draw_hands(self):
-        """Panneaux de sélection des cartes (phase d'énergie).
+        """Panneaux de cartes des joueurs (toutes phases tant que H n'a pas masqué).
 
         Panneau compact par joueur : en-tête avec nom + progression x/2,
         libellés à gauche des cartes, surbrillance au survol, cartes grisées
-        une fois jouées.
+        une fois jouées. Les cartes ne sont cliquables qu'en phase d'énergie
+        (cf. _handle_click).
         """
         mouse = pygame.mouse.get_pos()
         for player, panel, rows in self._hand_layout():
