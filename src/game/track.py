@@ -127,8 +127,17 @@ class Track:
         Retourne (steps, raison) :
         - DESCENTE : le coureur qui PART d'une descente avance d'au
           minimum 5 -> raison "minimum 5 (descente)"
-        - MONTÉE : si le trajet de la carte (départ compris) touche une
-          montée, plafonné à 5 -> raison "plafonné à 5 (montée)"
+        - MONTÉE (règles officielles) :
+          * le coureur qui PART d'une montée, ou dont la carte entre
+            dans la montée dans ses 5 PREMIÈRES cases : énergie
+            plafonnée à 5 (il peut traverser la montée)
+            -> "plafonné à 5 (montée)"
+          * si la carte entrerait dans la montée à la 6e case ou plus
+            ("si un coureur se déplace d'au moins 5 cases avant
+            d'entrer dans la montée, il stoppe son mouvement sur la
+            dernière file libre avant la montée") : arrêt JUSTE AVANT
+            la montée — le déplacement peut alors atteindre 6 ou 7
+            cases, toutes sur la plaine -> "arrêt avant la montée"
         La raison est None si la carte s'applique telle quelle.
         """
         steps = card_value
@@ -137,12 +146,19 @@ class Track:
             steps = 5
             reason = "minimum 5 (descente)"
         target = min(x + steps, self.length - 1)
-        for c in range(x, target + 1):
-            if self.tile_type_at(c) == TileType.UPHILL:
-                if card_value > 5:
-                    steps = min(steps, 5)
+        for d, c in enumerate(range(x, target + 1)):
+            if self.tile_type_at(c) != TileType.UPHILL:
+                continue
+            if d <= 5:
+                # entre dans la montée dans les 5 premières cases : plafond 5
+                if steps > 5:
+                    steps = 5
                     reason = "plafonn\u00e9 \u00e0 5 (mont\u00e9e)"
-                break
+            else:
+                # entrerait à la 6e case ou plus : stoppe juste avant la montée
+                steps = min(steps, d - 1)
+                reason = "arr\u00eat avant la mont\u00e9e"
+            break
         return steps, reason
 
     def move_runner(self, runner: Runner, steps: int) -> None:

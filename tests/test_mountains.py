@@ -205,20 +205,39 @@ class TestAscentSlipstream(unittest.TestCase):
         self.assertEqual(rear.x, 6)    # bloqué derrière
 
 
-    def test_card_landing_exactly_on_ascent_is_capped(self):
-        """Le cas limite : un coureur à 7 cases d'une montée qui joue un 7
-        n'atteint PAS la montée. L'énergie est plafonnée à 5 parce que le
-        trajet de la carte y entrerait (règle officielle : "No rider ...
-        moving INTO or through an ascent, may use an energy of more than
-        5") ; et Dized précise qu'un coureur ayant déjà bougé de 5 cases ou
-        plus ne peut jamais entrer dans une montée ce tour-ci. Résultat :
-        il avance de 5 et tombe AVANT la montée (x+5), pas dessus."""
+    def test_card_reaching_ascent_at_7th_square_stops_before(self):
+        """Règle officielle ("si un coureur se déplace d'au moins 5 cases
+        avant d'entrer dans la montée, il stoppe son mouvement sur la
+        dernière file libre avant la montée") : un 7 à 7 cases de la montée
+        entrerait à la 7e case -> arrêt JUSTE AVANT la montée (6 cases de
+        plaine), pas à 5 cases."""
         track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
                            + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        # cases 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL : montée à 7 cases du coureur
-        r = place(track, make_runner('r'), 1, 0)
-        track.move_runner(r, 7)   # cible 8 = première case de montée
-        self.assertEqual(r.x, 6)  # 1 + 5 : plafonné, arrêt AVANT la montée
+        # cases 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL
+        r = place(track, make_runner('r'), 1, 0)   # montée à 7 cases (case 8)
+        track.move_runner(r, 7)
+        self.assertEqual(r.x, 7)  # 1 + 6 : dernière case libre avant la montée
+
+    def test_card_reaching_ascent_at_8th_square_stops_before(self):
+        """Un 8 dont la montée est à 8 cases : arrêt à 7 cases de plaine,
+        juste devant la montée."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 4
+                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
+        # cases 0-1 START, 2-9 STRAIGHT, 10-11 UPHILL
+        r = place(track, make_runner('r'), 2, 0)   # montée à 8 cases (case 10)
+        track.move_runner(r, 8)
+        self.assertEqual(r.x, 9)  # 2 + 7 : juste avant la montée
+
+    def test_6th_move_into_ascent_stops_at_5(self):
+        """Cas frontière : depuis la case 4, la montée (cases 8-9) est à
+        4 cases -> entrée dans les 5 premières -> plafonné à 5 (la montée
+        est traversée)."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
+                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
+        # cases 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL
+        r = place(track, make_runner('r'), 4, 0)   # montée à 4 cases (d=4)
+        track.move_runner(r, 8)
+        self.assertEqual(r.x, 9)  # 4 + 5 : traverse la montée, plafonné
 
     def test_card_stopping_before_ascent_is_not_capped(self):
         """Un 6 depuis la même position ne touche pas la montée (cible 7,

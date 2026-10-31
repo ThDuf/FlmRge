@@ -1,12 +1,15 @@
 """Vérification par invariants des règles montée/descente sur parties aléatoires.
 
 Pour chaque mouvement :
-- si le trajet (départ compris, d'après la carte) touche une montée :
-  le déplacement effectif ne doit PAS dépasser 5 cases
 - si le coureur PART d'une descente : déplacement effectif = max(carte, 5),
-  sauf si bloqué par des cases pleines (toutes les cases entre l'arrêt
-  et la cible doivent alors être pleines)
-- sinon : déplacement effectif = valeur de la carte, sauf blocage
+  sauf si bloqué par des cases pleines
+- MONTÉE (règle officielle complète) :
+  * entrée dans la montée dans les 5 premières cases (ou départ en
+    montée) : déplacement plafonné à 5
+  * entrée à la 6e case ou plus : arrêt sur la dernière file libre
+    AVANT la montée (le déplacement peut atteindre d-1 cases de plaine)
+- sinon : déplacement = valeur de la carte, sauf blocage
+- aspiration : aucun coureur partant d'une montée ne bouge
 """
 import os, sys, random
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -26,6 +29,15 @@ def check_blocking(start, stop, target_x):
         assert cell is not None and cell.is_full(), (
             f"arrêt injustifié à {stop} au lieu de {target_x} (case {c} non pleine)")
 
+def first_ascent_distance(start, card_v):
+    """Distance d à la première case de montée sur le trajet de la carte
+    (d=0 si départ en montée), ou None si le trajet n'en touche pas."""
+    target = min(start + card_v, track.length - 1)
+    for d, c in enumerate(range(start, target + 1)):
+        if track.tile_type_at(c) == TileType.UPHILL:
+            return d
+    return None
+
 checked = 0
 for turn in range(10):
     for player in game.players:
@@ -41,32 +53,25 @@ for turn in range(10):
     for rid, card_v in cards.items():
         start = before[rid][0]
         eff = after[rid][0] - start
-        target_unc = min(start + card_v, track.length - 1)
-        touches_ascent = any(track.tile_type_at(c) == TileType.UPHILL
-                             for c in range(start, target_unc + 1))
+        d = first_ascent_distance(start, card_v)
         on_descent = track.tile_type_at(start) == TileType.DOWNHILL
 
-        if touches_ascent:
-            assert eff <= 5, f"T{turn} {rid}: {eff} cases (>5) avec montée sur le trajet"
-            expected = min(card_v, 5)
-            if eff < expected:
-                check_blocking(start, after[rid][0], min(start + expected, track.length - 1))
-        elif on_descent:
-            expected = max(card_v, 5)
-            target = min(start + expected, track.length - 1)
-            assert eff <= expected, f"T{turn} {rid}: {eff} > {expected} (descente)"
-            if eff < expected:
-                check_blocking(start, after[rid][0], target)
-        else:
-            target = min(start + card_v, track.length - 1)
-            if eff < card_v:
-                check_blocking(start, after[rid][0], target)
+        # Déplacement attendu selon les règles (indépendant du plafond final)
+        expected = max(card_v, 5) if on_descent else card_v
+        if d is not None:
+            if d <= 5:
+                expected = min(expected, 5)      # entre dans les 5 premières cases
+            else:
+                expected = min(expected, d - 1)  # arrêt avant la montée
+
+        assert eff <= expected, (
+            f"T{turn} {rid}: {eff} cases > attendu {expected} (carte {card_v}, d={d})")
+        if eff < expected:
+            check_blocking(start, after[rid][0], min(start + expected, track.length - 1))
         checked += 1
 
     # aspiration : appliquer puis vérifier qu'aucun coureur sur une montée n'a bougé
     steps = game.resolve_aspiration_phase()
-    on_ascent_before = {rid: track.tile_type_at(pos[0]) == TileType.UPHILL
-                        for rid, pos in before.items()}
     for step in steps:
         for runner, fx, fl, tx, tl in step:
             assert track.tile_type_at(fx) != TileType.UPHILL, (
