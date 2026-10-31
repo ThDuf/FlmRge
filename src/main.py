@@ -72,7 +72,7 @@ class FlammeRougeGame:
     permet de voir toute la course d'un coup d'œil.
     """
 
-    def __init__(self):
+    def __init__(self, stage: str = None):
         self.width, self.height = SCREEN_WIDTH, SCREEN_HEIGHT
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
         pygame.display.set_caption("Flamme Rouge")
@@ -85,7 +85,9 @@ class FlammeRougeGame:
         self.label_font = pygame.font.SysFont("Arial", 16)
         self.small_font = pygame.font.SysFont("Arial", 12)
 
-        self.game = Game(stage="circuit", player_count=2)
+        self.stage = stage  # None -> menu de sélection d'étape affiché
+        self.game = Game(stage=stage, player_count=2) if stage else None
+        self.menu_index = 0
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
@@ -408,48 +410,125 @@ class FlammeRougeGame:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-
                 elif event.type == pygame.VIDEORESIZE:
                     # Fenêtre redimensionnable (taille minimale pour rester lisible)
                     self.width = max(MIN_WIDTH, event.w)
                     self.height = max(MIN_HEIGHT, event.h)
                     self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+                elif self.game is None:
+                    self._menu_event(event)
+                else:
+                    self._game_event(event)
 
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        if not self._try_button_click(event.pos):
-                            if self.game.current_phase == Phase.ENERGY and self.show_hands:
-                                self._handle_click(event.pos)
-
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r:
-                        self.game = Game(stage="circuit", player_count=2)
-                        self.showing_movement = False
-                        self.movement_step = 0
-                        self.movement_total = 0
-                        self.movement_movements = []
-                        self.showing_aspiration = False
-                        self.aspiration_step = 0
-                        self.aspiration_total = 0
-                        self.aspiration_movements = []
-                        self.played_display_index = {}
-                        self.last_action = None
-                    elif event.key == pygame.K_h:
-                        self.show_hands = not self.show_hands
-                    elif event.key == pygame.K_d:
-                        self.show_decks = not self.show_decks
-                    elif event.key == pygame.K_RETURN:
-                        self._advance_step()
-
-            self.screen.fill(WHITE)
-            self._draw_track()
-            self._draw_runners()
-            self._draw_ui()
+            if self.game is None:
+                self.screen.fill((28, 32, 38))
+                self._draw_header()
+                self._draw_menu()
+            else:
+                self.screen.fill(WHITE)
+                self._draw_track()
+                self._draw_runners()
+                self._draw_ui()
             pygame.display.flip()
             self.clock.tick(60)
 
         pygame.quit()
         sys.exit()
+
+    def _game_event(self, event):
+        """Événements quand une partie est en cours."""
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                if not self._try_button_click(event.pos):
+                    if self.game.current_phase == Phase.ENERGY and self.show_hands:
+                        self._handle_click(event.pos)
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                self._select_stage(self.stage)
+            elif event.key == pygame.K_ESCAPE:
+                self.game = None  # retour au menu de sélection d'étape
+            elif event.key == pygame.K_h:
+                self.show_hands = not self.show_hands
+            elif event.key == pygame.K_d:
+                self.show_decks = not self.show_decks
+            elif event.key == pygame.K_RETURN:
+                self._advance_step()
+
+    # ------------------------------------------------------------------
+    # Menu de sélection d'étape
+    # ------------------------------------------------------------------
+
+    def _menu_entries(self):
+        """Entrées du menu : [(nom, description, code, rect), ...]."""
+        from game.game import available_stages
+        entries = []
+        w = min(680, self.width - 60)
+        x = (self.width - w) // 2
+        y = TOP_H + 46
+        for name, desc, code in available_stages():
+            rect = pygame.Rect(x, y, w, 58)
+            entries.append((name, desc, code, rect))
+            y += 66
+        return entries
+
+    def _select_stage(self, name: str):
+        """Démarre une partie sur l'étape choisie (depuis le menu ou R)."""
+        self.stage = name
+        self.game = Game(stage=name, player_count=2)
+        self.showing_movement = False
+        self.movement_step = 0
+        self.movement_total = 0
+        self.movement_movements = []
+        self.showing_aspiration = False
+        self.aspiration_step = 0
+        self.aspiration_total = 0
+        self.aspiration_movements = []
+        self.played_display_index = {}
+        self.last_action = None
+
+    def _menu_event(self, event):
+        """Événements du menu de sélection d'étape (clic ou clavier)."""
+        entries = self._menu_entries()
+        mouse = pygame.mouse.get_pos()
+        hovered = None
+        for i, (_name, _desc, _code, rect) in enumerate(entries):
+            if rect.collidepoint(mouse):
+                hovered = i
+        if hovered is not None:
+            self.menu_index = hovered
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and hovered is not None:
+            self._select_stage(entries[hovered][0])
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.menu_index = (self.menu_index - 1) % len(entries)
+            elif event.key == pygame.K_DOWN:
+                self.menu_index = (self.menu_index + 1) % len(entries)
+            elif event.key == pygame.K_RETURN:
+                self._select_stage(entries[self.menu_index][0])
+
+    def _draw_menu(self):
+        """Menu de sélection de l'étape (affiché quand self.game is None)."""
+        mouse = pygame.mouse.get_pos()
+        title = self.title_font.render("Choisis ton étape", True, WHITE)
+        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
+        hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, (150, 155, 165))
+        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
+
+        for i, (name, desc, code, rect) in enumerate(self._menu_entries()):
+            selected = (i == self.menu_index)
+            hovered = rect.collidepoint(mouse)
+            fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
+            border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
+                             border_radius=8)
+            name_surf = self.phase_font.render(name, True, WHITE)
+            self.screen.blit(name_surf, (rect.x + 16, rect.y + 8))
+            desc_surf = self.label_font.render(desc, True, (180, 185, 195))
+            self.screen.blit(desc_surf, (rect.x + 16, rect.y + 32))
+            if code:
+                code_surf = self.small_font.render(code, True, (120, 125, 135))
+                self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 10))
 
     def _handle_click(self, pos):
         """Gère un clic : jouer une carte via les zones du layout des mains."""
@@ -654,15 +733,16 @@ class FlammeRougeGame:
         self.screen.blit(flamme, (58, ty))
         self.screen.blit(rouge, (58 + flamme.get_width(), ty))
 
-        # Étape et tour, alignés à droite
-        stage_name = STAGE_NAMES.get(self.game.stage, self.game.stage)
-        stage_surf = self.label_font.render(stage_name, True, (175, 180, 190))
-        turn_surf = self.title_font.render(f"Tour {self.game.turn_count}", True, WHITE)
-        turn_x = self.width - 16 - turn_surf.get_width()
-        self.screen.blit(turn_surf, (turn_x, (HEADER_H - turn_surf.get_height()) // 2))
-        self.screen.blit(stage_surf,
-                         (turn_x - 14 - stage_surf.get_width(),
-                          (HEADER_H - stage_surf.get_height()) // 2))
+        # Étape et tour, alignés à droite (uniquement quand une partie est en cours)
+        if self.game is not None:
+            stage_name = STAGE_NAMES.get(self.game.stage, self.game.stage)
+            stage_surf = self.label_font.render(stage_name, True, (175, 180, 190))
+            turn_surf = self.title_font.render(f"Tour {self.game.turn_count}", True, WHITE)
+            turn_x = self.width - 16 - turn_surf.get_width()
+            self.screen.blit(turn_surf, (turn_x, (HEADER_H - turn_surf.get_height()) // 2))
+            self.screen.blit(stage_surf,
+                             (turn_x - 14 - stage_surf.get_width(),
+                              (HEADER_H - stage_surf.get_height()) // 2))
 
     def _draw_phase_band(self):
         """Bandeau de phase : nom + description de la phase, coloré."""

@@ -162,6 +162,21 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 ---
 
+## 🗺️ Étapes disponibles
+
+Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours). Les **5 étapes officielles du rulebook** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
+
+| Étape | Code | Profil |
+|-------|------|--------|
+| Avenue Corso Paseo | `abcdefghijklmnopqrstu` | plat (tutoriel) |
+| Firenze - Milano | `abcgi D H qntm K O L rep J sfu` | vallonné |
+| Ronde van Wevelgem | `abcmgfteqon L P jk I D H r S u` | vallonné |
+| La Haut Montagne | `abcfimet K G L H J sdop R Q N U` | très montagneuse |
+| La Classicissima | `A eb Q R N H P cgik D F s L ojmtu` | vallonné |
+| Circuit de montagne | perso | 60 cases, montée + descente, virages 180° |
+
+> Note : la répartition exacte lettre→montée/descente des faces majuscules n'est pas publiée en texte ; l'adaptation numérique est documentée dans `src/game/game.py` (`ASCENT_LETTERS`).
+
 ## 🎯 Roadmap
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
@@ -175,7 +190,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 - [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
 - [ ] **Ajout des étapes officielles** (Avenue Corso Paseo, etc.)
-- [ ] **Choix de l'étape** : sélection parmi des terrains proposés (menu au lancement)
+- [x] **Choix de l'étape** : menu au lancement parmi les 5 étapes officielles du rulebook + le circuit perso (`tests/test_stages.py`)
 - [ ] **Éditeur de piste** : créer son propre terrain à partir des tuiles (droites, virages, montées, descentes)
 - [ ] **Extensions** : possibilité d'ajouter des extensions (ex. Peloton : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement)
 - [ ] **Système de sauvegarde/reprise**

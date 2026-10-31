@@ -7,6 +7,119 @@ from .card import Card, CardType
 from .track import Track, TileType
 
 
+# ------------------------------------------------------------------
+# Étapes officielles (rulebook Lautapelit.fi / Dized)
+# ------------------------------------------------------------------
+# Chaque étape officielle est codée par les lettres de ses 21 tuiles
+# (espaces ignorés). Face minuscule = côté normal, majuscule = montagne.
+OFFICIAL_STAGES = {
+    "Avenue Corso Paseo": "abcdefghijklmnopqrstu",          # plate (tutoriel)
+    "Firenze - Milano": "abcgi D H qntm K O L rep J sfu",
+    "Ronde van Wevelgem": "abcmgfteqon L P jk I D H r S u",
+    "La Haut Montagne": "abcfimet K G L H J sdop R Q N U",  # très montagneuse
+    "La Classicissima": "A eb Q R N H P cgik D F s L ojmtu",
+}
+
+# Correspondance lettres -> type de tuile pour la face MINUSCULE (officielle :
+# a = départ, u = arrivée ; droites b c d f l m n ; virages légers h k q r s t ;
+# virages serrés e g i j o p).
+TILE_LETTER_LOWER = {
+    'a': TileType.START,
+    'u': TileType.FINISH,
+    **{c: TileType.STRAIGHT for c in "bcdf lmn".replace(" ", "")},
+    **{c: TileType.LIGHT_TURN for c in "hkqrst"},
+    **{c: TileType.SHARP_TURN for c in "egijop"},
+}
+
+# Face MAJUSCULE d'une tuile = face montagne (règles spéciales : montée bord
+# rouge, descente bord bleue). La répartition exacte lettre->montée/descente
+# n'est pas publiée en texte ; adaptation numérique documentée ici : les
+# majuscules de ASCENT_LETTERS sont des montées, les autres des descentes.
+ASCENT_LETTERS = set("DGKLHJRQN")
+
+
+def tile_type_for_letter(ch: str) -> TileType:
+    """Type de tuile pour une lettre de code de stage (a-u = normal, A-U = montagne)."""
+    low = ch.lower()
+    if low == 'a':
+        return TileType.START
+    if low == 'u':
+        return TileType.FINISH
+    if ch.isupper():
+        return TileType.UPHILL if ch in ASCENT_LETTERS else TileType.DOWNHILL
+    return TILE_LETTER_LOWER[low]
+
+
+def build_track_from_code(code: str) -> Track:
+    """Construit une piste à partir d'un code de stage en lettres (a-u, A-U)."""
+    track = Track()
+    for ch in code:
+        if ch.strip():
+            track.add_tile(tile_type_for_letter(ch))
+    return track
+
+
+def build_stage_track(name: str) -> Track:
+    """Construit la piste d'une étape nommée (officielle, 'circuit' ou 'test')."""
+    if name in OFFICIAL_STAGES:
+        return build_track_from_code(OFFICIAL_STAGES[name])
+    if name == "circuit":
+        # Circuit perso : rangées de 16 cases (14 droites + virage 180°),
+        # avec montée et descente. 30 tuiles = 60 cases.
+        track = Track()
+        track.add_tile(TileType.START)
+        for _ in range(4):
+            track.add_tile(TileType.STRAIGHT)
+        for _ in range(2):
+            track.add_tile(TileType.UPHILL)
+        track.add_tile(TileType.SHARP_TURN)
+        for _ in range(2):
+            track.add_tile(TileType.STRAIGHT)
+        for _ in range(3):
+            track.add_tile(TileType.DOWNHILL)
+        for _ in range(2):
+            track.add_tile(TileType.STRAIGHT)
+        track.add_tile(TileType.SHARP_TURN)
+        for _ in range(7):
+            track.add_tile(TileType.STRAIGHT)
+        track.add_tile(TileType.SHARP_TURN)
+        for _ in range(5):
+            track.add_tile(TileType.STRAIGHT)
+        track.add_tile(TileType.FINISH)
+        return track
+    if name == "test":
+        track = Track()
+        track.add_tile(TileType.START)
+        for _ in range(13):
+            track.add_tile(TileType.STRAIGHT)
+        track.add_tile(TileType.FINISH)
+        return track
+    # Inconnu -> étape tutorielle par défaut
+    return build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
+
+
+def available_stages() -> List[tuple]:
+    """Étapes jouables : [(nom, description, code), ...] — 'circuit' perso
+    puis les étapes officielles du rulebook."""
+    result = []
+    for name in ["circuit", *OFFICIAL_STAGES]:
+        track = build_stage_track(name)
+        n_up = sum(1 for t in track.tiles if t.type == TileType.UPHILL)
+        n_down = sum(1 for t in track.tiles if t.type == TileType.DOWNHILL)
+        n_sharp = sum(1 for t in track.tiles if t.type == TileType.SHARP_TURN)
+        parts = [f"{track.length} cases"]
+        if n_sharp:
+            parts.append(f"{n_sharp} virage(s) serré(s)")
+        if n_up:
+            parts.append(f"{n_up} montée(s)")
+        if n_down:
+            parts.append(f"{n_down} descente(s)")
+        if not (n_sharp or n_up or n_down):
+            parts.append("plat")
+        result.append((name, " · ".join(parts), OFFICIAL_STAGES.get(name, "")))
+    return result
+
+
 class Phase(Enum):
     ENERGY = auto()    # Phase d'Énergie
     MOVEMENT = auto()  # Phase de Mouvement
@@ -87,45 +200,8 @@ class Game:
         return [Card(value, CardType.ENERGY, runner_str) for value in values]
 
     def _build_track(self, stage: str) -> Track:
-        """Construit la piste selon l'étape choisie."""
-        track = Track()
-
-        if stage == "Avenue Corso Paseo":
-            track.add_tile(TileType.START)
-            for _ in range(10):
-                track.add_tile(TileType.STRAIGHT)
-            track.add_tile(TileType.FINISH)
-        elif stage == "test":
-            track.add_tile(TileType.START)
-            for _ in range(13):
-                track.add_tile(TileType.STRAIGHT)
-            track.add_tile(TileType.FINISH)
-        elif stage == "circuit":
-            # Circuit "organique" avec montées et descentes :
-            # rangées de 16 cases (14 droites + un virage à 180° = 2 cases),
-            # rendues comme de VRAIS virages par l'UI (cases contiguës).
-            # 3 rangées pleines + rangée finale : 30 tuiles = 60 cases.
-            track.add_tile(TileType.START)
-            for _ in range(4):          # rangée 1
-                track.add_tile(TileType.STRAIGHT)
-            for _ in range(2):          # montée (cases 10 à 13)
-                track.add_tile(TileType.UPHILL)
-            track.add_tile(TileType.SHARP_TURN)
-            for _ in range(2):          # rangée 2
-                track.add_tile(TileType.STRAIGHT)
-            for _ in range(3):          # descente (cases 18 à 23)
-                track.add_tile(TileType.DOWNHILL)
-            for _ in range(2):
-                track.add_tile(TileType.STRAIGHT)
-            track.add_tile(TileType.SHARP_TURN)
-            for _ in range(7):          # rangée 3
-                track.add_tile(TileType.STRAIGHT)
-            track.add_tile(TileType.SHARP_TURN)
-            for _ in range(5):          # rangée finale (pas de virage avant l'arrivée)
-                track.add_tile(TileType.STRAIGHT)
-            track.add_tile(TileType.FINISH)
-
-        return track
+        """Construit la piste de l'étape choisie (officielle, 'circuit', 'test')."""
+        return build_stage_track(stage)
 
     def _place_runner_at_start(self, runner: Runner) -> None:
         """Place un coureur au départ dans la première file libre.

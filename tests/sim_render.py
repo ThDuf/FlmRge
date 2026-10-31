@@ -6,7 +6,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import main
 from game.game import Phase
 
-ui = main.FlammeRougeGame()
+# --- Menu de sélection d'étape (au lancement, sans stage) ---
+ui_menu = main.FlammeRougeGame()
+assert ui_menu.game is None
+for w, h in [(900, 600), (1200, 800), (1600, 1000)]:
+    ui_menu.width, ui_menu.height = w, h
+    ui_menu.screen.fill((28, 32, 38))
+    ui_menu._draw_header()
+    ui_menu._draw_menu()
+    for i, (name, desc, code, rect) in enumerate(ui_menu._menu_entries()):
+        assert rect.bottom <= h, f"entrée menu {name} hors écran"
+print("MENU: rendu OK a 3 tailles, toutes les entrées visibles")
+
+ui = main.FlammeRougeGame(stage="circuit")
 
 def render_all():
     ui.screen.fill(main.WHITE)
