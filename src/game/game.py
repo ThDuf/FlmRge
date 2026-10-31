@@ -101,19 +101,27 @@ class Game:
                 track.add_tile(TileType.STRAIGHT)
             track.add_tile(TileType.FINISH)
         elif stage == "circuit":
-            # Circuit "organique" : rangées de 16 cases (14 droites + un
-            # virage à 180° = 2 cases) rendues comme de VRAIS virages par
-            # l'UI (demi-cercles, cases contiguës le long de l'arc).
+            # Circuit "organique" avec montées et descentes :
+            # rangées de 16 cases (14 droites + un virage à 180° = 2 cases),
+            # rendues comme de VRAIS virages par l'UI (cases contiguës).
             # 3 rangées pleines + rangée finale : 30 tuiles = 60 cases.
             track.add_tile(TileType.START)
-            for _ in range(6):
+            for _ in range(4):          # rangée 1
+                track.add_tile(TileType.STRAIGHT)
+            for _ in range(2):          # montée (cases 10 à 13)
+                track.add_tile(TileType.UPHILL)
+            track.add_tile(TileType.SHARP_TURN)
+            for _ in range(2):          # rangée 2
+                track.add_tile(TileType.STRAIGHT)
+            for _ in range(3):          # descente (cases 18 à 23)
+                track.add_tile(TileType.DOWNHILL)
+            for _ in range(2):
                 track.add_tile(TileType.STRAIGHT)
             track.add_tile(TileType.SHARP_TURN)
-            for _ in range(2):  # rangées 2 et 3
-                for _ in range(7):
-                    track.add_tile(TileType.STRAIGHT)
-                track.add_tile(TileType.SHARP_TURN)
-            for _ in range(5):  # rangée finale (pas de virage avant l'arrivée)
+            for _ in range(7):          # rangée 3
+                track.add_tile(TileType.STRAIGHT)
+            track.add_tile(TileType.SHARP_TURN)
+            for _ in range(5):          # rangée finale (pas de virage avant l'arrivée)
                 track.add_tile(TileType.STRAIGHT)
             track.add_tile(TileType.FINISH)
 

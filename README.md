@@ -19,7 +19,8 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 - **Fatigue** : Chaque coureur dont la CASE devant lui est vide (2 files) reçoit une carte Fatigue (valeur 2). Une simple file libre ne suffit pas.
 - **Mouvement** : Un coureur traverse les autres coureurs ; il ne peut pas finir son mouvement sur une case pleine (il s'arrête derrière sur la première file libre). Case d'arrivée vide → file de droite (file A).
 - **Decks** : Les cartes jouées sont retirées du jeu ; les cartes non jouées sont recyclées. Les decks s'épuisent au fil de la course.
-- **Montées/Descentes** : Les montées limitent le déplacement à 5 cases max, les descentes imposent un minimum de 5 cases.
+- **Montées** (rouge) : un coureur dont le trajet touche une montée (départ compris) est plafonné à 5 cases ; la 6e case ne peut jamais pénétrer la montée (arrêt juste avant). Un coureur en montée ne donne **ni ne reçoit** l'aspiration.
+- **Descentes** (bleu) : un coureur qui **part** d'une descente avance d'au minimum 5 cases ; l'aspiration s'y applique normalement.
 
 ---
 
@@ -59,7 +60,7 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 | **D** | Afficher/Masquer les cartes restantes |
 | **R** | Recommencer la partie |
 
-**Disposition de l'écran** : les panneaux de cartes des joueurs sont empilés en colonne à gauche ; tout l'écran à droite affiche le **circuit complet** — un chemin continu « organique » de rangées droites reliées par de **vrais virages à 180°** (demi-cercles), les cases étant contiguës le long du chemin (aucun saut). Une légende en bas d'écran explique les couleurs : **vert = départ, rouge = arrivée, orange = virage, jaune = virage léger**, ligne blanche = séparation des files A (droite) et B (gauche). La fenêtre est **redimensionnable** (minimum 900x600), la taille des cases s'adapte.
+**Disposition de l'écran** : les panneaux de cartes des joueurs sont empilés en colonne à gauche ; tout l'écran à droite affiche le **circuit complet** — un chemin continu « organique » de rangées droites reliées par de **vrais virages à 180°** (demi-cercles), les cases étant contiguës le long du chemin (aucun saut). Une légende en bas d'écran explique les couleurs : **vert = départ, rouge = arrivée, orange = virage, rouge clair + triangle rouge = montée, bleu clair + triangle bleu = descente**, ligne blanche = séparation des files A (droite) et B (gauche). La fenêtre est **redimensionnable** (minimum 900x600), la taille des cases s'adapte.
 
 ---
 
@@ -167,7 +168,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
 - [x] **Implémentation complète de l'aspiration** (packs arrière→avant, fusion + revérification, pas-à-pas animé — vérifiée par `tests/test_aspiration.py`)
 - [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)
-- [ ] **Ajout des montées/descentes**
+- [x] **Montées/descentes** (plafond 5 / minimum 5, pas d'aspiration en montée — vérifiées par `tests/test_mountains.py`)
 - [ ] **Amélioration de l'UI** (boutons, animations)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)
 - [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)

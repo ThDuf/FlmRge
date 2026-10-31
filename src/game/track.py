@@ -90,6 +90,12 @@ class Track:
             return self.tiles[tile_index].cells[cell_index]
         return None
 
+    def tile_type_at(self, x: int) -> TileType:
+        """Type de la tuile contenant la case x (STRAIGHT si hors piste)."""
+        if x < 0 or x >= self.length:
+            return TileType.STRAIGHT
+        return self.tiles[x // 2].type
+
     def is_cell_empty(self, x: int, lane: int) -> bool:
         cell = self.get_cell(x, lane)
         return cell is not None and cell.is_empty(lane)
@@ -125,9 +131,29 @@ class Track:
           première case offrant une file libre.
         - Case d'arrivée vide -> placé dans la file A (file de droite,
           marquée d'une double ligne) ; sinon il prend la file libre.
+
+        Montagnes (règles officielles) :
+        - DESCENTE : un coureur qui PART d'une case de descente avance
+          d'au moins 5 cases (une carte plus faible est jouable, mais sa
+          valeur vaut minimum 5).
+        - MONTÉE : si le trajet touche une case de montée (case de départ
+          comprise), le déplacement est PLAFONNÉ à 5 cases — la 6e case ou
+          plus ne peut jamais pénétrer dans la montée, le coureur s'arrête
+          juste avant (dernière file libre).
         """
         if steps <= 0:
             return
+
+        # Descente : minimum 5 si le coureur part d'une descente
+        if self.tile_type_at(runner.x) == TileType.DOWNHILL:
+            steps = max(steps, 5)
+
+        # Montée : plafond à 5 si le trajet (départ compris) touche une montée
+        uncapped_target = min(runner.x + steps, self.length - 1)
+        for c in range(runner.x, uncapped_target + 1):
+            if self.tile_type_at(c) == TileType.UPHILL:
+                steps = min(steps, 5)
+                break
 
         target = min(runner.x + steps, self.length - 1)
         x = target
@@ -203,6 +229,9 @@ class Track:
         - On traite les packs de l'arrière vers l'avant ; un pack fusionné
           est IMMÉDIATEMENT revérifié (il peut aspirer plusieurs fois).
         - Chaque coureur garde sa file (le pack "glisse" d'une case).
+        - MONTÉE : un coureur sur une case de montée ne donne NI ne reçoit
+          l'aspiration (règle officielle). Le "donneur" est le coureur le
+          plus en arrière du pack de devant ; les descentes ne changent rien.
 
         Retourne une liste d'étapes : chaque étape est la liste des
         mouvements (runner, from_x, from_lane, to_x, to_lane) d'un pack.
@@ -219,20 +248,28 @@ class Track:
                 break  # pas de pack devant : terminé pour celui-ci
             rear_x = max(pos[rid][0] for rid in packs[i])
             ahead_x = min(pos[rid][0] for rid in packs[i + 1])
-            if ahead_x - rear_x == 2:  # exactement une case vide entre les packs
-                step = []
-                # Du coureur le plus en avant au plus en arrière : chacun doit
-                # libérer sa case avant que celui derrière ne s'y place.
-                for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
-                    fx, flane = pos[rid]
-                    step.append((runners[rid], fx, flane, fx + 1, flane))
-                    pos[rid] = (fx + 1, flane)
-                steps.append(step)
-                # Le pack a fusionné avec celui de devant : recalculer
-                # et revérifier immédiatement le pack fusionné (index i)
-                packs = self._packs_from_positions(pos)
-            else:
-                i += 1  # pas d'aspiration possible pour ce pack
+            if ahead_x - rear_x != 2:  # pas exactement une case vide
+                i += 1
+                continue
+            # Montée : ni donner ni recevoir l'aspiration
+            rear_on_ascent = any(
+                self.tile_type_at(pos[rid][0]) == TileType.UPHILL
+                for rid in packs[i])
+            giver = min(packs[i + 1], key=lambda r: pos[r][0])
+            if rear_on_ascent or self.tile_type_at(pos[giver][0]) == TileType.UPHILL:
+                i += 1
+                continue
+            step = []
+            # Du coureur le plus en avant au plus en arrière : chacun doit
+            # libérer sa case avant que celui derrière ne s'y place.
+            for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
+                fx, flane = pos[rid]
+                step.append((runners[rid], fx, flane, fx + 1, flane))
+                pos[rid] = (fx + 1, flane)
+            steps.append(step)
+            # Le pack a fusionné avec celui de devant : recalculer
+            # et revérifier immédiatement le pack fusionné (index i)
+            packs = self._packs_from_positions(pos)
         return steps
 
     def apply_slipstream_step(self, step: List[tuple]) -> None:

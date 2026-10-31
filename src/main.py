@@ -29,7 +29,11 @@ GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
 
 LIGHT_TURN_FILL = (255, 250, 205)    # virage léger
-SHARP_TURN_FILL = (255, 224, 178)     # virage serré
+SHARP_TURN_FILL = (255, 224, 178)   # virage serré
+UPHILL_FILL = (255, 205, 205)       # montée (bords rouges dans le jeu officiel)
+DOWNHILL_FILL = (205, 225, 255)     # descente (bords bleus)
+UPHILL_ARROW = (180, 60, 60)        # triangle marqueur montée
+DOWNHILL_ARROW = (60, 90, 180)      # triangle marqueur descente
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -461,13 +465,17 @@ class FlammeRougeGame:
         pygame.draw.polygon(self.screen, LIGHT_GRAY, road)
         pygame.draw.polygon(self.screen, GRAY, road, width=2)
 
-        # Teinte des cases de virage (le demi-cercle de fin de rangée)
+        # Teinte des cases spéciales (virages, montées, descentes) + marqueurs
         for x_cell in range(track.length):
             tile_type = track.tiles[x_cell // 2].type
             if tile_type == TileType.LIGHT_TURN:
                 color = LIGHT_TURN_FILL
             elif tile_type == TileType.SHARP_TURN:
                 color = SHARP_TURN_FILL
+            elif tile_type == TileType.UPHILL:
+                color = UPHILL_FILL
+            elif tile_type == TileType.DOWNHILL:
+                color = DOWNHILL_FILL
             else:
                 continue
             sample = []
@@ -475,6 +483,19 @@ class FlammeRougeGame:
                 px, py, _tx, _ty = self._path_at(geo, x_cell * cell + cell * k / 8)
                 sample.append((px, py))
             pygame.draw.lines(self.screen, color, False, sample, width=2 * half)
+
+            # Marqueurs montée/descente : triangles à l'extérieur droit de la route
+            if tile_type in (TileType.UPHILL, TileType.DOWNHILL):
+                px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
+                nx, ny = -ty, tx
+                mx = px + nx * (half + 12)
+                my = py + ny * (half + 12)
+                forward = 1 if tile_type == TileType.UPHILL else -1
+                pts = [(mx + tx * 7 * forward, my + ty * 7 * forward),
+                       (mx + nx * 5, my + ny * 5),
+                       (mx - nx * 5, my - ny * 5)]
+                arrow_color = UPHILL_ARROW if tile_type == TileType.UPHILL else DOWNHILL_ARROW
+                pygame.draw.polygon(self.screen, arrow_color, pts)
 
         # Ligne médiane (séparation des files) + quadrillage des cases
         pygame.draw.lines(self.screen, WHITE, False, pts, 3)
@@ -634,8 +655,8 @@ class FlammeRougeGame:
         legend_y = self.height - 26
         legend_x = self._left_w() + 20
         for swatch, label in ((GREEN, "D\u00e9part"), (RED, "Arriv\u00e9e"),
-                              (SHARP_TURN_FILL, "Virage"), (LIGHT_TURN_FILL, "Virage l\u00e9ger"),
-                              (WHITE, "Files A|B")):
+                              (SHARP_TURN_FILL, "Virage"), (UPHILL_FILL, "Mont\u00e9e"),
+                              (DOWNHILL_FILL, "Descente"), (WHITE, "Files A|B")):
             pygame.draw.rect(self.screen, swatch, (legend_x, legend_y, 14, 14), border_radius=3)
             pygame.draw.rect(self.screen, BLACK, (legend_x, legend_y, 14, 14),
                              width=1, border_radius=3)
