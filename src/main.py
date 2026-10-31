@@ -578,9 +578,13 @@ class FlammeRougeGame:
             self.screen.blit(movement_text, (info_x, 94))
             if self.movement_movements:
                 runner, value = self.movement_movements[0]
-                next_text = self.font.render(
-                    f"Suivant: {runner.id} joue {value}", True, BLACK)
-                self.screen.blit(next_text, (info_x, 138))
+                eff, reason = self.game.track.effective_steps(runner.x, value)
+                if reason:
+                    next_text = f"Suivant: {runner.id} joue {value} \u2192 {eff} ({reason})"
+                else:
+                    next_text = f"Suivant: {runner.id} joue {value}"
+                next_surf = self.font.render(next_text, True, BLACK)
+                self.screen.blit(next_surf, (info_x, 138))
 
         # Phase d'aspiration (pas-à-pas appliqué sur le plateau)
         if self.showing_aspiration:
@@ -739,6 +743,12 @@ class FlammeRougeGame:
                     value_text = str(card.value) + ("F" if card.type == CardType.FATIGUE else "")
                     val_surf = self.card_font.render(value_text, True, text_color)
                     self.screen.blit(val_surf, val_surf.get_rect(center=rect.center))
+                    # Survol + montagne : montrer le déplacement effectif avant de jouer
+                    if hovered:
+                        eff, reason = self.game.track.effective_steps(runner.x, card.value)
+                        if reason:
+                            hint = self.small_font.render(f"\u2192{eff}", True, (180, 90, 0))
+                            self.screen.blit(hint, (rect.right - 14, rect.y - 12))
 
     def _remaining_counts(self, runner) -> dict:
         """Nombre de cartes restantes dans le jeu, par valeur.

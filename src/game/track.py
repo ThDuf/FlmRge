@@ -121,6 +121,30 @@ class Track:
                 runners.append((x, 1, cell.b))
         return runners
 
+    def effective_steps(self, x: int, card_value: int):
+        """Déplacement effectif d'une carte selon les règles de montagne.
+
+        Retourne (steps, raison) :
+        - DESCENTE : le coureur qui PART d'une descente avance d'au
+          minimum 5 -> raison "minimum 5 (descente)"
+        - MONTÉE : si le trajet de la carte (départ compris) touche une
+          montée, plafonné à 5 -> raison "plafonné à 5 (montée)"
+        La raison est None si la carte s'applique telle quelle.
+        """
+        steps = card_value
+        reason = None
+        if self.tile_type_at(x) == TileType.DOWNHILL and steps < 5:
+            steps = 5
+            reason = "minimum 5 (descente)"
+        target = min(x + steps, self.length - 1)
+        for c in range(x, target + 1):
+            if self.tile_type_at(c) == TileType.UPHILL:
+                if card_value > 5:
+                    steps = min(steps, 5)
+                    reason = "plafonn\u00e9 \u00e0 5 (mont\u00e9e)"
+                break
+        return steps, reason
+
     def move_runner(self, runner: Runner, steps: int) -> None:
         """
         Déplace un coureur de `steps` cases selon les règles officielles :
@@ -132,28 +156,16 @@ class Track:
         - Case d'arrivée vide -> placé dans la file A (file de droite,
           marquée d'une double ligne) ; sinon il prend la file libre.
 
-        Montagnes (règles officielles) :
-        - DESCENTE : un coureur qui PART d'une case de descente avance
-          d'au moins 5 cases (une carte plus faible est jouable, mais sa
-          valeur vaut minimum 5).
-        - MONTÉE : si le trajet touche une case de montée (case de départ
-          comprise), le déplacement est PLAFONNÉ à 5 cases — la 6e case ou
-          plus ne peut jamais pénétrer dans la montée, le coureur s'arrête
-          juste avant (dernière file libre).
+        Montagnes (règles officielles, cf. effective_steps) :
+        - DESCENTE : minimum 5 en partant d'une descente.
+        - MONTÉE : plafonné à 5 si le trajet (départ compris) touche une
+          montée — la 6e case ou plus ne peut jamais y pénétrer, le
+          coureur s'arrête juste avant (dernière file libre).
         """
         if steps <= 0:
             return
 
-        # Descente : minimum 5 si le coureur part d'une descente
-        if self.tile_type_at(runner.x) == TileType.DOWNHILL:
-            steps = max(steps, 5)
-
-        # Montée : plafond à 5 si le trajet (départ compris) touche une montée
-        uncapped_target = min(runner.x + steps, self.length - 1)
-        for c in range(runner.x, uncapped_target + 1):
-            if self.tile_type_at(c) == TileType.UPHILL:
-                steps = min(steps, 5)
-                break
+        steps, _reason = self.effective_steps(runner.x, steps)
 
         target = min(runner.x + steps, self.length - 1)
         x = target
