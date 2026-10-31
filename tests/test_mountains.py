@@ -205,6 +205,41 @@ class TestAscentSlipstream(unittest.TestCase):
         self.assertEqual(rear.x, 6)    # bloqué derrière
 
 
+    def test_card_landing_exactly_on_ascent_is_capped(self):
+        """Le cas limite : un coureur à 7 cases d'une montée qui joue un 7
+        n'atteint PAS la montée. L'énergie est plafonnée à 5 parce que le
+        trajet de la carte y entrerait (règle officielle : "No rider ...
+        moving INTO or through an ascent, may use an energy of more than
+        5") ; et Dized précise qu'un coureur ayant déjà bougé de 5 cases ou
+        plus ne peut jamais entrer dans une montée ce tour-ci. Résultat :
+        il avance de 5 et tombe AVANT la montée (x+5), pas dessus."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
+                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
+        # cases 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL : montée à 7 cases du coureur
+        r = place(track, make_runner('r'), 1, 0)
+        track.move_runner(r, 7)   # cible 8 = première case de montée
+        self.assertEqual(r.x, 6)  # 1 + 5 : plafonné, arrêt AVANT la montée
+
+    def test_card_stopping_before_ascent_is_not_capped(self):
+        """Un 6 depuis la même position ne touche pas la montée (cible 7,
+        plaine) : PAS de plafond, le coureur s'arrête juste devant."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
+                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
+        r = place(track, make_runner('r'), 1, 0)
+        track.move_runner(r, 6)
+        self.assertEqual(r.x, 7)  # 1 + 6 : trajet hors montée, pas de plafond
+
+    def test_climbing_from_the_foot_of_the_ascent(self):
+        """Au pied de la montée (case adjacente), un 5 traverse et sort de
+        la montée : entrer dans la montée dans les 5 premières cases est
+        parfaitement légal."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
+                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
+        r = place(track, make_runner('r'), 7, 0)   # juste avant la montée (8-9)
+        track.move_runner(r, 5)
+        self.assertEqual(r.x, 12)  # traverse la montée, 5 cases au total
+
+
 class TestCircuitStage(unittest.TestCase):
     def test_circuit_contains_mountains(self):
         from game.track import TileType
