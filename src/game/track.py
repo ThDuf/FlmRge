@@ -241,9 +241,12 @@ class Track:
         - On traite les packs de l'arrière vers l'avant ; un pack fusionné
           est IMMÉDIATEMENT revérifié (il peut aspirer plusieurs fois).
         - Chaque coureur garde sa file (le pack "glisse" d'une case).
-        - MONTÉE : un coureur sur une case de montée ne donne NI ne reçoit
-          l'aspiration (règle officielle). Le "donneur" est le coureur le
-          plus en arrière du pack de devant ; les descentes ne changent rien.
+        - MONTÉE : un coureur en montée ne donne ni ne reçoit l'aspiration.
+          Le "donneur" est le coureur le plus en arrière du pack de devant ;
+          dans un pack qui glisse, les coureurs en montée restent sur place
+          (ils bloquent ceux derrière eux) et les coureurs hors montée
+          partent quand même — le pack peut se séparer (exemple officiel
+          Dized). Les descentes ne changent rien.
 
         Retourne une liste d'étapes : chaque étape est la liste des
         mouvements (runner, from_x, from_lane, to_x, to_lane) d'un pack.
@@ -263,24 +266,32 @@ class Track:
             if ahead_x - rear_x != 2:  # pas exactement une case vide
                 i += 1
                 continue
-            # Montée : ni donner ni recevoir l'aspiration
-            rear_on_ascent = any(
-                self.tile_type_at(pos[rid][0]) == TileType.UPHILL
-                for rid in packs[i])
+            # Montée : le donneur (le coureur le plus en arrière du pack de
+            # devant) ne peut pas donner l'aspiration depuis une montée.
             giver = min(packs[i + 1], key=lambda r: pos[r][0])
-            if rear_on_ascent or self.tile_type_at(pos[giver][0]) == TileType.UPHILL:
+            if self.tile_type_at(pos[giver][0]) == TileType.UPHILL:
                 i += 1
                 continue
-            step = []
             # Du coureur le plus en avant au plus en arrière : chacun doit
             # libérer sa case avant que celui derrière ne s'y place.
+            # Règle officielle (exemple de la page Dized "Ascents") : un
+            # coureur en montée ne participe PAS au glissement — il reste
+            # sur place et bloque ceux derrière lui ; les coureurs devant
+            # lui, hors montée, partent quand même ("left behind, even
+            # though he is in the same pack") : le pack peut se séparer.
+            step = []
             for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
+                if self.tile_type_at(pos[rid][0]) == TileType.UPHILL:
+                    break  # reste sur place ; bloque ceux derrière lui
                 fx, flane = pos[rid]
                 step.append((runners[rid], fx, flane, fx + 1, flane))
                 pos[rid] = (fx + 1, flane)
+            if not step:
+                i += 1  # personne ne peut glisser (tête du pack en montée)
+                continue
             steps.append(step)
-            # Le pack a fusionné avec celui de devant : recalculer
-            # et revérifier immédiatement le pack fusionné (index i)
+            # Le segment parti a fusionné avec le pack de devant :
+            # recalculer et revérifier immédiatement le pack fusionné
             packs = self._packs_from_positions(pos)
         return steps
 

@@ -170,6 +170,41 @@ class TestAscentSlipstream(unittest.TestCase):
         self.assertEqual(rear.x, 4)
 
 
+    def test_pack_splits_on_ascent_during_slipstream(self):
+        """Exemple officiel (page Dized "Ascents") : dans un pack qui aspire,
+        le coureur hors montée en tête glisse et FUSIONNE avec le pack de
+        devant, tandis que le coéquipier en montée est laissé sur place
+        ("left behind, even though he is in the same pack") — ceux derrière
+        lui sont bloqués."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
+                           + [TileType.UPHILL] + [TileType.STRAIGHT] * 2)
+        # cases : 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL, 10-13 STRAIGHT
+        sprinteur = place(track, make_runner('sprinteur'), 10, 0)  # plaine, tête du pack
+        rouleur = place(track, make_runner('rouleur'), 9, 0)       # MONTÉE (8-9)
+        place(track, make_runner('giver'), 12, 0)                  # plaine, gap en 11
+        steps = run_aspiration(track)
+        moved_ids = {m[0].id for step in steps for m in step}
+        self.assertEqual(sprinteur.x, 11)   # parti fusionner avec le giver
+        self.assertEqual(rouleur.x, 9)       # laissé sur place, en montée
+        self.assertIn('sprinteur', moved_ids)
+        self.assertNotIn('rouleur', moved_ids)
+
+    def test_ascent_rider_blocks_packmates_behind(self):
+        """Un coureur en montée au MILIEU d'un pack bloque ceux derrière lui :
+        seul le segment de tête (hors montée) glisse."""
+        track = make_track([TileType.START] + [TileType.STRAIGHT] * 2
+                           + [TileType.UPHILL] + [TileType.STRAIGHT] * 3)
+        # cases : 0-1 START, 2-5 STRAIGHT, 6-7 UPHILL, 8-13 STRAIGHT
+        front = place(track, make_runner('front'), 8, 0)    # plaine, tête
+        frozen = place(track, make_runner('frozen'), 7, 0)  # MONTÉE (6-7)
+        rear = place(track, make_runner('rear'), 6, 0)      # MONTÉE (6-7)
+        place(track, make_runner('giver'), 10, 0)           # gap en 9
+        run_aspiration(track)
+        self.assertEqual(front.x, 9)   # glisse
+        self.assertEqual(frozen.x, 7)  # reste
+        self.assertEqual(rear.x, 6)    # bloqué derrière
+
+
 class TestCircuitStage(unittest.TestCase):
     def test_circuit_contains_mountains(self):
         from game.track import TileType
