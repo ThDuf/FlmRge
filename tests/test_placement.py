@@ -69,6 +69,27 @@ class TestPlacementPhase(unittest.TestCase):
         occupied_x = sorted({x for x, _l, _r in runners})
         self.assertEqual(occupied_x, [1, 2, 3, 4])  # case 0 (la plus loin) vide
 
+    def test_auto_place_shuffles_player_order(self):
+        """Le placement aléatoire mélange vraiment l'ordre des coureurs
+        (pas toujours la même équipe en premier)."""
+        from unittest import mock
+        game = Game(stage="test", player_count=4, auto_place=False)
+        with mock.patch('random.shuffle') as m:
+            game.auto_place_riders()
+            m.assert_called_once()
+        # et avec un vrai shuffle, l'ordre de placement varie selon la graine
+        import random
+        orders = set()
+        for seed in range(6):
+            random.seed(seed)
+            g = Game(stage="test", player_count=4, auto_place=False)
+            random.seed(seed)
+            g.auto_place_riders()
+            orders.add(tuple(r.id for _x, _l, r in
+                             sorted(g.track.get_all_runners(),
+                                    key=lambda t: (t[0], t[1]))))
+        self.assertGreater(len(orders), 1)  # plusieurs dispositions différentes
+
 
 class TestPlacementUI(unittest.TestCase):
     def test_ui_starts_in_placement_phase(self):

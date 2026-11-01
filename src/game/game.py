@@ -246,10 +246,14 @@ class Game:
         return True
 
     def auto_place_riders(self) -> None:
-        """Option 'placement au hasard' : les coureurs restants sont placés
-        AU PLUS PROCHE de la ligne de départ (règle), la file étant choisie
-        au hasard parmi les files libres de la case la plus proche."""
+        """Option 'placement au hasard' : l'ordre des joueurs/coureurs restants
+        est mélangé (règle : on commence par un joueur tiré au sort, puis sens
+        horaire), puis chacun est placé AU PLUS PROCHE de la ligne de départ,
+        la file étant choisie au hasard parmi les files libres de la case."""
         import random
+        rest = self.placement_queue[self.placement_index:]
+        random.shuffle(rest)
+        self.placement_queue[self.placement_index:] = rest
         while self.current_placement() is not None:
             limit = self.track.start_line_x()
             # case la plus proche de la ligne ayant encore une file libre
