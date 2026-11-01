@@ -159,14 +159,16 @@ class TestOfficialStages(unittest.TestCase):
         self.assertTrue(all(g == CellGeographyType.FLAT for g in geographies))
 
     def test_start_line_is_after_the_start_cells(self):
-        """La ligne de départ est JUSTE APRÈS les cases 's' de la tuile a
-        (a = "sssssf") : les coureurs se placent derrière, en x < 5."""
+        """La ligne de départ est JUSTE APRÈS les cases 's' de la 1re tuile
+        (a = "sssssf" -> 5, A = "ssssff" -> 4) : les coureurs se placent
+        derrière, en x < start_line_x()."""
         from game.game import build_stage_track
         for name in OFFICIAL_STAGES:
             track = build_stage_track(name)
-            self.assertEqual(track.start_line_x(), 5, name)
-            self.assertEqual(track.run_at(4), CellRunType.START, name)
-            self.assertEqual(track.run_at(5), CellRunType.NONE, name)
+            sx = track.start_line_x()
+            self.assertIn(sx, (4, 5), name)
+            self.assertEqual(track.run_at(sx - 1), CellRunType.START, name)
+            self.assertNotEqual(track.run_at(sx), CellRunType.START, name)
             # arrivée : la ligne est sur la 1re case END (u="feeeee", U="uueeee")
             ex = track.end_line_x()
             self.assertEqual(track.run_at(ex), CellRunType.END, name)
