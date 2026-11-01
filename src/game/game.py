@@ -142,6 +142,7 @@ def available_stages() -> List[tuple]:
 
 
 class Phase(Enum):
+    PLACEMENT = auto()  # Placement des coureurs au départ (avant le 1er tour)
     ENERGY = auto()    # Phase d'Énergie
     MOVEMENT = auto()  # Phase de Mouvement
     ASPIRATION = auto()  # Phase d'Aspiration
@@ -151,12 +152,13 @@ class Phase(Enum):
 class Game:
     """Moteur principal du jeu Flamme Rouge."""
 
-    def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2):
+    def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
+                 auto_place: bool = True):
         player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
         self.stage = stage
         self.players: List[Player] = []
         self.track = self._build_track(stage)
-        self.current_phase: Phase = Phase.ENERGY
+        self.current_phase: Phase = Phase.PLACEMENT
         self.turn_count: int = 0
         self.game_over: bool = False
         self.winner: Optional[Player] = None
@@ -166,14 +168,23 @@ class Game:
 
         # Initialiser les joueurs
         self._initialize_players(player_count)
-        
+
         # Initialiser le compteur de cartes par coureur
         for player in self.players:
             for runner in player.get_runners():
                 self.cards_played_per_runner[runner.id] = 0
 
-        # Démarrer le premier tour
-        self.start_turn()
+        # Phase de placement au départ : file d'attente (joueur, coureur),
+        # chaque joueur place son sprinteur puis son rouleur. En mode auto
+        # (tests/sims), tout est placé d'un coup au plus proche de la ligne.
+        self.placement_queue: List[tuple] = []
+        self.placement_index = 0
+        if auto_place:
+            self._auto_place_all()
+            self.start_turn()
+        else:
+            self.placement_queue = [(p, r) for p in self.players
+                                    for r in (p.sprinter, p.roller)]
 
     def _initialize_players(self, count: int) -> None:
         """Initialise les joueurs et leurs coureurs."""
@@ -194,13 +205,58 @@ class Game:
             player = Player(id=f"player_{i}", color=color, sprinter=sprinter, roller=roller)
             self.players.append(player)
 
-        # Placement au départ en round-robin pour l'équité : tous les
-        # sprinteurs d'abord (à la première file libre), puis tous les
-        # rouleurs. Les équipes démarrent ainsi sur des cases équivalentes.
+    def _auto_place_all(self) -> None:
+        """Placement automatique : tous les sprinteurs d'abord, puis tous les
+        rouleurs, chacun au plus proche de la ligne de départ."""
         for player in self.players:
             self._place_runner_at_start(player.sprinter)
         for player in self.players:
             self._place_runner_at_start(player.roller)
+
+    # ------------------------------------------------------------------
+    # Phase de placement au départ (règles officielles)
+    # ------------------------------------------------------------------
+
+    def current_placement(self):
+        """(player, runner) à placer maintenant, ou None si placement fini."""
+        if self.current_phase != Phase.PLACEMENT or self.placement_index >= len(self.placement_queue):
+            return None
+        return self.placement_queue[self.placement_index]
+
+    def can_place_at(self, x: int, lane: int) -> bool:
+        """Un coureur ne peut être placé que derrière la ligne de départ
+        (x < start_line_x()), sur une file libre."""
+        if self.current_phase != Phase.PLACEMENT:
+            return False
+        if not (0 <= x < self.track.start_line_x()):
+            return False
+        cell = self.track.get_cell(x, lane)
+        return cell is not None and cell.is_empty(lane)
+
+    def place_runner_at(self, x: int, lane: int) -> bool:
+        """Place le coureur en cours à (x, lane). Passe au suivant ; quand
+        tout le monde est placé, démarre le premier tour."""
+        if not self.can_place_at(x, lane):
+            return False
+        _player, runner = self.current_placement()
+        self.track.get_cell(x, lane).set_runner(runner, lane)
+        self.placement_index += 1
+        if self.placement_index >= len(self.placement_queue):
+            self.start_turn()
+        return True
+
+    def auto_place_riders(self) -> None:
+        """Option 'placement au hasard' : chaque coureur restant est placé sur
+        une file libre choisie au hasard, derrière la ligne de départ."""
+        import random
+        while self.current_placement() is not None:
+            limit = self.track.start_line_x()
+            free = [(x, lane) for x in range(limit) for lane in (0, 1)
+                    if self.can_place_at(x, lane)]
+            if not free:
+                raise RuntimeError("Zone de départ pleine")
+            x, lane = random.choice(free)
+            self.place_runner_at(x, lane)
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:
         """Génère un deck Énergie de 15 cartes pour un coureur.

@@ -18,4 +18,8 @@ ui.menu_step = 'players'
 ui._pending_stage = names[-1]
 ui._draw_menu()
 pygame.display.flip()
-print(f"menu rendu OK ({len(names)} etapes + ecran joueurs)")
+# écran de la phase de placement (via le menu : placement manuel)
+ui._select_stage(names[0])
+ui._draw_ui()
+pygame.display.flip()
+print(f"menu rendu OK ({len(names)} etapes + ecran joueurs + phase placement)")

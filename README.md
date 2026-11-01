@@ -182,6 +182,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 ## 🎯 Roadmap
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
+- [x] **Phase de placement au départ** : chaque joueur place ses 2 coureurs un par un derrière la ligne DÉPART (clic sur une case, cases surlignées), avec bouton **« Placement aléatoire »** (`tests/test_placement.py`)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
 - [x] **Implémentation complète de l'aspiration** (packs arrière→avant, fusion + revérification, pas-à-pas animé — vérifiée par `tests/test_aspiration.py`)
 - [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)

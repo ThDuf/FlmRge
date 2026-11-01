@@ -293,6 +293,8 @@ class FlammeRougeGame:
         Le bouton est l'équivalent cliquable de la touche ENTRÉE :
         lancer le mouvement, puis avancer un coureur / un pack à la fois.
         """
+        if self.game.current_phase == Phase.PLACEMENT:
+            return ("Placement aléatoire", (126, 87, 194))
         if self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
             return ("Lancer le mouvement", (25, 118, 210))
         if self.showing_movement:
@@ -313,7 +315,9 @@ class FlammeRougeGame:
 
     def _advance_step(self):
         """Avance d'une étape (bouton ou ENTRÉE) selon l'état courant."""
-        if self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
+        if self.game.current_phase == Phase.PLACEMENT:
+            self.game.auto_place_riders()  # option "placement au hasard"
+        elif self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
             self._start_movement_phase()
         elif self.showing_movement:
             if self._next_movement_step():
@@ -424,7 +428,9 @@ class FlammeRougeGame:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 if not self._try_button_click(event.pos):
-                    if self.game.current_phase == Phase.ENERGY and self.show_hands:
+                    if self.game.current_phase == Phase.PLACEMENT:
+                        self._placement_click(event.pos)
+                    elif self.game.current_phase == Phase.ENERGY and self.show_hands:
                         self._handle_click(event.pos)
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_r:
@@ -714,7 +720,7 @@ class FlammeRougeGame:
     def _select_stage(self, name: str):
         """Démarre une partie sur l'étape choisie (depuis le menu ou R)."""
         self.stage = name
-        self.game = Game(stage=name, player_count=self.player_count)
+        self.game = Game(stage=name, player_count=self.player_count, auto_place=False)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -769,6 +775,37 @@ class FlammeRougeGame:
                 self._select_stage(self._pending_stage)
             elif event.key == pygame.K_ESCAPE:
                 self.menu_step = "stage"
+
+    def _placement_click(self, pos):
+        """Phase de placement : clic sur une case derrière la ligne DÉPART."""
+        game = self.game
+        if game.current_phase != Phase.PLACEMENT:
+            return
+        limit = game.track.start_line_x()
+        geo = self._track_geometry()
+        cell = geo["cell"]
+        half = geo["half"]
+        best = None
+        best_d = cell * 0.75
+        for x in range(limit):
+            px, py, tx, ty = self._cell_anchor(x)
+            nx, ny = -ty, tx
+            for lane, off in ((0, half * 0.5), (1, -half * 0.5)):  # A = droite
+                if not game.can_place_at(x, lane):
+                    continue
+                cx, cy = px + nx * off, py + ny * off
+                d = math.hypot(pos[0] - cx, pos[1] - cy)
+                if d < best_d:
+                    best_d = d
+                    best = (x, lane)
+        if best and game.place_runner_at(*best):
+            cur = game.current_placement()
+            if cur:
+                p, r = cur
+                print(f"[OK] {p.color} placera ensuite son "
+                      f"{'Sprinteur' if r.type.name == 'SPRINTER' else 'Rouleur'}")
+            else:
+                print("[OK] Placement terminé, début de la course !")
 
     def _handle_click(self, pos):
         """Gère un clic : jouer une carte via les zones du layout des mains."""
@@ -904,6 +941,23 @@ class FlammeRougeGame:
                                          (255, 236, 130) if kind == "start" else (240, 210, 60))
             self.screen.blit(lbl, (lx - lbl.get_width() // 2, ly - lbl.get_height() // 2))
 
+        # Phase de placement : surligner les files libres derrière la ligne DÉPART
+        if self.game.current_phase == Phase.PLACEMENT:
+            cur = self.game.current_placement()
+            if cur:
+                player, _runner = cur
+                color = PLAYER_COLORS.get(player.color, WHITE)
+                limit = track.start_line_x()
+                for x in range(limit):
+                    px, py, tx, ty = self._cell_anchor(x)
+                    nx, ny = -ty, tx
+                    for lane, off in ((0, half * 0.5), (1, -half * 0.5)):
+                        if self.game.can_place_at(x, lane):
+                            cx, cy = px + nx * off, py + ny * off
+                            pygame.draw.circle(self.screen, color,
+                                               (int(cx), int(cy)),
+                                               max(4, int(cell * 0.28)), 2)
+
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
             px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
@@ -966,6 +1020,15 @@ class FlammeRougeGame:
                     "Si exactement une case vide s\u00e9pare deux packs, le pack arri\u00e8re glisse d'une case",
                     (230, 126, 0))
         phase = self.game.current_phase
+        if phase == Phase.PLACEMENT:
+            cur = self.game.current_placement()
+            if cur:
+                player, runner = cur
+                what = "Sprinteur" if runner.type.name == "SPRINTER" else "Rouleur"
+                return ("PLACEMENT AU DÉPART",
+                        f"Joueur {player.color} place son {what} : cliquez une case libre "
+                        f"derrière la ligne DÉPART (bouton = tout placer au hasard)",
+                        (126, 87, 194))
         if phase == Phase.ENERGY:
             if self.game.all_players_ready():
                 return ("PHASE D'\u00c9NERGIE",
@@ -1113,8 +1176,8 @@ class FlammeRougeGame:
 
         # Mains des coureurs : visibles dans toutes les phases (cartes jouées
         # en vert, progression x/2) ; cliquables uniquement en phase d'énergie
-        if self.show_hands:
-            self._draw_hands()
+        if self.show_hands and self.game.current_phase == Phase.ENERGY:
+            self._draw_hands()  # les mains ne sont piochées qu'au 1er tour
 
         # Affichage des cartes restantes
         if self.show_decks:
