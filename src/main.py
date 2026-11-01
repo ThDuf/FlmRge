@@ -1186,7 +1186,7 @@ class FlammeRougeGame:
         # Légende des couleurs du circuit (bas de la zone circuit)
         legend_y = self.height - 26
         legend_x = self._left_w() + 20
-        for swatch, label in ((GREEN, "D\u00e9part"), (RED, "Arriv\u00e9e"),
+        for swatch, label in (((255, 236, 130), "D\u00e9part"), ((240, 210, 60), "Arriv\u00e9e"),
                               (UPHILL_FILL, "Mont\u00e9e"),
                               (DOWNHILL_FILL, "Descente"), (WHITE, "Files A|B")):
             pygame.draw.rect(self.screen, swatch, (legend_x, legend_y, 14, 14), border_radius=3)
