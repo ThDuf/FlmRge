@@ -21,6 +21,7 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 - **Decks** : Les cartes jouées sont retirées du jeu ; les cartes non jouées sont recyclées. Les decks s'épuisent au fil de la course.
 - **Montées** (rouge) : deux cas selon la distance à la montée — si le coureur part d'une montée ou y **entre dans ses 5 premières cases**, son énergie est plafonnée à 5 (il peut la traverser) ; si sa carte l'y ferait entrer à la **6ᵉ case ou plus**, il **stoppe son mouvement sur la dernière file libre avant la montée** (le déplacement peut alors atteindre 6-7 cases de plaine). Pour l'aspiration : un coureur en montée ne donne ni ne reçoit ; dans un pack qui aspire, il reste sur place et bloque ceux derrière lui, mais ses coéquipiers hors montée glissent quand même (le pack peut se séparer).
 - **Descentes** (bleu) : un coureur qui **part** d'une descente avance d'au minimum 5 cases ; l'aspiration s'y applique normalement.
+- **Fin de course** : la course se termine dès qu'un coureur franchit la ligne d'arrivée — concrètement à la fin du tour où au moins un coureur la franchit (le tour se joue jusqu'au bout : mouvement, aspiration, fatigue). **Elle ne continue pas après un gagnant** : la partie est terminée (`game_over`). Le **vainqueur** est le coureur allé **le plus loin au-delà de la ligne** parmi ceux qui l'ont franchie ce tour ; en cas d'égalité, c'est celui de la **file de droite (A)** qui gagne. Un coureur ne peut de toute façon pas dépasser la dernière case de la piste.
 
 ---
 
@@ -183,6 +184,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
 - [x] **Phase de placement au départ** : chaque joueur place ses 2 coureurs un par un derrière la ligne DÉPART (clic sur une case, cases surlignées), avec bouton **« Placement aléatoire »** (`tests/test_placement.py`)
+- [x] **Fin de course** : fin du tour où un coureur franchit la ligne d'arrivée (la course ne continue pas après), vainqueur = le plus loin au-delà de la ligne, égalité → file A de droite (`Game._check_win_condition`)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
 - [x] **Implémentation complète de l'aspiration** (packs arrière→avant, fusion + revérification, pas-à-pas animé — vérifiée par `tests/test_aspiration.py`)
 - [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)
