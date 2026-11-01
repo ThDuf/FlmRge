@@ -473,26 +473,26 @@ class Game:
             for runner in player.get_runners():
                 runner.reset_hand()
 
+    def ranking(self) -> List[tuple]:
+        """Classement des coureurs : (player, runner), du plus loin au moins
+        loin ; à égalité de case, la file A (droite, y=0) est devant la file B."""
+        entries = [(p, r) for p in self.players for r in p.get_runners()]
+        entries.sort(key=lambda pr: (-pr[1].x, pr[1].y))
+        return entries
+
     def _check_win_condition(self) -> bool:
         """Vérifie si un coureur a franchi la ligne d'arrivée.
 
-        Règle officielle : la course se termine quand un coureur franchit la
-        ligne d'arrivée (début de la tuile d'arrivée, qui offre 5 cases au-delà
-        de la ligne) ; si plusieurs franchissent dans le même tour, le plus
-        loin devant gagne ; à égalité, la file A (file de droite) est en tête.
+        Règle officielle : la course se termine à la fin du tour où un coureur
+        franchit la ligne d'arrivée (elle ne continue pas après) ; si plusieurs
+        franchissent dans le même tour, le plus loin devant gagne ; à égalité,
+        la file A (file de droite) est en tête.
         """
-        track = self.track
-        finish_x = track.end_line_x()  # case de la ligne d'arrivée
-        best = None
-        for player in self.players:
-            for runner in player.get_runners():
-                if runner.x >= finish_x:
-                    key = (runner.x, -runner.y)  # plus loin devant, puis file A
-                    if best is None or key > best[0]:
-                        best = (key, player, runner)
-        if best is not None:
-            self.winner = best[1]
-            return True
+        finish_x = self.track.end_line_x()  # case de la ligne d'arrivée
+        for player, runner in self.ranking():
+            if runner.x >= finish_x:
+                self.winner = player
+                return True
         return False
 
     def get_current_phase_name(self) -> str:

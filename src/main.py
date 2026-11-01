@@ -1205,16 +1205,47 @@ class FlammeRougeGame:
             self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
             legend_x += 18 + text_surf.get_width() + 14
 
-        # Écran de fin de partie (affiché quelle que soit la phase)
-        if self.game.game_over and self.game.winner:
-            winner_text = self.big_font.render(
-                f"Gagnant: {self.game.winner.color} !", True,
-                PLAYER_COLORS.get(self.game.winner.color, BLACK))
-            text_rect = winner_text.get_rect(center=(self.width // 2, self.height // 2 - 50))
-            self.screen.blit(winner_text, text_rect)
-            restart_text = self.font.render("Appuyez sur R pour recommencer", True, BLACK)
-            restart_rect = restart_text.get_rect(center=(self.width // 2, self.height // 2 + 10))
-            self.screen.blit(restart_text, restart_rect)
+        # Écran de victoire avec podium (affiché quand la partie est finie)
+        if self.game.game_over:
+            self._draw_podium()
+
+    def _draw_podium(self):
+        """Écran de fin de course : podium des 3 premiers coureurs."""
+        game = self.game
+        overlay = pygame.Rect(self.width // 2 - 270, self.height // 2 - 230, 540, 420)
+        pygame.draw.rect(self.screen, (24, 28, 34), overlay, border_radius=12)
+        pygame.draw.rect(self.screen, (240, 210, 60), overlay, width=2, border_radius=12)
+        title = self.title_font.render("VICTOIRE", True, (240, 210, 60))
+        self.screen.blit(title, title.get_rect(center=(overlay.centerx, overlay.y + 34)))
+
+        rank = game.ranking()[:3]
+        heights = [130, 95, 70]           # 1er, 2e, 3e
+        slots = [1, 0, 2]                  # affichage : 2e à gauche, 1er au centre, 3e à droite
+        base_y = overlay.bottom - 46
+        for place in slots:
+            entry = rank[place] if place < len(rank) else None
+            x = overlay.centerx + (place - 1) * 130 - 55
+            h = heights[place]
+            pygame.draw.rect(self.screen, (60, 66, 78), (x, base_y - h, 110, h),
+                             border_radius=6)
+            num = self.big_font.render(str(place + 1), True, WHITE)
+            self.screen.blit(num, num.get_rect(center=(x + 55, base_y - h + 26)))
+            if entry:
+                player, runner = entry
+                color = PLAYER_COLORS.get(player.color, WHITE)
+                kind = "S" if runner.type.name == "SPRINTER" else "R"
+                pygame.draw.circle(self.screen, color, (x + 55, base_y - h - 24), 16)
+                pygame.draw.circle(self.screen, BLACK, (x + 55, base_y - h - 24), 16, 1)
+                lbl = self.label_font.render(f"{player.color} {kind}", True, WHITE)
+                self.screen.blit(lbl, lbl.get_rect(center=(x + 55, base_y - h - 50)))
+
+        if game.winner:
+            w = self.font.render(f"Gagnant : joueur {game.winner.color} !", True,
+                                 (240, 210, 60))
+            self.screen.blit(w, w.get_rect(center=(overlay.centerx, overlay.bottom - 30)))
+        hint = self.label_font.render("R : recommencer   ·   Échap : menu des étapes",
+                                      True, (150, 155, 165))
+        self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
 
     def _draw_unplaced_runners(self):
         """Phase de placement : les coureurs pas encore placés sont dessinés

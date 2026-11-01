@@ -230,3 +230,39 @@ class TestNoCardsEdgeCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+
+class TestRankingAndVictory(unittest.TestCase):
+    def _teleport(self, game, runner, x, lane=0):
+        old = game.track.get_cell(runner.x, runner.y)
+        if old:
+            old.remove_runner(runner.y)
+        game.track.get_cell(x, lane).set_runner(runner, lane)
+
+    def test_ranking_orders_by_position_then_lane_A(self):
+        game = Game(stage="test", player_count=2)
+        r = {rid: run for p in game.players for rid, run in
+             ((r.id, r) for r in p.get_runners())}
+        self._teleport(game, r['sprinter_0'], 20, 0)
+        self._teleport(game, r['roller_0'], 20, 1)   # même case, file B après A
+        self._teleport(game, r['sprinter_1'], 25, 0)
+        rank = game.ranking()
+        self.assertEqual([e[1].id for e in rank],
+                         ['sprinter_1', 'sprinter_0', 'roller_0', 'roller_1'])
+
+    def test_winner_is_furthest_past_the_line(self):
+        game = Game(stage="test", player_count=2)
+        r = {rid: run for p in game.players for rid, run in
+             ((x.id, x) for x in p.get_runners())}
+        finish = game.track.end_line_x()
+        self._teleport(game, r['roller_1'], finish + 2, 1)   # franchi, file B
+        self._teleport(game, r['sprinter_0'], finish + 2, 0)  # franchi, même case, file A
+        self._teleport(game, r['sprinter_1'], finish + 4, 1)  # le plus loin
+        self.assertTrue(game._check_win_condition())
+        self.assertIs(game.winner, game.players[1])  # sprinter_1 = joueur bleu
+        self.assertEqual(game.ranking()[0][1].id, 'sprinter_1')
+
+    def test_no_winner_before_the_line(self):
+        game = Game(stage="test", player_count=2)
+        self.assertFalse(game._check_win_condition())
+        self.assertIsNone(game.winner)
