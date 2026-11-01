@@ -293,6 +293,10 @@ class FlammeRougeGame:
         r = self._button_rect()
         return pygame.Rect(r.x, min(r.bottom + 6, self.height - 46), r.w, 40)
 
+    def _podium_button_rect(self) -> pygame.Rect:
+        """Bouton « Podium » en haut à droite de l'écran de fin (avec TAB)."""
+        return pygame.Rect(self.width - 140, TOP_H + 8, 128, 40)
+
     def _button_info(self):
         """(libellé, couleur) du bouton d'action, ou None s'il n'y en a pas.
 
@@ -468,7 +472,9 @@ class FlammeRougeGame:
         """Événements quand une partie est en cours."""
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
-                if not self._try_button_click(event.pos):
+                if self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
+                    self.show_podium = not self.show_podium  # podium <-> circuit final
+                elif not self._try_button_click(event.pos):
                     if self.game.current_phase == Phase.PLACEMENT:
                         self._placement_click(event.pos)
                     elif self.game.current_phase == Phase.ENERGY and self.show_hands:
@@ -1259,9 +1265,19 @@ class FlammeRougeGame:
             self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
             legend_x += 18 + text_surf.get_width() + 14
 
-        # Écran de victoire avec podium (TAB bascule avec l'état final du circuit)
-        if self.game.game_over and self.show_podium:
-            self._draw_podium()
+        # Écran de victoire : bouton Podium en haut à droite + overlay podium
+        # (TAB ou le bouton basculent avec l'état final du circuit)
+        if self.game.game_over:
+            prect = self._podium_button_rect()
+            phovered = prect.collidepoint(pygame.mouse.get_pos())
+            pfill = (240, 220, 120) if phovered else (240, 210, 60)
+            pygame.draw.rect(self.screen, pfill, prect, border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, prect, width=2, border_radius=10)
+            plabel = "Voir le circuit" if self.show_podium else "Voir le podium"
+            ptext = self.label_font.render(plabel, True, BLACK)
+            self.screen.blit(ptext, ptext.get_rect(center=prect.center))
+            if self.show_podium:
+                self._draw_podium()
 
     def _draw_podium(self):
         """Écran de fin de course : podium des 3 premiers coureurs."""

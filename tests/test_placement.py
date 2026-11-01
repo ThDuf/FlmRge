@@ -199,3 +199,18 @@ class TestPodiumScreen(unittest.TestCase):
         # le 1er du classement doit être dessiné au centre
         self.assertEqual(offsets[0], 0)
         self.assertEqual(rank[0][1].id, 'sprinter_0')  # notre vainqueur forcÃ©
+
+    def test_podium_button_toggles(self):
+        """Le bouton à droite bascule podium <-> circuit final (comme TAB)."""
+        import pygame
+        ui = self._game_over_ui()
+        rect = ui._podium_button_rect()
+        self.assertTrue(ui.show_podium)
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=rect.center))
+        self.assertFalse(ui.show_podium)
+        ui._draw_ui()  # bouton + circuit final
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=rect.center))
+        self.assertTrue(ui.show_podium)
+        ui._draw_ui()  # bouton + podium
