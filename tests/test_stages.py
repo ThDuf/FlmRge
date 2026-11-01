@@ -158,6 +158,20 @@ class TestOfficialStages(unittest.TestCase):
         self.assertNotIn(CellGeographyType.DOWNHILL, geographies)
         self.assertTrue(all(g == CellGeographyType.FLAT for g in geographies))
 
+    def test_start_line_is_after_the_start_cells(self):
+        """La ligne de départ est JUSTE APRÈS les cases 's' de la tuile a
+        (a = "sssssf") : les coureurs se placent derrière, en x < 5."""
+        from game.game import build_stage_track
+        for name in OFFICIAL_STAGES:
+            track = build_stage_track(name)
+            self.assertEqual(track.start_line_x(), 5, name)
+            self.assertEqual(track.run_at(4), CellRunType.START, name)
+            self.assertEqual(track.run_at(5), CellRunType.NONE, name)
+            # arrivée : la ligne est sur la 1re case END (u="feeeee", U="uueeee")
+            ex = track.end_line_x()
+            self.assertEqual(track.run_at(ex), CellRunType.END, name)
+            self.assertNotEqual(track.run_at(ex - 1), CellRunType.END, name)
+
     def test_col_du_ballon_has_mountains(self):
         track = build_track_from_code(OFFICIAL_STAGES["Col du Ballon"])
         self.assertEqual(len(track.tiles), 21)

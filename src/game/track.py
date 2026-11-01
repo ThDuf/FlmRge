@@ -200,6 +200,19 @@ class Track:
                     return cell.x
         return self.length - 1
 
+    def start_line_x(self) -> int:
+        """Position de la ligne de départ : JUSTE APRÈS la dernière case de
+        départ (les cases START en début de piste). Les coureurs se placent
+        derrière la ligne, donc sur les cases x < start_line_x()."""
+        x = 0
+        for tile in self.tiles:
+            for cell in tile.cells:
+                if cell.run == CellRunType.START:
+                    x = cell.x + 1
+                else:
+                    return x
+        return x
+
     def get_cell(self, x: int, lane: int) -> Optional[Cell]:
         if x < 0 or x >= self.length:
             return None

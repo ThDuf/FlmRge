@@ -174,6 +174,22 @@ class TestStartPlacement(unittest.TestCase):
         self.assertEqual(p0.sprinter.x, p1.sprinter.x)
         self.assertEqual(p0.roller.x, p1.roller.x)
 
+    def test_riders_start_behind_the_start_line(self):
+        """Règle officielle : tous les coureurs sont placés derrière la ligne
+        de départ (x < start_line_x()), file A prioritaire sur case vide."""
+        game = Game(stage="test", player_count=4)  # 8 coureurs
+        limit = game.track.start_line_x()
+        self.assertEqual(limit, 5)
+        runners = game.track.get_all_runners()
+        self.assertEqual(len(runners), 8)
+        for x, lane, r in runners:
+            self.assertLess(x, limit, f"{r.id} placé sur/après la ligne ({x})")
+        # file A remplie avant la file B sur chaque case de départ
+        for x in range(limit):
+            cell = game.track.get_cell(x, 0)
+            if cell.get_runner(1) is not None:
+                self.assertIsNotNone(cell.get_runner(0), f"file B occupée sans file A en case {x}")
+
     def test_four_player_full_turn_consistency(self):
         """Un tour complet à 4 joueurs ne doit corrompre aucun état."""
         game = Game(stage="test", player_count=4)

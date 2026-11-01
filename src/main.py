@@ -876,7 +876,7 @@ class FlammeRougeGame:
 
         # Lignes de DÉPART (bande jaune) et d'ARRIVÉE (damier noir/blanc),
         # bien visibles en travers de toute la route
-        line_specs = [(0.0, "start", "DÉPART"),
+        line_specs = [(track.start_line_x() * cell, "start", "DÉPART"),
                       (track.end_line_x() * cell, "end", "ARRIVÉE")]
         for s, kind, label in line_specs:
             px, py, tx, ty = self._path_at(geo, s)
