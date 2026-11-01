@@ -28,6 +28,7 @@ CARD_GAP = 6       # espace entre cartes
 PANEL_PAD = 10     # padding des panneaux de joueur
 PANEL_HEADER = 30  # hauteur de l'en-tête des panneaux (nom + progression)
 PANEL_H = 170      # hauteur d'un panneau de joueur (colonne de gauche)
+BUTTONS_H = 100    # hauteur réservée en bas de colonne pour les 2 boutons
 GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
 
@@ -193,9 +194,10 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _panel_h(self) -> int:
-        """Hauteur d'un panneau de joueur, réduite si beaucoup de joueurs."""
+        """Hauteur d'un panneau de joueur, réduite si beaucoup de joueurs
+        (en réservant la place des boutons en bas de colonne)."""
         n = max(1, len(self.game.players))
-        return min(PANEL_H, (self.height - TOP_H - 16 - (n - 1) * 8) // n)
+        return min(PANEL_H, (self.height - TOP_H - 16 - BUTTONS_H - (n - 1) * 8) // n)
 
     def _row_items(self, runner):
         """Cartes affichées d'un coureur : [(carte, jouée), ...].
@@ -286,7 +288,7 @@ class FlammeRougeGame:
         """Position du bouton d'action (sous la colonne de panneaux, à gauche)."""
         n = max(1, len(self.game.players))
         y = TOP_H + 8 + n * (self._panel_h() + 8) + 6
-        return pygame.Rect(8, min(y, self.height - 106), self._left_w() - 16, 48)
+        return pygame.Rect(8, min(y, self.height - BUTTONS_H - 6), self._left_w() - 16, 48)
 
     def _random_button_rect(self) -> pygame.Rect:
         """Bouton « Tour aléatoire » sous le bouton d'action."""
@@ -1216,29 +1218,6 @@ class FlammeRougeGame:
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (instructions_x, controls_y + i * 25))
 
-        # Bouton d'action (équivalent cliquable de ENTRÉE) :
-        # lancer le mouvement, puis avancer coureur par coureur / pack par pack
-        button_info = self._button_info()
-        if button_info is not None:
-            label, button_color = button_info
-            rect = self._button_rect()
-            hovered = rect.collidepoint(pygame.mouse.get_pos())
-            fill = tuple(min(255, c + 35) for c in button_color) if hovered else button_color
-            pygame.draw.rect(self.screen, fill, rect, border_radius=10)
-            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=10)
-            button_text = self.font.render(label, True, WHITE)
-            self.screen.blit(button_text, button_text.get_rect(center=rect.center))
-
-        # Bouton « Tour aléatoire » (partie non terminée)
-        if not self.game.game_over:
-            rrect = self._random_button_rect()
-            rhovered = rrect.collidepoint(pygame.mouse.get_pos())
-            rfill = (150, 110, 210) if rhovered else (126, 87, 194)
-            pygame.draw.rect(self.screen, rfill, rrect, border_radius=10)
-            pygame.draw.rect(self.screen, BLACK, rrect, width=2, border_radius=10)
-            rtext = self.label_font.render("Tour aléatoire", True, WHITE)
-            self.screen.blit(rtext, rtext.get_rect(center=rrect.center))
-
         # Mains des coureurs : visibles dans toutes les phases (cartes jouées
         # en vert, progression x/2) ; cliquables uniquement en phase d'énergie
         if self.show_hands and self.game.current_phase == Phase.ENERGY:
@@ -1251,6 +1230,28 @@ class FlammeRougeGame:
         # Affichage des cartes restantes
         if self.show_decks:
             self._draw_decks()
+
+        # Boutons dessinés APRÈS les panneaux pour ne jamais être couverts :
+        # bouton d'action (équivalent cliquable de ENTRÉE) + « Tour aléatoire »
+        button_info = self._button_info()
+        if button_info is not None:
+            label, button_color = button_info
+            rect = self._button_rect()
+            hovered = rect.collidepoint(pygame.mouse.get_pos())
+            fill = tuple(min(255, c + 35) for c in button_color) if hovered else button_color
+            pygame.draw.rect(self.screen, fill, rect, border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=10)
+            button_text = self.font.render(label, True, WHITE)
+            self.screen.blit(button_text, button_text.get_rect(center=rect.center))
+
+        if not self.game.game_over:
+            rrect = self._random_button_rect()
+            rhovered = rrect.collidepoint(pygame.mouse.get_pos())
+            rfill = (150, 110, 210) if rhovered else (126, 87, 194)
+            pygame.draw.rect(self.screen, rfill, rrect, border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, rrect, width=2, border_radius=10)
+            rtext = self.label_font.render("Tour aléatoire", True, WHITE)
+            self.screen.blit(rtext, rtext.get_rect(center=rrect.center))
 
         # Légende des couleurs du circuit (bas de la zone circuit)
         legend_y = self.height - 26

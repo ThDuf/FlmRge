@@ -214,3 +214,29 @@ class TestPodiumScreen(unittest.TestCase):
                                           pos=rect.center))
         self.assertTrue(ui.show_podium)
         ui._draw_ui()  # bouton + podium
+
+
+class TestButtonsLayout(unittest.TestCase):
+    def test_buttons_visible_at_4_players(self):
+        """À 4 joueurs, les 2 boutons restent dans la fenêtre et sous les panneaux."""
+        import pygame
+        for w, h in ((1200, 800), (900, 600)):
+            ui = main.FlammeRougeGame(stage="test")
+            ui._select_stage("test")
+            ui.game.players  # 2 joueurs par défaut ; on force 4
+            from game.game import Game
+            ui.game = Game(stage="test", player_count=4, auto_place=False)
+            ui.width, ui.height = w, h
+            ui.screen = pygame.display.set_mode((w, h))
+            ui._draw_ui()
+            b = ui._button_rect()
+            r = ui._random_button_rect()
+            self.assertGreaterEqual(b.y, 0)
+            self.assertLessEqual(b.bottom, h, f"bouton action hors écran {w}x{h}")
+            self.assertLessEqual(r.bottom, h, f"bouton aléatoire hors écran {w}x{h}")
+            self.assertGreater(r.y, b.y)  # le bouton aléatoire est sous l'autre
+            # pas de chevauchement avec les panneaux
+            panel_h = ui._panel_h()
+            panels_bottom = 8 + 112 + 4 * (panel_h + 8)
+            self.assertGreaterEqual(b.y, panels_bottom - 8 - 8,
+                                    f"bouton chevauche les panneaux {w}x{h}")
