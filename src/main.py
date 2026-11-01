@@ -500,8 +500,10 @@ class FlammeRougeGame:
         title = self.label_font.render(name, True, WHITE)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
 
-        # Tracé coloré par tuile : départ vert, arrivée rouge, montagnes teintées
+        # Tracé coloré par tuile : départ vert, arrivée rouge,
+        # montées ROUGE vif, descentes BLEU vif
         from game.game import build_stage_track
+        from game.track import Terrain
         track = build_stage_track(name)
         s = 0.0
         for tile in track.tiles:
@@ -509,10 +511,10 @@ class FlammeRougeGame:
                 seg_color = (80, 200, 100)
             elif tile.type == TileType.FINISH:
                 seg_color = (230, 70, 70)
-            elif tile.type == TileType.UPHILL:
-                seg_color = (240, 160, 160)
-            elif tile.type == TileType.DOWNHILL:
-                seg_color = (150, 180, 240)
+            elif tile.terrain == Terrain.UPHILL:
+                seg_color = (220, 50, 50)
+            elif tile.terrain == Terrain.DOWNHILL:
+                seg_color = (50, 90, 220)
             else:
                 seg_color = (200, 205, 215)
             steps = max(2, int(tile.length * 3))
@@ -674,16 +676,18 @@ class FlammeRougeGame:
         pygame.draw.polygon(self.screen, GRAY, road, width=2)
 
         # Teinte des cases spéciales : départ (vert), arrivée (rouge),
-        # montées/descentes (les virages se voient à leur forme, sans teinte)
+        # montées/descentes par case (les virages se voient à leur forme)
+        from game.track import Terrain
         for x_cell in range(track.length):
             tile_type = track.tiles[track.tile_index_at(x_cell)].type
+            terrain = track.terrain_at(x_cell)
             if tile_type == TileType.START:
                 color = (200, 240, 200)
             elif tile_type == TileType.FINISH:
                 color = (250, 205, 205)
-            elif tile_type == TileType.UPHILL:
+            elif terrain == Terrain.UPHILL:
                 color = UPHILL_FILL
-            elif tile_type == TileType.DOWNHILL:
+            elif terrain == Terrain.DOWNHILL:
                 color = DOWNHILL_FILL
             else:
                 continue
@@ -694,16 +698,17 @@ class FlammeRougeGame:
             pygame.draw.lines(self.screen, color, False, sample, width=2 * half)
 
             # Marqueurs montée/descente : triangles à l'extérieur droit de la route
-            if tile_type in (TileType.UPHILL, TileType.DOWNHILL):
+            terrain = track.terrain_at(x_cell)
+            if terrain in (Terrain.UPHILL, Terrain.DOWNHILL):
                 px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
                 nx, ny = -ty, tx
                 mx = px + nx * (half + 12)
                 my = py + ny * (half + 12)
-                forward = 1 if tile_type == TileType.UPHILL else -1
+                forward = 1 if terrain == Terrain.UPHILL else -1
                 pts = [(mx + tx * 7 * forward, my + ty * 7 * forward),
                        (mx + nx * 5, my + ny * 5),
                        (mx - nx * 5, my - ny * 5)]
-                arrow_color = UPHILL_ARROW if tile_type == TileType.UPHILL else DOWNHILL_ARROW
+                arrow_color = UPHILL_ARROW if terrain == Terrain.UPHILL else DOWNHILL_ARROW
                 pygame.draw.polygon(self.screen, arrow_color, pts)
 
         # Ligne médiane (séparation des files) + quadrillage des cases

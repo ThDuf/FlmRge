@@ -15,7 +15,7 @@ import os, sys, random
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.game import Game
-from game.track import TileType
+from game.track import Terrain
 
 random.seed(42)
 game = Game(stage="circuit", player_count=2)
@@ -34,7 +34,7 @@ def first_ascent_distance(start, card_v):
     (d=0 si départ en montée), ou None si le trajet n'en touche pas."""
     target = min(start + card_v, track.length - 1)
     for d, c in enumerate(range(start, target + 1)):
-        if track.tile_type_at(c) == TileType.UPHILL:
+        if track.terrain_at(c) == Terrain.UPHILL:
             return d
     return None
 
@@ -54,7 +54,7 @@ for turn in range(10):
         start = before[rid][0]
         eff = after[rid][0] - start
         d = first_ascent_distance(start, card_v)
-        on_descent = track.tile_type_at(start) == TileType.DOWNHILL
+        on_descent = track.terrain_at(start) == Terrain.DOWNHILL
 
         # Déplacement attendu selon les règles (indépendant du plafond final)
         expected = max(card_v, 5) if on_descent else card_v
@@ -74,7 +74,7 @@ for turn in range(10):
     steps = game.resolve_aspiration_phase()
     for step in steps:
         for runner, fx, fl, tx, tl in step:
-            assert track.tile_type_at(fx) != TileType.UPHILL, (
+            assert track.terrain_at(fx) != Terrain.UPHILL, (
                 f"T{turn} {runner.id} a reçu de l'aspiration en partant d'une montée")
     game.apply_aspiration_steps(steps)
     game._assign_fatigue_cards()

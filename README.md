@@ -177,7 +177,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 
 > Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens gauche/droite de chaque virage ne sont pas publiés en texte (les tuiles physiques sont retournables, la carte d'étape fixe le sens) ; les adaptations numériques sont documentées dans `src/game/game.py` (`ASCENT_LETTERS`, `TURN_DIRECTION_LETTER`). Angles des virages officiels : 45° (léger) / 90° (serré).
 
-> Catalogue complet des 21 tuiles dans `src/game/game.py` (`TILE_CATALOG` : lettre → type + angle 45°/90° + sens). Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens G/D de chaque virage ne sont pas publiés en texte (tuiles retournables, la carte imprimée fixe le sens) ; les adaptations numériques sont documentées dans le code (`ASCENT_LETTERS`, sens alternés dans `TILE_CATALOG`).
+> Catalogue complet des 21 tuiles dans `src/game/game.py` (`TILE_CATALOG` : lettre → type + angle 45°/90° + sens). **Le relief vit sur chaque case** (`Terrain` dans `src/game/track.py`) : une tuile majuscule propage son relief (montée si lettre dans `ASCENT_LETTERS`, descente si dans `DESCENT_LETTERS`, `A`/`U` toujours plats) à toutes ses cases. Dans la prévisualisation du menu, les **montées sont tracées en rouge vif et les descentes en bleu vif**, avec la lettre de chaque tuile et un séparateur entre tuiles. Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens G/D de chaque virage ne sont pas publiés en texte (tuiles retournables, la carte imprimée fixe le sens) ; les adaptations numériques sont documentées dans le code (`ASCENT_LETTERS`, sens relevés sur la carte Corso Paseo dans `TILE_CATALOG`).
 
 ## 🎯 Roadmap
 

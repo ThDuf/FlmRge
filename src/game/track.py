@@ -6,14 +6,19 @@ import math
 from .runner import Runner
 
 
+class Terrain(Enum):
+    """Relief d'une case (les tuiles majuscules ont un relief par case)."""
+    FLAT = auto()
+    UPHILL = auto()    # montée (bord rouge)
+    DOWNHILL = auto()  # descente (bord bleu)
+
+
 class TileType(Enum):
     START = auto()      # Départ
     FINISH = auto()     # Arrivée
     STRAIGHT = auto()   # Ligne droite
     LIGHT_TURN = auto() # Virage léger
     SHARP_TURN = auto() # Virage serré
-    UPHILL = auto()     # Montée (rouge)
-    DOWNHILL = auto()   # Descente (bleue)
 
 
 @dataclass
@@ -22,6 +27,11 @@ class Cell:
     a: Optional[Runner] = None  # File A (prioritaire)
     b: Optional[Runner] = None  # File B
     x: int = 0  # Position X de la case
+    terrain: 'Terrain' = None  # relief de la case (None -> FLAT en post-init)
+
+    def __post_init__(self):
+        if self.terrain is None:
+            self.terrain = Terrain.FLAT
 
     def is_empty(self, lane: int) -> bool:
         """Vérifie si une file est vide (0=A, 1=B)."""
@@ -62,8 +72,6 @@ TILE_CELLS = {
     TileType.START: 4,
     TileType.FINISH: 5,
     TileType.STRAIGHT: 6,
-    TileType.UPHILL: 6,
-    TileType.DOWNHILL: 6,
     TileType.LIGHT_TURN: 2,
     TileType.SHARP_TURN: 2,
 }
@@ -76,13 +84,17 @@ class Tile:
     x: int = 0  # Position X (en cases) du début de la tuile
     direction: int = 1  # Sens du virage (+1/-1) ; purement visuel
     length: int = 2  # nombre de cases le long de la route
+    terrain: 'Terrain' = None  # relief uniforme de la tuile (majuscule)
     cells: List[Cell] = field(default_factory=list)
 
     def __post_init__(self):
+        if self.terrain is None:
+            self.terrain = Terrain.FLAT
         if not self.cells:
             self.cells = [Cell() for _ in range(self.length)]
         for i, cell in enumerate(self.cells):
             cell.x = self.x + i
+            cell.terrain = self.terrain
 
 
 # Angles des virages (pièces officielles : 45° = léger, 90° = serré)
@@ -155,9 +167,11 @@ class Track:
     length: int = 0  # nombre total de cases
     _starts: List[int] = field(default_factory=list)  # début (en cases) de chaque tuile
 
-    def add_tile(self, tile_type: TileType, direction: int = 1, cells: int = None) -> None:
+    def add_tile(self, tile_type: TileType, direction: int = 1, cells: int = None,
+                 terrain: 'Terrain' = None) -> None:
         length = cells if cells is not None else TILE_CELLS.get(tile_type, 2)
-        tile = Tile(tile_type, x=self.length, direction=direction, length=length)
+        tile = Tile(tile_type, x=self.length, direction=direction, length=length,
+                    terrain=terrain)
         self.tiles.append(tile)
         self._starts.append(tile.x)
         self.length += length
@@ -166,6 +180,11 @@ class Track:
         """Index de la tuile contenant la case x."""
         i = bisect_right(self._starts, x) - 1
         return max(0, min(i, len(self.tiles) - 1))
+
+    def terrain_at(self, x: int) -> 'Terrain':
+        """Relief de la case x (Terrain.FLAT si hors piste)."""
+        cell = self.get_cell(x, 0)
+        return cell.terrain if cell else Terrain.FLAT
 
     def get_cell(self, x: int, lane: int) -> Optional[Cell]:
         if x < 0 or x >= self.length:
@@ -225,12 +244,12 @@ class Track:
         """
         steps = card_value
         reason = None
-        if self.tile_type_at(x) == TileType.DOWNHILL and steps < 5:
+        if self.terrain_at(x) == Terrain.DOWNHILL and steps < 5:
             steps = 5
             reason = "minimum 5 (descente)"
         target = min(x + steps, self.length - 1)
         for d, c in enumerate(range(x, target + 1)):
-            if self.tile_type_at(c) != TileType.UPHILL:
+            if self.terrain_at(c) != Terrain.UPHILL:
                 continue
             if d <= 5:
                 # entre dans la montée dans les 5 premières cases : plafond 5
@@ -368,7 +387,7 @@ class Track:
             # Montée : le donneur (le coureur le plus en arrière du pack de
             # devant) ne peut pas donner l'aspiration depuis une montée.
             giver = min(packs[i + 1], key=lambda r: pos[r][0])
-            if self.tile_type_at(pos[giver][0]) == TileType.UPHILL:
+            if self.terrain_at(pos[giver][0]) == Terrain.UPHILL:
                 i += 1
                 continue
             # Du coureur le plus en avant au plus en arrière : chacun doit
@@ -380,7 +399,7 @@ class Track:
             # though he is in the same pack") : le pack peut se séparer.
             step = []
             for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
-                if self.tile_type_at(pos[rid][0]) == TileType.UPHILL:
+                if self.terrain_at(pos[rid][0]) == Terrain.UPHILL:
                     break  # reste sur place ; bloque ceux derrière lui
                 fx, flane = pos[rid]
                 step.append((runners[rid], fx, flane, fx + 1, flane))

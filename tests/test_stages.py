@@ -13,9 +13,10 @@ import unittest
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from game.track import TileType  # noqa: E402
+from game.track import TileType, Terrain  # noqa: E402
 from game.game import (Game, OFFICIAL_STAGES, available_stages,  # noqa: E402
-                       build_track_from_code, tile_type_for_letter)
+                       build_track_from_code, tile_type_for_letter,
+                       tile_info_for_letter)
 import main  # noqa: E402
 
 
@@ -77,19 +78,22 @@ class TestTileLetters(unittest.TestCase):
         from game.game import ASCENT_LETTERS, DESCENT_LETTERS
         self.assertIn('K', ASCENT_LETTERS)
         self.assertIn('O', DESCENT_LETTERS)
-        self.assertEqual(tile_type_for_letter('K'), TileType.UPHILL)
-        self.assertEqual(tile_type_for_letter('O'), TileType.DOWNHILL)
+        # la forme reste celle de la tuile, le relief est sur les cases
+        self.assertEqual(tile_info_for_letter('K')[3], Terrain.UPHILL)
+        self.assertEqual(tile_info_for_letter('O')[3], Terrain.DOWNHILL)
+        self.assertEqual(tile_type_for_letter('K'), TileType.LIGHT_TURN)
         self.assertEqual(tile_type_for_letter('a'), TileType.START)
         self.assertEqual(tile_type_for_letter('u'), TileType.FINISH)
         for c in "bcdf lmn".replace(" ", ""):
             self.assertEqual(tile_type_for_letter(c), TileType.STRAIGHT)
+            self.assertEqual(tile_info_for_letter(c)[3], Terrain.FLAT)
         for c in "hkqrst":
             self.assertEqual(tile_type_for_letter(c), TileType.LIGHT_TURN)
         for c in "egijop":
             self.assertEqual(tile_type_for_letter(c), TileType.SHARP_TURN)
-        # majuscules = montagne
-        self.assertIn(tile_type_for_letter('G'), (TileType.UPHILL, TileType.DOWNHILL))
-        self.assertIn(tile_type_for_letter('O'), (TileType.UPHILL, TileType.DOWNHILL))
+        # majuscules = montagne (relief sur chaque case de la tuile)
+        self.assertIn(tile_info_for_letter('G')[3], (Terrain.UPHILL, Terrain.DOWNHILL))
+        self.assertIn(tile_info_for_letter('O')[3], (Terrain.UPHILL, Terrain.DOWNHILL))
 
     def test_code_ignores_spaces(self):
         t1 = build_track_from_code("ab c")
@@ -109,16 +113,21 @@ class TestOfficialStages(unittest.TestCase):
     def test_avenue_corso_paseo_is_flat_with_turns(self):
         track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
         types = [t.type for t in track.tiles]
+        terrains = [t.terrain for t in track.tiles]
         self.assertEqual(types.count(TileType.STRAIGHT), 7)
         self.assertEqual(types.count(TileType.LIGHT_TURN), 6)
         self.assertEqual(types.count(TileType.SHARP_TURN), 6)
-        self.assertNotIn(TileType.UPHILL, types)
-        self.assertNotIn(TileType.DOWNHILL, types)
+        self.assertNotIn(Terrain.UPHILL, terrains)
+        self.assertNotIn(Terrain.DOWNHILL, terrains)
+        self.assertTrue(all(c.terrain == Terrain.FLAT
+                            for t in track.tiles for c in t.cells))
 
     def test_la_haut_montagne_has_mountains(self):
         track = build_track_from_code(OFFICIAL_STAGES["La Haut Montagne"])
-        types = [t.type for t in track.tiles]
-        self.assertGreaterEqual(types.count(TileType.UPHILL), 4)
+        terrains = [t.terrain for t in track.tiles]
+        self.assertGreaterEqual(terrains.count(Terrain.UPHILL), 4)
+        # départ/arrivée (A/U) restent plats : aucune descente sur cette étape
+        self.assertEqual(terrains.count(Terrain.DOWNHILL), 0)
 
     def test_game_builds_and_plays_on_official_stage(self):
         game = Game(stage="La Haut Montagne", player_count=2)
@@ -138,9 +147,9 @@ class TestOfficialStages(unittest.TestCase):
         (le suit des tuiles bout à bout, virages à leur place)."""
         from game.track import compute_track_path
         track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
-        types = [t.type for t in track.tiles]
-        self.assertNotIn(TileType.UPHILL, types)
-        self.assertNotIn(TileType.DOWNHILL, types)
+        terrains = [t.terrain for t in track.tiles]
+        self.assertNotIn(Terrain.UPHILL, terrains)
+        self.assertNotIn(Terrain.DOWNHILL, terrains)
         pts = compute_track_path(track, 1.0)
         # continuité : un segment du polyligne = une tuile (6 cases max pour une droite)
         import math
@@ -172,8 +181,8 @@ class TestStageMenu(unittest.TestCase):
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "La Haut Montagne")
         self.assertEqual(ui.game.track.length, 75)
-        types = [t.type for t in ui.game.track.tiles]
-        self.assertIn(TileType.UPHILL, types)
+        terrains = [t.terrain for t in ui.game.track.tiles]
+        self.assertIn(Terrain.UPHILL, terrains)
 
     def test_menu_click_selects_entry(self):
         ui = main.FlammeRougeGame()

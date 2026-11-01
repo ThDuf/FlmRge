@@ -14,23 +14,28 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from game.track import Track, TileType  # noqa: E402
+from game.track import Track, TileType, Terrain  # noqa: E402
 from game.runner import Runner, RunnerType  # noqa: E402
 from game.game import Game  # noqa: E402
 
 
 def make_track(spec):
-    """spec : liste de types, ou de tuples (type, cases)."""
+    """spec : liste de types, ou de tuples (type, cases[, terrain])."""
     track = Track()
     for item in spec:
-        t, cells = item if isinstance(item, tuple) else (item, None)
-        track.add_tile(t, cells=cells)
+        if isinstance(item, tuple):
+            t = item[0]
+            cells = item[1] if len(item) > 1 else None
+            terrain = item[2] if len(item) > 2 else Terrain.FLAT
+        else:
+            t, cells, terrain = item, None, Terrain.FLAT
+        track.add_tile(t, cells=cells, terrain=terrain)
     return track
 
 
-def first_cell_of(track, ttype):
-    """Première case d'une tuile du type donné."""
-    return next(t.x for t in track.tiles if t.type == ttype)
+def first_cell_of(track, terrain):
+    """Première case d'un relief donné (Terrain.UPHILL / DOWNHILL)."""
+    return next(c.x for t in track.tiles for c in t.cells if c.terrain == terrain)
 
 
 def make_runner(name):
@@ -53,16 +58,16 @@ def run_aspiration(track):
 # Piste avec une montée de 2 cases (comme une vraie tuile virage retournée)
 # cases : START 0-1, STRAIGHT 2-19, UPHILL 20-21, STRAIGHT 22-39
 MOUNTAIN_TRACK = ([TileType.START] + [TileType.STRAIGHT] * 3
-                  + [(TileType.UPHILL, 2)] + [TileType.STRAIGHT] * 3)
+                  + [(TileType.STRAIGHT, 2, Terrain.UPHILL)] + [TileType.STRAIGHT] * 3)
 # Piste avec une descente de 6 cases (tuile droite)
 # cases : START 0-1, DOWNHILL 2-7, STRAIGHT 8-31
-DOWNHILL_TRACK = ([TileType.START] + [(TileType.DOWNHILL, 6)] + [TileType.STRAIGHT] * 4)
+DOWNHILL_TRACK = ([TileType.START] + [(TileType.STRAIGHT, 6, Terrain.DOWNHILL)] + [TileType.STRAIGHT] * 4)
 
 
 class TestAscentMovement(unittest.TestCase):
     def setUp(self):
         self.track = make_track(MOUNTAIN_TRACK)
-        self.up = first_cell_of(self.track, TileType.UPHILL)  # 20
+        self.up = first_cell_of(self.track, Terrain.UPHILL)  # 20
 
     def test_ascent_caps_movement_at_5(self):
         """Carte 8 dont le trajet touche la montée (entrée en 4e case) -> 5."""
@@ -114,7 +119,7 @@ class TestAscentMovement(unittest.TestCase):
 class TestDescentMovement(unittest.TestCase):
     def setUp(self):
         self.track = make_track(DOWNHILL_TRACK)
-        self.down = first_cell_of(self.track, TileType.DOWNHILL)  # 2
+        self.down = first_cell_of(self.track, Terrain.DOWNHILL)  # 2
 
     def test_descent_gives_minimum_5(self):
         r = place(self.track, make_runner('r'), self.down, 0)
@@ -133,10 +138,10 @@ class TestDescentMovement(unittest.TestCase):
         self.assertEqual(r.x, self.down + 8)
 
     def test_descent_then_ascent_caps_back_to_5(self):
-        track = make_track([TileType.START, (TileType.DOWNHILL, 6),
-                            TileType.STRAIGHT, (TileType.UPHILL, 2),
+        track = make_track([TileType.START, (TileType.STRAIGHT, 6, Terrain.DOWNHILL),
+                            TileType.STRAIGHT, (TileType.STRAIGHT, 2, Terrain.UPHILL),
                             TileType.STRAIGHT, TileType.STRAIGHT])
-        down = first_cell_of(track, TileType.DOWNHILL)
+        down = first_cell_of(track, Terrain.DOWNHILL)
         r = place(track, make_runner('r'), down, 0)
         track.move_runner(r, 2)   # min 5 -> cible down+5, montée loin
         self.assertEqual(r.x, down + 5)
@@ -146,7 +151,7 @@ class TestAscentSlipstream(unittest.TestCase):
     def test_rider_on_ascent_cannot_receive(self):
         """Un coureur SUR une montée ne reçoit pas l'aspiration."""
         track = make_track(MOUNTAIN_TRACK)
-        up = first_cell_of(track, TileType.UPHILL)
+        up = first_cell_of(track, Terrain.UPHILL)
         rear = place(track, make_runner('rear'), up, 0)
         place(track, make_runner('ahead'), up + 2, 0)  # 1 case vide entre les deux
         steps = run_aspiration(track)
@@ -156,7 +161,7 @@ class TestAscentSlipstream(unittest.TestCase):
     def test_rider_on_ascent_cannot_give(self):
         """Le donneur (le plus en arrière du pack de devant) est en montée."""
         track = make_track(MOUNTAIN_TRACK)
-        up = first_cell_of(track, TileType.UPHILL)
+        up = first_cell_of(track, Terrain.UPHILL)
         place(track, make_runner('rear'), up - 2, 0)   # plaine
         place(track, make_runner('giver'), up, 0)      # 1re case de montée
         steps = run_aspiration(track)
@@ -168,7 +173,7 @@ class TestAscentSlipstream(unittest.TestCase):
         """Exemple officiel Dized : le sprinteur hors montée en tête glisse
         et fusionne, le rouleur en montée reste ('left behind')."""
         track = make_track(MOUNTAIN_TRACK)
-        up = first_cell_of(track, TileType.UPHILL)  # 20-21
+        up = first_cell_of(track, Terrain.UPHILL)  # 20-21
         rouleur = place(track, make_runner('rouleur'), up + 1, 0)      # MONTÉE (2e case)
         sprinteur = place(track, make_runner('sprinteur'), up + 2, 0)  # plaine, tête du pack
         place(track, make_runner('giver'), up + 4, 0)                  # plaine, gap en up+3
@@ -179,8 +184,8 @@ class TestAscentSlipstream(unittest.TestCase):
     def test_ascent_rider_blocks_packmates_behind(self):
         """Un coureur en montée au milieu d'un pack bloque ceux derrière lui."""
         track = make_track([TileType.START, TileType.STRAIGHT,
-                            (TileType.UPHILL, 2), TileType.STRAIGHT, TileType.STRAIGHT])
-        up = first_cell_of(track, TileType.UPHILL)  # 10-11
+                            (TileType.STRAIGHT, 2, Terrain.UPHILL), TileType.STRAIGHT, TileType.STRAIGHT])
+        up = first_cell_of(track, Terrain.UPHILL)  # 10-11
         front = place(track, make_runner('front'), up + 2, 0)   # plaine, tête
         frozen = place(track, make_runner('frozen'), up + 1, 0)  # MONTÉE
         rear = place(track, make_runner('rear'), up, 0)          # MONTÉE
@@ -193,7 +198,7 @@ class TestAscentSlipstream(unittest.TestCase):
     def test_descent_slipstream_is_normal(self):
         """Exemple du rulebook : en descente, l'aspiration s'applique normalement."""
         track = make_track(DOWNHILL_TRACK)
-        down = first_cell_of(track, TileType.DOWNHILL)
+        down = first_cell_of(track, Terrain.DOWNHILL)
         rear = place(track, make_runner('rear'), down, 0)
         place(track, make_runner('front'), down + 2, 0)
         steps = run_aspiration(track)
@@ -205,8 +210,9 @@ class TestCircuitStage(unittest.TestCase):
     def test_circuit_contains_mountains(self):
         game = Game(stage="circuit", player_count=2)
         tiles = [t.type for t in game.track.tiles]
-        self.assertIn(TileType.UPHILL, tiles)
-        self.assertIn(TileType.DOWNHILL, tiles)
+        terrains = [t.terrain for t in game.track.tiles]
+        self.assertIn(Terrain.UPHILL, terrains)
+        self.assertIn(Terrain.DOWNHILL, terrains)
         self.assertIn(TileType.SHARP_TURN, tiles)
         self.assertEqual(game.track.length, 95)  # circuit perso : 19 tuiles
 
