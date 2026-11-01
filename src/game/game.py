@@ -246,16 +246,19 @@ class Game:
         return True
 
     def auto_place_riders(self) -> None:
-        """Option 'placement au hasard' : chaque coureur restant est placé sur
-        une file libre choisie au hasard, derrière la ligne de départ."""
+        """Option 'placement au hasard' : les coureurs restants sont placés
+        AU PLUS PROCHE de la ligne de départ (règle), la file étant choisie
+        au hasard parmi les files libres de la case la plus proche."""
         import random
         while self.current_placement() is not None:
             limit = self.track.start_line_x()
-            free = [(x, lane) for x in range(limit) for lane in (0, 1)
-                    if self.can_place_at(x, lane)]
-            if not free:
+            # case la plus proche de la ligne ayant encore une file libre
+            x = max((xx for xx in range(limit)
+                     if any(self.can_place_at(xx, lane) for lane in (0, 1))),
+                    default=None)
+            if x is None:
                 raise RuntimeError("Zone de départ pleine")
-            x, lane = random.choice(free)
+            lane = random.choice([l for l in (0, 1) if self.can_place_at(x, l)])
             self.place_runner_at(x, lane)
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:

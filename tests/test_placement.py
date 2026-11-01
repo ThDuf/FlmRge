@@ -56,6 +56,8 @@ class TestPlacementPhase(unittest.TestCase):
             self.assertLess(x, limit)
 
     def test_auto_place_riders_random_option(self):
+        """Le placement aléatoire respecte la règle : au plus proche de la
+        ligne (8 coureurs -> cases 1..4 remplies, case 0 vide)."""
         game = Game(stage="test", player_count=4, auto_place=False)
         game.auto_place_riders()
         self.assertEqual(game.current_phase, Phase.ENERGY)
@@ -64,6 +66,8 @@ class TestPlacementPhase(unittest.TestCase):
         self.assertEqual(len(runners), 8)
         for x, _lane, _r in runners:
             self.assertLess(x, limit)
+        occupied_x = sorted({x for x, _l, _r in runners})
+        self.assertEqual(occupied_x, [1, 2, 3, 4])  # case 0 (la plus loin) vide
 
 
 class TestPlacementUI(unittest.TestCase):

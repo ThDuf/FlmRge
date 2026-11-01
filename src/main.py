@@ -1179,6 +1179,10 @@ class FlammeRougeGame:
         if self.show_hands and self.game.current_phase == Phase.ENERGY:
             self._draw_hands()  # les mains ne sont piochées qu'au 1er tour
 
+        # Phase de placement : coureurs non placés affichés en réserve à côté
+        # du départ (pas sur la piste, espacés pour ne pas se superposer)
+        self._draw_unplaced_runners()
+
         # Affichage des cartes restantes
         if self.show_decks:
             self._draw_decks()
@@ -1206,6 +1210,35 @@ class FlammeRougeGame:
             restart_text = self.font.render("Appuyez sur R pour recommencer", True, BLACK)
             restart_rect = restart_text.get_rect(center=(self.width // 2, self.height // 2 + 10))
             self.screen.blit(restart_text, restart_rect)
+
+    def _draw_unplaced_runners(self):
+        """Phase de placement : les coureurs pas encore placés sont dessinés
+        en réserve à côté de la ligne de départ, espacés (pas superposés)."""
+        if not self.game or self.game.current_phase != Phase.PLACEMENT:
+            return
+        placed = {r.id for _x, _l, r in self.game.track.get_all_runners()}
+        unplaced = [r for p in self.game.players for r in (p.sprinter, p.roller)
+                    if r.id not in placed]
+        if not unplaced:
+            return
+        geo = self._track_geometry()
+        half = geo["half"]
+        px, py, tx, ty = self._path_at(geo, 0.0)  # début du circuit
+        nx, ny = -ty, tx
+        # point de départ de la rangée : côté extérieur de la route au départ
+        bx = px - nx * (half + 30)
+        by = py - ny * (half + 30)
+        reserve = self.small_font.render("réserve", True, GRAY)
+        self.screen.blit(reserve, (bx - 6, by - half - 22))
+        for i, r in enumerate(unplaced):
+            cx = bx + tx * (i * 26)
+            cy = by + ty * (i * 26)
+            color = PLAYER_COLORS.get(r.color, WHITE)
+            pygame.draw.circle(self.screen, color, (int(cx), int(cy)), 9)
+            pygame.draw.circle(self.screen, BLACK, (int(cx), int(cy)), 9, 1)
+            lbl = self.small_font.render("S" if r.type.name == "SPRINTER" else "R",
+                                         True, BLACK)
+            self.screen.blit(lbl, (cx - lbl.get_width() // 2, cy - lbl.get_height() // 2))
 
     def _draw_hands(self):
         """Panneaux de cartes des joueurs, empilés en colonne à gauche.
