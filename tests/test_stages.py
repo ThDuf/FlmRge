@@ -45,6 +45,27 @@ class TestTileLetters(unittest.TestCase):
         for letter, direction in expected.items():
             self.assertEqual(TILE_CATALOG[letter][2], direction, letter)
 
+    def test_first_turn_of_corso_paseo_goes_left(self):
+        """Convention écran (y vers le bas) : e=G -> le premier virage de
+        Corso Paseo fait tourner le cap vers le haut (angle négatif)."""
+        import math
+        from game.track import compute_track_path
+        track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
+        pts = compute_track_path(track, 1.0)
+
+        def heading_at(s):
+            cum = 0.0
+            for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+                d = math.hypot(x1 - x0, y1 - y0)
+                if cum + d >= s:
+                    return math.atan2(y1 - y0, x1 - x0)
+                cum += d
+            return 0.0
+
+        # tuile e = 5e tuile = arc s=8..10 ; on mesure avant/après
+        self.assertAlmostEqual(math.degrees(heading_at(7.0)), 0, places=0)
+        self.assertAlmostEqual(math.degrees(heading_at(10.5)), -90, places=0)
+
     def test_letter_mapping(self):
         self.assertEqual(tile_type_for_letter('a'), TileType.START)
         self.assertEqual(tile_type_for_letter('u'), TileType.FINISH)

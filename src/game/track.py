@@ -86,7 +86,9 @@ def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, f
     x, y, heading = 0.0, 0.0, 0.0
     for tile in track.tiles:
         if tile.type in TURN_ANGLE:
-            theta = TURN_ANGLE[tile.type] * getattr(tile, "direction", 1)
+            # coordonnées écran (y vers le bas) : angle NÉGATIF = virage à
+            # gauche visuel, donc G (+1) -> on inverse le signe
+            theta = -TURN_ANGLE[tile.type] * getattr(tile, "direction", 1)
             arc = 2 * unit
             radius = arc / abs(theta)
             nx, ny = -math.sin(heading), math.cos(heading)  # normale au cap
