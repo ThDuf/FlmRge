@@ -285,20 +285,44 @@ class TestStageMenu(unittest.TestCase):
         self.assertEqual(total, 78)  # 78 cases
 
     def test_menu_preview_points_within_panel(self):
-        """La prévisualisation du tracé tient dans son panneau (grandes fenêtres)."""
+        """La prévisualisation du tracé tient dans son sous-panneau (grandes fenêtres)."""
         ui = main.FlammeRougeGame()
         ui.width, ui.height = 1200, 800
         rect = ui._preview_rect()
+        trect = ui._preview_track_rect(rect)
         for name, _desc, _code in __import__('game.game', fromlist=['available_stages']).available_stages():
             pts = ui._stage_preview_points(name)
             xs = [p[0] for p in pts]
             ys = [p[1] for p in pts]
             bb_w = max(xs) - min(xs)
             bb_h = max(ys) - min(ys)
-            scale = min((rect.w - 30) / max(bb_w, 1e-9), (rect.h - 60) / max(bb_h, 1e-9))
+            scale = min((trect.w - 16) / max(bb_w, 1e-9), (trect.h - 16) / max(bb_h, 1e-9))
             self.assertGreater(scale, 0)
-            self.assertLessEqual(bb_w * scale, rect.w - 30, name)
-            self.assertLessEqual(bb_h * scale, rect.h - 60, name)
+            self.assertLessEqual(bb_w * scale, trect.w - 16, name)
+            self.assertLessEqual(bb_h * scale, trect.h - 16, name)
+
+    def test_stage_profile_matches_geography(self):
+        """Le profil d'altitude monte en montée (+1/case) et descend en descente."""
+        from game.track import CellGeographyType
+        ui = main.FlammeRougeGame()
+        alt = ui._stage_profile("La Haut Montagne")
+        track = __import__('game.game', fromlist=['build_stage_track']).build_stage_track("La Haut Montagne")
+        self.assertEqual(len(alt), track.length + 1)
+        diffs = [alt[i + 1] - alt[i] for i in range(track.length)]
+        geos = [c.geography for t in track.tiles for c in t.cells]
+        for d, g in zip(diffs, geos):
+            if g == CellGeographyType.UPHILL:
+                self.assertEqual(d, 1)
+            elif g == CellGeographyType.DOWNHILL:
+                self.assertEqual(d, -1)
+            else:
+                self.assertEqual(d, 0)
+        self.assertGreater(max(alt), 0)  # il y a bien des montées
+
+    def test_stage_card_image_optional(self):
+        """Pas d'image de carte déposée -> None (la preview affiche un indice)."""
+        ui = main.FlammeRougeGame()
+        self.assertIsNone(ui._stage_card_path("Avenue Corso Paseo"))
 
     def test_escape_returns_to_menu_and_r_restarts_stage(self):
         ui = main.FlammeRougeGame(stage="Firenze - Milano")
