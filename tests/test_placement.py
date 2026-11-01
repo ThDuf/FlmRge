@@ -110,6 +110,22 @@ class TestPlacementUI(unittest.TestCase):
         self.assertEqual(ui.game.current_phase, Phase.ENERGY)
         self.assertEqual(len(ui.game.track.get_all_runners()), 4)
 
+    def test_unplaced_runners_not_drawn_on_track(self):
+        """En phase PLACEMENT, les coureurs non placés ne sont pas sur la
+        piste (ils sont en réserve à côté) : _draw_runners ne lit que la piste."""
+        ui = main.FlammeRougeGame()
+        ui._select_stage("Avenue Corso Paseo")
+        ui.screen = __import__('pygame').display.set_mode((1200, 800))
+        ui._draw_runners()  # ne doit pas dessiner les 4 coureurs non placés
+        on_track = {r.id for _x, _l, r in ui.game.track.get_all_runners()}
+        self.assertEqual(on_track, set())  # rien sur la piste
+        # après placement aléatoire, tout le monde est sur la piste, derrière la ligne
+        ui.game.auto_place_riders()
+        ui._draw_runners()
+        limit = ui.game.track.start_line_x()
+        for x, _l, r in ui.game.track.get_all_runners():
+            self.assertLess(x, limit)
+
     def test_ui_click_places_runner(self):
         ui = main.FlammeRougeGame()
         ui._select_stage("Avenue Corso Paseo")

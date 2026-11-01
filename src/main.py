@@ -977,29 +977,34 @@ class FlammeRougeGame:
             center=(px - nx * (half + 10), py - ny * (half + 10))))
 
     def _draw_runners(self):
+        """Dessine les coureurs placés sur la piste (source de vérité : la
+        piste). Les coureurs non placés (phase PLACEMENT) ne sont PAS sur la
+        piste : ils sont affichés en réserve par _draw_unplaced_runners."""
         geo = self._track_geometry()
         lane_off = geo["lane_w"] / 2
         radius = int(geo["lane_w"] * 0.55)
 
-        for player in self.game.players:
-            for runner in player.get_runners():
-                px, py, tx, ty = self._cell_anchor(runner.x)
-                nx, ny = -ty, tx
-                sign = 1 if runner.y == 0 else -1  # file A = droite du sens de marche
-                cx = px + nx * lane_off * sign
-                cy = py + ny * lane_off * sign
+        players_by_runner = {r.id: p for p in self.game.players
+                             for r in p.get_runners()}
+        for x, lane, runner in self.game.track.get_all_runners():
+            player = players_by_runner[runner.id]
+            px, py, tx, ty = self._cell_anchor(x)
+            nx, ny = -ty, tx
+            sign = 1 if lane == 0 else -1  # file A = droite du sens de marche
+            cx = px + nx * lane_off * sign
+            cy = py + ny * lane_off * sign
 
-                color = PLAYER_COLORS.get(player.color, BLACK)
-                pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)
+            color = PLAYER_COLORS.get(player.color, BLACK)
+            pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)
 
-                # Type du coureur au-dessus du centre, carte jouée en dessous
-                type_text = "S" if runner.type.name == "SPRINTER" else "R"
-                type_surf = self.small_font.render(f"{type_text}{runner.id[-1]}", True, WHITE)
-                self.screen.blit(type_surf, type_surf.get_rect(center=(cx, cy - 7)))
+            # Type du coureur au-dessus du centre, carte jouée en dessous
+            type_text = "S" if runner.type.name == "SPRINTER" else "R"
+            type_surf = self.small_font.render(f"{type_text}{runner.id[-1]}", True, WHITE)
+            self.screen.blit(type_surf, type_surf.get_rect(center=(cx, cy - 7)))
 
-                if self.game.current_phase in [Phase.MOVEMENT, Phase.TERMINAL, Phase.ASPIRATION] and runner.played_card:
-                    val_surf = self.small_font.render(str(runner.played_card.value), True, WHITE)
-                    self.screen.blit(val_surf, val_surf.get_rect(center=(cx, cy + 8)))
+            if self.game.current_phase in [Phase.MOVEMENT, Phase.TERMINAL, Phase.ASPIRATION] and runner.played_card:
+                val_surf = self.small_font.render(str(runner.played_card.value), True, WHITE)
+                self.screen.blit(val_surf, val_surf.get_rect(center=(cx, cy + 8)))
 
     # ------------------------------------------------------------------
     # Dessin : interface
