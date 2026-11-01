@@ -107,8 +107,8 @@ class TestTileLetters(unittest.TestCase):
         """Sens des virages des faces montagne, relevés sur les tuiles physiques
         (droite = -1, gauche = +1). Ce n'est PAS toujours le miroir de la face
         plate : ex. H tourne à droite (-1) alors que h va à gauche (+1),
-        et K tourne à droite (-1) comme k (-1)."""
-        expected = {'E': -1, 'G': -1, 'H': -1, 'I': -1, 'J': 1, 'K': -1,
+        et K tourne à gauche (+1) alors que k va à droite (-1)."""
+        expected = {'E': -1, 'G': -1, 'H': -1, 'I': -1, 'J': 1, 'K': 1,
                     'O': 1, 'P': 1, 'Q': -1, 'R': 1, 'S': 1, 'T': -1}
         angles = {'E': math.pi / 2, 'G': math.pi / 2, 'I': math.pi / 2,
                   'J': math.pi / 2, 'O': math.pi / 2, 'P': math.pi / 2,

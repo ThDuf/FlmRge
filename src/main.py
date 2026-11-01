@@ -514,7 +514,7 @@ class FlammeRougeGame:
                 if cell.run == CellRunType.START:
                     seg_color = (80, 200, 100)
                 elif cell.run == CellRunType.END:
-                    seg_color = (230, 70, 70)
+                    seg_color = (240, 210, 60)  # arrivée en jaune
                 elif cell.geography == CellGeographyType.UPHILL:
                     seg_color = (220, 50, 50)
                 elif cell.geography == CellGeographyType.DOWNHILL:
@@ -528,9 +528,9 @@ class FlammeRougeGame:
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, seg_color, False, seg, 5)
 
-        # départ (vert) et arrivée (rouge)
+        # départ (vert) et arrivée (jaune)
         pygame.draw.circle(self.screen, GREEN, screen_pts[0], 5)
-        pygame.draw.circle(self.screen, RED, screen_pts[-1], 5)
+        pygame.draw.circle(self.screen, YELLOW, screen_pts[-1], 5)
 
         # Séparateurs de tuiles + lettres au milieu de chaque tuile
         marks, total = self._preview_tile_marks(name)

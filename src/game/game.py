@@ -63,7 +63,7 @@ MOUNTAIN_DEFS = {
     'H': ((math.pi / 4, -1), 2, "dd"),   # virage 45° droite
     'I': ((math.pi / 2, -1), 2, "ff"),   # virage 90° droite
     'J': ((math.pi / 2, 1), 2, "ff"),    # virage 90° gauche
-    'K': ((math.pi / 4, -1), 2, "uu"),   # virage 45° droite
+    'K': ((math.pi / 4, 1), 2, "uu"),    # virage 45° gauche
     'L': (None, 2, "uuuddd"),
     'M': (None, 2, "ffuuuu"),
     'N': (None, 2, "uuuuuu"),
