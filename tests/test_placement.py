@@ -141,3 +141,24 @@ class TestPlacementUI(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+
+class TestRandomTurnButton(unittest.TestCase):
+    def test_random_turn_button_plays_a_full_turn(self):
+        """Le bouton « Tour aléatoire » enchaîne placement + cartes + phases."""
+        ui = main.FlammeRougeGame()
+        ui._select_stage("Avenue Corso Paseo")  # phase PLACEMENT
+        ui.screen = __import__('pygame').display.set_mode((1200, 800))
+        # clic sur le bouton aléatoire
+        rect = ui._random_button_rect()
+        ui._try_button_click(rect.center)
+        game = ui.game
+        self.assertEqual(game.current_phase, Phase.ENERGY)  # tour suivant (ou game over)
+        self.assertEqual(game.turn_count, 2)  # placement -> tour 1 joué -> tour 2
+        self.assertEqual(len(game.track.get_all_runners()), 4)  # tous placés
+        # rejouer jusqu'à game over éventuel : toujours cohérent
+        for _ in range(30):
+            if game.game_over:
+                break
+            ui._try_button_click(rect.center)
+        self.assertIn(game.current_phase, (Phase.ENERGY, Phase.TERMINAL))

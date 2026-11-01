@@ -184,6 +184,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
 - [x] **Phase de placement au départ** : chaque joueur place ses 2 coureurs un par un derrière la ligne DÉPART (clic sur une case, cases surlignées), avec bouton **« Placement aléatoire »** (`tests/test_placement.py`)
+- [x] **Bouton « Tour aléatoire »** : en un clic, placement auto si besoin + une carte au hasard par coureur + mouvement/aspiration/fatigue d'un coup (pratique pour tester)
 - [x] **Fin de course** : fin du tour où un coureur franchit la ligne d'arrivée (la course ne continue pas après), vainqueur = le plus loin au-delà de la ligne, égalité → file A de droite (`Game._check_win_condition`)
 - [x] **Écran de victoire avec podium** des 3 premiers coureurs (classement `Game.ranking()` : position puis file A)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)

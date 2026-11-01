@@ -285,7 +285,12 @@ class FlammeRougeGame:
         """Position du bouton d'action (sous la colonne de panneaux, à gauche)."""
         n = max(1, len(self.game.players))
         y = TOP_H + 8 + n * (self._panel_h() + 8) + 6
-        return pygame.Rect(8, min(y, self.height - 58), self._left_w() - 16, 48)
+        return pygame.Rect(8, min(y, self.height - 106), self._left_w() - 16, 48)
+
+    def _random_button_rect(self) -> pygame.Rect:
+        """Bouton « Tour aléatoire » sous le bouton d'action."""
+        r = self._button_rect()
+        return pygame.Rect(r.x, min(r.bottom + 6, self.height - 46), r.w, 40)
 
     def _button_info(self):
         """(libellé, couleur) du bouton d'action, ou None s'il n'y en a pas.
@@ -306,12 +311,47 @@ class FlammeRougeGame:
         return None
 
     def _try_button_click(self, pos) -> bool:
-        """Gère un clic sur le bouton d'action. Retourne True si consommé."""
+        """Gère un clic sur les boutons d'action. Retourne True si consommé."""
+        if not self.game.game_over and self._random_button_rect().collidepoint(pos):
+            self._play_random_turn()
+            return True
         info = self._button_info()
         if info is None or not self._button_rect().collidepoint(pos):
             return False
         self._advance_step()
         return True
+
+    def _play_random_turn(self):
+        """Bouton « Tour aléatoire » : placement auto si besoin, une carte au
+        hasard par coureur, puis mouvement + aspiration + fatigue d'un coup."""
+        import random
+        game = self.game
+        if game is None or game.game_over:
+            return
+        if game.current_phase == Phase.PLACEMENT:
+            game.auto_place_riders()
+        if game.current_phase == Phase.ENERGY:
+            for player in game.players:
+                for runner in player.get_runners():
+                    if game.cards_played_per_runner.get(runner.id, 0) < 1 and runner.hand:
+                        game.play_card(player, runner, random.choice(runner.hand))
+        if game.current_phase == Phase.ENERGY and game.all_players_ready():
+            game.apply_movement_steps(game.resolve_movement_phase())  # phase -> MOVEMENT
+            game.apply_aspiration_steps(game.resolve_aspiration_phase())  # -> ASPIRATION
+            game.current_phase = Phase.TERMINAL
+            game._assign_fatigue_cards()
+            if game._check_win_condition():
+                game.game_over = True
+            else:
+                game._cleanup_hands()
+                game.start_turn()
+        # reset de l'affichage pas-à-pas
+        self.showing_movement = False
+        self.showing_aspiration = False
+        self.movement_step = self.movement_total = 0
+        self.aspiration_step = self.aspiration_total = 0
+        self.played_display_index = {r.id: 0 for p in game.players for r in p.get_runners()}
+        self.last_action = (f"Tour {game.turn_count} joué en aléatoire", (126, 87, 194))
 
     def _advance_step(self):
         """Avance d'une étape (bouton ou ENTRÉE) selon l'état courant."""
@@ -1178,6 +1218,16 @@ class FlammeRougeGame:
             pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=10)
             button_text = self.font.render(label, True, WHITE)
             self.screen.blit(button_text, button_text.get_rect(center=rect.center))
+
+        # Bouton « Tour aléatoire » (partie non terminée)
+        if not self.game.game_over:
+            rrect = self._random_button_rect()
+            rhovered = rrect.collidepoint(pygame.mouse.get_pos())
+            rfill = (150, 110, 210) if rhovered else (126, 87, 194)
+            pygame.draw.rect(self.screen, rfill, rrect, border_radius=10)
+            pygame.draw.rect(self.screen, BLACK, rrect, width=2, border_radius=10)
+            rtext = self.label_font.render("Tour aléatoire", True, WHITE)
+            self.screen.blit(rtext, rtext.get_rect(center=rrect.center))
 
         # Mains des coureurs : visibles dans toutes les phases (cartes jouées
         # en vert, progression x/2) ; cliquables uniquement en phase d'énergie
