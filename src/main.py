@@ -86,8 +86,11 @@ class FlammeRougeGame:
         self.small_font = pygame.font.SysFont("Arial", 12)
 
         self.stage = stage  # None -> menu de sélection d'étape affiché
-        self.game = Game(stage=stage, player_count=2) if stage else None
+        self.player_count = 2  # nombre de joueurs choisi au menu (2-4)
+        self.game = Game(stage=stage, player_count=self.player_count) if stage else None
         self.menu_index = 0
+        self.menu_step = "stage"  # "stage" -> "players"
+        self._pending_stage = None
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
@@ -552,8 +555,11 @@ class FlammeRougeGame:
             self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
 
     def _draw_menu(self):
-        """Menu de sélection de l'étape (affiché quand self.game is None)."""
+        """Menu de sélection (affiché quand self.game is None)."""
         mouse = pygame.mouse.get_pos()
+        if self.menu_step == "players":
+            self._draw_players_menu(mouse)
+            return
         title = self.title_font.render("Choisis ton étape", True, WHITE)
         self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
         hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, (150, 155, 165))
@@ -580,10 +586,43 @@ class FlammeRougeGame:
         if self.width >= 1100 and entries:
             self._draw_menu_preview(entries[self.menu_index][0], self._preview_rect())
 
+    def _draw_players_menu(self, mouse):
+        """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
+        title = self.title_font.render(f"{self._pending_stage} — combien de joueurs ?",
+                                       True, WHITE)
+        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
+        hint = self.label_font.render("Clic ou flèches gauche/droite + ENTRÉE (Échap = retour)",
+                                      True, (150, 155, 165))
+        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
+        for count, rect in self._player_count_rects():
+            selected = (count == self.player_count)
+            hovered = rect.collidepoint(mouse)
+            fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
+            border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
+                             border_radius=8)
+            n_surf = self.big_font.render(str(count), True, WHITE)
+            self.screen.blit(n_surf, (rect.centerx - n_surf.get_width() // 2,
+                                      rect.centery - n_surf.get_height() // 2))
+        if self.width >= 1100 and self._pending_stage:
+            self._draw_menu_preview(self._pending_stage, self._preview_rect())
+
+    def _player_count_rects(self):
+        """Boutons 2/3/4 joueurs de l'étape 'players' du menu."""
+        rects = []
+        total_w = 3 * 110 + 2 * 20
+        x = (self.width - total_w) // 2
+        y = TOP_H + 220
+        for count in (2, 3, 4):
+            rects.append((count, pygame.Rect(x, y, 110, 80)))
+            x += 130
+        return rects
+
     def _select_stage(self, name: str):
         """Démarre une partie sur l'étape choisie (depuis le menu ou R)."""
         self.stage = name
-        self.game = Game(stage=name, player_count=2)
+        self.game = Game(stage=name, player_count=self.player_count)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -596,7 +635,10 @@ class FlammeRougeGame:
         self.last_action = None
 
     def _menu_event(self, event):
-        """Événements du menu de sélection d'étape (clic ou clavier)."""
+        """Événements du menu (étape 1 : choix de l'étape, étape 2 : nb joueurs)."""
+        if self.menu_step == "players":
+            self._players_menu_event(event)
+            return
         entries = self._menu_entries()
         mouse = pygame.mouse.get_pos()
         hovered = None
@@ -606,14 +648,35 @@ class FlammeRougeGame:
         if hovered is not None:
             self.menu_index = hovered
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and hovered is not None:
-            self._select_stage(entries[hovered][0])
+            self._pending_stage = entries[hovered][0]
+            self.menu_step = "players"
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
             elif event.key == pygame.K_DOWN:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
-                self._select_stage(entries[self.menu_index][0])
+                self._pending_stage = entries[self.menu_index][0]
+                self.menu_step = "players"
+
+    def _players_menu_event(self, event):
+        """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
+        counts = [2, 3, 4]
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for count, rect in self._player_count_rects():
+                if rect.collidepoint(event.pos):
+                    self.player_count = count
+                    self._select_stage(self._pending_stage)
+                    return
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                self.player_count = counts[max(0, counts.index(self.player_count) - 1)]
+            elif event.key == pygame.K_RIGHT:
+                self.player_count = counts[min(len(counts) - 1, counts.index(self.player_count) + 1)]
+            elif event.key == pygame.K_RETURN:
+                self._select_stage(self._pending_stage)
+            elif event.key == pygame.K_ESCAPE:
+                self.menu_step = "stage"
 
     def _handle_click(self, pos):
         """Gère un clic : jouer une carte via les zones du layout des mains."""

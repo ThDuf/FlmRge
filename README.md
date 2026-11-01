@@ -186,6 +186,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 - [x] **Implémentation complète de l'aspiration** (packs arrière→avant, fusion + revérification, pas-à-pas animé — vérifiée par `tests/test_aspiration.py`)
 - [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)
 - [x] **Montées/descentes** (plafond 5 / minimum 5, pas d'aspiration en montée — vérifiées par `tests/test_mountains.py`)
+- [x] **Nombre de joueurs au départ** : demandé au menu de lancement (2 à 4 joueurs, boutons ou flèches + ENTRÉE), passé au moteur qui crée les joueurs/coureurs en conséquence
 - [ ] **Amélioration de l'UI** (boutons, animations)
 - [ ] **Animations des déplacements des coureurs** : animer les coureurs case par case lors des phases de mouvement, d'aspiration et de fatigue (glissade fluide le long du circuit, sans téléportation)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)

@@ -165,6 +165,7 @@ class Game:
     """Moteur principal du jeu Flamme Rouge."""
 
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2):
+        player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
         self.stage = stage
         self.players: List[Player] = []
         self.track = self._build_track(stage)

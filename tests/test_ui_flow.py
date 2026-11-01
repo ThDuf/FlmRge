@@ -255,7 +255,7 @@ class TestRemainingCounts(unittest.TestCase):
         self.assertTrue(ui.game.play_card(ui.game.players[0], runner, card))
         after = ui._remaining_counts(runner)
         self.assertEqual(sum(after.values()), 14)
-        self.assertEqual(after[key], before[key] - 1)
+        self.assertEqual(after.get(key, 0), before[key] - 1)
 
     def test_fatigue_card_adds_to_remaining(self):
         from game.card import Card, CardType

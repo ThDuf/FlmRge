@@ -210,8 +210,51 @@ class TestStageMenu(unittest.TestCase):
         self.assertIsNone(ui.game)  # le clic n'a rien sélectionné (souris hors entrée)
         ui.menu_index = 1
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertIsNone(ui.game)  # ENTRÉE passe à l'étape "joueurs"
+        self.assertEqual(ui.menu_step, "players")
+        self.assertEqual(ui._pending_stage, name)
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, name)
+        self.assertEqual(len(ui.game.players), 2)  # 2 joueurs par défaut
+
+    def test_menu_player_count_2_to_4(self):
+        """Étape 'players' du menu : on choisit 3 joueurs au clavier."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_index = 0
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "players")
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
+        self.assertEqual(ui.player_count, 3)
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertIsNotNone(ui.game)
+        self.assertEqual(len(ui.game.players), 3)
+        # borné à 4 : deux RIGHT de plus -> 4, puis on reste à 4
+        ui2 = main.FlammeRougeGame()
+        ui2.menu_step = "players"
+        ui2._pending_stage = "circuit"
+        ui2.player_count = 4
+        ui2._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
+        self.assertEqual(ui2.player_count, 4)
+        # Échap revient au choix d'étape
+        ui2._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+        self.assertEqual(ui2.menu_step, "stage")
+        # clic sur le bouton "4"
+        ui3 = main.FlammeRougeGame()
+        ui3.menu_step = "players"
+        ui3._pending_stage = "circuit"
+        count, rect = ui3._player_count_rects()[-1]
+        ui3._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                           pos=rect.center))
+        self.assertEqual(ui3.player_count, 4)
+        self.assertIsNotNone(ui3.game)
+        self.assertEqual(len(ui3.game.players), 4)
+
+    def test_game_clamps_player_count(self):
+        from game.game import Game
+        self.assertEqual(len(Game(stage="test", player_count=1).players), 2)
+        self.assertEqual(len(Game(stage="test", player_count=9).players), 4)
 
     def test_preview_tile_marks_letters(self):
         """La preview marque chaque tuile avec sa lettre (a..u) pour les
