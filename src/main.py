@@ -90,6 +90,7 @@ class FlammeRougeGame:
         self.menu_index = 0
         self.menu_step = "stage"  # "stage" -> "players"
         self._pending_stage = None
+        self.show_podium = True
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self._profile_cache = {}  # nom d'étape -> profil d'altitude
         self.show_hands = True
@@ -481,6 +482,8 @@ class FlammeRougeGame:
                 self.show_hands = not self.show_hands
             elif event.key == pygame.K_d:
                 self.show_decks = not self.show_decks
+            elif event.key == pygame.K_TAB and self.game.game_over:
+                self.show_podium = not self.show_podium  # podium <-> circuit final
             elif event.key == pygame.K_RETURN:
                 self._advance_step()
 
@@ -771,6 +774,7 @@ class FlammeRougeGame:
         self.aspiration_movements = []
         self.played_display_index = {}
         self.last_action = None
+        self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
 
     def _menu_event(self, event):
         """Événements du menu (étape 1 : choix de l'étape, étape 2 : nb joueurs)."""
@@ -1255,8 +1259,8 @@ class FlammeRougeGame:
             self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
             legend_x += 18 + text_surf.get_width() + 14
 
-        # Écran de victoire avec podium (affiché quand la partie est finie)
-        if self.game.game_over:
+        # Écran de victoire avec podium (TAB bascule avec l'état final du circuit)
+        if self.game.game_over and self.show_podium:
             self._draw_podium()
 
     def _draw_podium(self):
@@ -1269,31 +1273,29 @@ class FlammeRougeGame:
         self.screen.blit(title, title.get_rect(center=(overlay.centerx, overlay.y + 34)))
 
         rank = game.ranking()[:3]
-        heights = [130, 95, 70]           # 1er, 2e, 3e
-        slots = [1, 0, 2]                  # affichage : 2e à gauche, 1er au centre, 3e à droite
+        heights = [130, 95, 70]     # 1er, 2e, 3e
+        offsets = [0, -1, 1]        # 1er au CENTRE, 2e à gauche, 3e à droite
         base_y = overlay.bottom - 46
-        for place in slots:
-            entry = rank[place] if place < len(rank) else None
-            x = overlay.centerx + (place - 1) * 130 - 55
-            h = heights[place]
+        for i, entry in enumerate(rank):
+            x = overlay.centerx + offsets[i] * 130 - 55
+            h = heights[i]
             pygame.draw.rect(self.screen, (60, 66, 78), (x, base_y - h, 110, h),
                              border_radius=6)
-            num = self.big_font.render(str(place + 1), True, WHITE)
+            num = self.big_font.render(str(i + 1), True, WHITE)
             self.screen.blit(num, num.get_rect(center=(x + 55, base_y - h + 26)))
-            if entry:
-                player, runner = entry
-                color = PLAYER_COLORS.get(player.color, WHITE)
-                kind = "S" if runner.type.name == "SPRINTER" else "R"
-                pygame.draw.circle(self.screen, color, (x + 55, base_y - h - 24), 16)
-                pygame.draw.circle(self.screen, BLACK, (x + 55, base_y - h - 24), 16, 1)
-                lbl = self.label_font.render(f"{player.color} {kind}", True, WHITE)
-                self.screen.blit(lbl, lbl.get_rect(center=(x + 55, base_y - h - 50)))
+            player, runner = entry
+            color = PLAYER_COLORS.get(player.color, WHITE)
+            kind = "S" if runner.type.name == "SPRINTER" else "R"
+            pygame.draw.circle(self.screen, color, (x + 55, base_y - h - 24), 16)
+            pygame.draw.circle(self.screen, BLACK, (x + 55, base_y - h - 24), 16, 1)
+            lbl = self.label_font.render(f"{player.color} {kind}", True, WHITE)
+            self.screen.blit(lbl, lbl.get_rect(center=(x + 55, base_y - h - 50)))
 
         if game.winner:
             w = self.font.render(f"Gagnant : joueur {game.winner.color} !", True,
                                  (240, 210, 60))
             self.screen.blit(w, w.get_rect(center=(overlay.centerx, overlay.bottom - 30)))
-        hint = self.label_font.render("R : recommencer   ·   Échap : menu des étapes",
+        hint = self.label_font.render("TAB : voir le circuit final   ·   R : recommencer   ·   Échap : menu",
                                       True, (150, 155, 165))
         self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
 

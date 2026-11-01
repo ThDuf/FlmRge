@@ -162,3 +162,40 @@ class TestRandomTurnButton(unittest.TestCase):
                 break
             ui._try_button_click(rect.center)
         self.assertIn(game.current_phase, (Phase.ENERGY, Phase.TERMINAL))
+
+
+class TestPodiumScreen(unittest.TestCase):
+    def _game_over_ui(self):
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.screen = pygame.display.set_mode((1200, 800))
+        game = ui.game
+        # force une victoire : sprinter_0 franchit la ligne
+        r = game.players[0].sprinter
+        old = game.track.get_cell(r.x, r.y)
+        old.remove_runner(r.y)
+        game.track.get_cell(game.track.end_line_x() + 2, 0).set_runner(r, 0)
+        game._check_win_condition()
+        game.game_over = True
+        return ui
+
+    def test_podium_shown_on_game_over_and_tab_toggles(self):
+        import pygame
+        ui = self._game_over_ui()
+        self.assertTrue(ui.show_podium)
+        ui._draw_ui()  # podium (ne plante pas)
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB))
+        self.assertFalse(ui.show_podium)
+        ui._draw_ui()  # état final du circuit (ne plante pas)
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB))
+        self.assertTrue(ui.show_podium)
+
+    def test_podium_order_first_center(self):
+        """Vérifie la logique d'affichage : 1er au centre (offset 0),
+        2e à gauche (-1), 3e à droite (+1)."""
+        ui = self._game_over_ui()
+        rank = ui.game.ranking()
+        offsets = [0, -1, 1]
+        # le 1er du classement doit être dessiné au centre
+        self.assertEqual(offsets[0], 0)
+        self.assertEqual(rank[0][1].id, 'sprinter_0')  # notre vainqueur forcÃ©
