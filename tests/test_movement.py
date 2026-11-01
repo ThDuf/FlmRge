@@ -19,7 +19,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from game.track import Track, TileType  # noqa: E402
+from game.track import Track, make_tile  # noqa: E402
 from game.runner import Runner, RunnerType  # noqa: E402
 from game.card import Card, CardType  # noqa: E402
 from game.game import Game, Phase  # noqa: E402
@@ -28,7 +28,7 @@ from game.game import Game, Phase  # noqa: E402
 def make_track(min_cells):
     track = Track()
     while track.length < min_cells:
-        track.add_tile(TileType.STRAIGHT)
+        track.add_tile(make_tile("ffffff"))
     return track
 
 

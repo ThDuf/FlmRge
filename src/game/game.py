@@ -1,10 +1,11 @@
 import random
+import math
 from typing import List, Optional, Dict
 from enum import Enum, auto
 from .player import Player
 from .runner import Runner, RunnerType
 from .card import Card, CardType
-from .track import Track, TileType, TILE_CELLS
+from .track import Track, make_tile, CellGeographyType, CellRunType
 
 
 # ------------------------------------------------------------------
@@ -22,77 +23,63 @@ OFFICIAL_STAGES = {
 
 # ------------------------------------------------------------------
 # Catalogue complet des 21 tuiles officielles (a-u), une entrée par lettre.
-#   (type, angle en degrés, sens du virage +1/-1)
-# - face MINUSCULE = côté plat : a=départ, u=arrivée, droites b c d f l m n,
-#   virages légers 45° h k q r s t, virages serrés 90° e g i j o p
-#   (géométrie officielle : 7 droites, 6 virages 45°, 6 virages 90°)
-# - sens du virage : relevés sur la carte imprimée Avenue Corso Paseo
-#   (e=G g=G h=G i=G j=D k=D o=D p=D q=G r=D s=D t=G ; G=+1, D=-1)
-# - face MAJUSCULE = face montagne : montée si lettre dans ASCENT_LETTERS,
-#   sinon descente (répartition non publiée en texte -> documentée ici)
+# Chaque tuile = (virage, largeur, cases) :
+# - virage = (angle en radians, sens +1/-1), None = ligne droite
+#   (45° = virage léger, 90° = virage serré ; sens relevés sur la carte
+#    imprimée Avenue Corso Paseo : e=G g=G h=G i=G j=D k=D o=D p=D
+#    q=G r=D s=D t=G, avec G=+1, D=-1)
+# - largeur = nombre de files de la tuile (2 en jeu de base)
+# - cases = alphabet CELL_CHARS de track.py (f=plat, u=montée, d=descente,
+#   s=ligne de départ, e=ligne d'arrivée) ; une droite fait 6 cases,
+#   un virage 2, le départ 6, l'arrivée 5 (ligne sur la 1re case)
 # ------------------------------------------------------------------
-TILE_CATALOG = {
-    # lettre: (type, angle°, sens, cases) — cases officielles : virages 2, droites 6
-    'a': (TileType.START, 0, 1, 4),     'u': (TileType.FINISH, 0, 1, 5),
-    'b': (TileType.STRAIGHT, 0, 1, 6),  'c': (TileType.STRAIGHT, 0, 1, 6),
-    'd': (TileType.STRAIGHT, 0, 1, 6),  'f': (TileType.STRAIGHT, 0, 1, 6),
-    'l': (TileType.STRAIGHT, 0, 1, 6),  'm': (TileType.STRAIGHT, 0, 1, 6),
-    'n': (TileType.STRAIGHT, 0, 1, 6),
-    'h': (TileType.LIGHT_TURN, 45, 1, 2),  'k': (TileType.LIGHT_TURN, 45, -1, 2),
-    'q': (TileType.LIGHT_TURN, 45, 1, 2),  'r': (TileType.LIGHT_TURN, 45, -1, 2),
-    's': (TileType.LIGHT_TURN, 45, -1, 2), 't': (TileType.LIGHT_TURN, 45, 1, 2),
-    'e': (TileType.SHARP_TURN, 90, 1, 2),  'g': (TileType.SHARP_TURN, 90, 1, 2),
-    'i': (TileType.SHARP_TURN, 90, 1, 2),  'j': (TileType.SHARP_TURN, 90, -1, 2),
-    'o': (TileType.SHARP_TURN, 90, -1, 2), 'p': (TileType.SHARP_TURN, 90, -1, 2),
+TILE_DEFS = {
+    'a': (None, 2, "sssssf"),   'u': (None, 2, "effff"),
+    'b': (None, 2, "ffffff"),   'c': (None, 2, "ffffff"),
+    'd': (None, 2, "ffffff"),   'f': (None, 2, "ffffff"),
+    'l': (None, 2, "ffffff"),   'm': (None, 2, "ffffff"),
+    'n': (None, 2, "ffffff"),
+    'h': ((math.pi / 4, 1), 2, "ff"),   'k': ((math.pi / 4, -1), 2, "ff"),
+    'q': ((math.pi / 4, 1), 2, "ff"),   'r': ((math.pi / 4, -1), 2, "ff"),
+    's': ((math.pi / 4, -1), 2, "ff"),  't': ((math.pi / 4, 1), 2, "ff"),
+    'e': ((math.pi / 2, 1), 2, "ff"),   'g': ((math.pi / 2, 1), 2, "ff"),
+    'i': ((math.pi / 2, 1), 2, "ff"),   'j': ((math.pi / 2, -1), 2, "ff"),
+    'o': ((math.pi / 2, -1), 2, "ff"),  'p': ((math.pi / 2, -1), 2, "ff"),
 }
 
-ASCENT_LETTERS = set("DGKLHJRQN")    # majuscules = montée (bord rouge)
-DESCENT_LETTERS = set("FIOPS")        # majuscules = descente (bord bleu)
-# (les majuscules restantes des codes officiels, A et U, sont le départ/arrivée)
+# Faces montagne (majuscules) : définition COMPLÈTE (virage en miroir,
+# largeur, cases case par case). Lettres non listées : repli = toutes les
+# cases montagne (montée si lettre dans ASCENT_LETTERS, descente si dans
+# DESCENT_LETTERS) avec le virage miroir de la face plate.
+ASCENT_LETTERS = set("DGKLHJRQN")    # face montagne = montée (bord rouge)
+DESCENT_LETTERS = set("FIOPS")        # face montagne = descente (bord bleu)
+MOUNTAIN_DEFS = {
+    'A': (None, 2, "ssssff"),           # départ, face retournée
+    'B': (None, 2, "ddddff"),           # descente sur les 4 premières cases seulement
+    'U': (None, 2, "effff"),            # arrivée, toujours plate
+}
 
 
-def tile_info_for_letter(ch: str):
-    """(type, direction, cases, terrains) pour une lettre de code de stage.
-
-    `terrains` = relief CASE PAR CASE de la tuile (liste de `cases` Terrain).
-    - a-u = face plate : toutes les cases FLAT.
-    - A-U = face montagne (tuile retournée) : même forme, mais
-      * sens du virage INVERSÉ (miroir : H tourne à droite si h va à gauche),
-      * chaque case a un relief : UPHILL si lettre dans ASCENT_LETTERS,
-        DOWNHILL si dans DESCENT_LETTERS (A/U = départ/arrivée, toujours FLAT).
-    """
-    from .track import Terrain
+def tile_def_for_letter(ch: str):
+    """(virage, largeur, cases) pour une lettre de code de stage (a-u / A-U)."""
     low = ch.lower()
-    ttype, _angle, direction, cells = TILE_CATALOG[low]
-    if ch.isupper() and low not in ('a', 'u'):
-        if ch in ASCENT_LETTERS:
-            terrain = Terrain.UPHILL
-        elif ch in DESCENT_LETTERS:
-            terrain = Terrain.DOWNHILL
-        else:
-            terrain = Terrain.DOWNHILL  # défaut documenté
-        return ttype, -direction, cells, [terrain] * cells
-    return ttype, direction, cells, [Terrain.FLAT] * cells
+    turn, width, chars = TILE_DEFS[low]
+    if ch.isupper():
+        if ch in MOUNTAIN_DEFS:
+            return MOUNTAIN_DEFS[ch]
+        if low in ('a', 'u'):
+            return turn, width, chars  # départ/arrivée : toujours plats
+        terrain = 'u' if ch in ASCENT_LETTERS else 'd'
+        mirrored = (turn[0], -turn[1]) if turn else None  # tuile retournée = miroir
+        return mirrored, width, terrain * len(chars)
+    return turn, width, chars
 
 
-def tile_type_for_letter(ch: str) -> TileType:
-    """Type (forme) de tuile pour une lettre de code de stage."""
-    return tile_info_for_letter(ch)[0]
-
-
-def tile_direction_for_letter(ch: str) -> int:
-    """Sens du virage (+1/-1) pour une lettre de virage (1 sinon, sans effet)."""
-    return tile_info_for_letter(ch)[1]
-
-
-def tile_cells_for_letter(ch: str) -> int:
-    """Nombre de cases d'une tuile (identique sur les deux faces)."""
-    return tile_info_for_letter(ch)[2]
-
-
-def tile_terrains_for_letter(ch: str) -> list:
-    """Relief case par case de la tuile pour une lettre de code de stage."""
-    return tile_info_for_letter(ch)[3]
+def build_tile(ch: str) -> 'Tile':
+    """Construit la tuile d'une lettre de code de stage (a-u / A-U)."""
+    from .track import Tile
+    turn, width, chars = tile_def_for_letter(ch)
+    return make_tile(chars, turn=turn, width=width, letter=ch)
 
 
 def build_track_from_code(code: str) -> Track:
@@ -101,8 +88,7 @@ def build_track_from_code(code: str) -> Track:
     track = Track()
     for ch in code:
         if ch.strip():
-            ttype, direction, cells, terrains = tile_info_for_letter(ch)
-            track.add_tile(ttype, direction=direction, cells=cells, terrains=terrains)
+            track.add_tile(build_tile(ch))
     return track
 
 
@@ -112,41 +98,33 @@ def build_stage_track(name: str) -> Track:
         return build_track_from_code(OFFICIAL_STAGES[name])
     if name == "circuit":
         # Circuit perso en boucle (4 virages serrés de 90° dans le même sens) :
-        # montée à l'aller, descente au retour (relief au niveau des cases).
-        # 19 tuiles = 95 cases.
-        from .track import Terrain
+        # montée à l'aller, descente au retour (géographie au niveau des cases).
+        # 19 tuiles = 97 cases.
         track = Track()
 
-        def add(t, d=1, terrain=Terrain.FLAT):
-            n = TILE_CELLS[t]
-            track.add_tile(t, direction=d, terrains=[terrain] * n)
+        def add(chars, turn=None):
+            track.add_tile(make_tile(chars, turn=turn))
 
-        add(TileType.START)
-        for _ in range(2):
-            add(TileType.STRAIGHT)
-        for _ in range(2):
-            add(TileType.STRAIGHT, terrain=Terrain.UPHILL)
-        add(TileType.SHARP_TURN, +1)
-        for _ in range(2):
-            add(TileType.STRAIGHT)
-        add(TileType.SHARP_TURN, +1)
-        for _ in range(2):
-            add(TileType.STRAIGHT)
-        for _ in range(2):
-            add(TileType.STRAIGHT, terrain=Terrain.DOWNHILL)
-        add(TileType.SHARP_TURN, +1)
-        for _ in range(2):
-            add(TileType.STRAIGHT)
-        add(TileType.SHARP_TURN, +1)
-        add(TileType.STRAIGHT)
-        add(TileType.FINISH)
+        add("sssssf")                          # départ
+        add("ffffff"); add("ffffff")
+        add("uuuuuu"); add("uuuuuu")           # montée
+        add("ff", turn=(math.pi / 2, 1))
+        add("ffffff"); add("ffffff")
+        add("ff", turn=(math.pi / 2, 1))
+        add("ffffff"); add("ffffff")
+        add("dddddd"); add("dddddd")           # descente
+        add("ff", turn=(math.pi / 2, 1))
+        add("ffffff"); add("ffffff")
+        add("ff", turn=(math.pi / 2, 1))
+        add("ffffff")
+        add("effff")                           # arrivée
         return track
     if name == "test":
         track = Track()
-        track.add_tile(TileType.START)
+        track.add_tile(make_tile("sssssf"))
         for _ in range(4):
-            track.add_tile(TileType.STRAIGHT)
-        track.add_tile(TileType.FINISH)
+            track.add_tile(make_tile("ffffff"))
+        track.add_tile(make_tile("effff"))
         return track
     # Inconnu -> étape tutorielle par défaut
     return build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
@@ -158,11 +136,11 @@ def available_stages() -> List[tuple]:
     result = []
     for name in ["circuit", *OFFICIAL_STAGES]:
         track = build_stage_track(name)
-        from .track import Terrain
         cells = [c for t in track.tiles for c in t.cells]
-        n_up = sum(1 for c in cells if c.terrain == Terrain.UPHILL)
-        n_down = sum(1 for c in cells if c.terrain == Terrain.DOWNHILL)
-        n_sharp = sum(1 for t in track.tiles if t.type == TileType.SHARP_TURN)
+        n_up = sum(1 for c in cells if c.geography == CellGeographyType.UPHILL)
+        n_down = sum(1 for c in cells if c.geography == CellGeographyType.DOWNHILL)
+        n_sharp = sum(1 for t in track.tiles
+                      if t.turn is not None and abs(t.turn[0]) >= math.pi / 2)
         parts = [f"{track.length} cases"]
         if n_sharp:
             parts.append(f"{n_sharp} virage(s) serré(s)")
@@ -450,10 +428,7 @@ class Game:
         loin devant gagne ; à égalité, la file A (file de droite) est en tête.
         """
         track = self.track
-        if track.tiles and track.tiles[-1].type == TileType.FINISH:
-            finish_x = track.tiles[-1].x  # la ligne = début de la tuile d'arrivée
-        else:
-            finish_x = track.length - 1
+        finish_x = track.end_line_x()  # case de la ligne d'arrivée
         best = None
         for player in self.players:
             for runner in player.get_runners():

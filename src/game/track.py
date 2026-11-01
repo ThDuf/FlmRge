@@ -6,105 +6,101 @@ import math
 from .runner import Runner
 
 
-class Terrain(Enum):
-    """Relief d'une case (les tuiles majuscules ont un relief par case)."""
-    FLAT = auto()
+class CellGeographyType(Enum):
+    """Géographie d'une case (les tuiles montagne ont une géographie par case)."""
+    FLAT = auto()      # plat
     UPHILL = auto()    # montée (bord rouge)
     DOWNHILL = auto()  # descente (bord bleu)
 
 
-class TileType(Enum):
-    START = auto()      # Départ
-    FINISH = auto()     # Arrivée
-    STRAIGHT = auto()   # Ligne droite
-    LIGHT_TURN = auto() # Virage léger
-    SHARP_TURN = auto() # Virage serré
+class CellRunType(Enum):
+    """Ligne de course éventuelle tracée sur la case."""
+    NONE = auto()
+    START = auto()     # ligne de départ
+    END = auto()       # ligne d'arrivée
+
+
+# Alphabet des cases d'une tuile (initiales anglaises) :
+#   f = flat, u = uphill, d = downhill, s = start line, e = end line
+CELL_CHARS = {
+    'f': (CellGeographyType.FLAT,     CellRunType.NONE),
+    'u': (CellGeographyType.UPHILL,   CellRunType.NONE),
+    'd': (CellGeographyType.DOWNHILL, CellRunType.NONE),
+    's': (CellGeographyType.FLAT,     CellRunType.START),
+    'e': (CellGeographyType.FLAT,     CellRunType.END),
+}
 
 
 @dataclass
 class Cell:
-    """Représente une case sur la piste (avec 2 files: A et B)."""
-    a: Optional[Runner] = None  # File A (prioritaire)
-    b: Optional[Runner] = None  # File B
+    """Une case de la piste : géographie + ligne + occupation des files."""
+    geography: CellGeographyType = CellGeographyType.FLAT
+    run: CellRunType = CellRunType.NONE
+    runners: List[Optional[Runner]] = field(default_factory=lambda: [None, None])
     x: int = 0  # Position X de la case
-    terrain: 'Terrain' = None  # relief de la case (None -> FLAT en post-init)
-
-    def __post_init__(self):
-        if self.terrain is None:
-            self.terrain = Terrain.FLAT
 
     def is_empty(self, lane: int) -> bool:
-        """Vérifie si une file est vide (0=A, 1=B)."""
-        return (lane == 0 and self.a is None) or (lane == 1 and self.b is None)
+        """Vérifie si une file est vide."""
+        return 0 <= lane < len(self.runners) and self.runners[lane] is None
 
     def is_full(self) -> bool:
-        """Vérifie si la case est complètement occupée (2 coureurs)."""
-        return self.a is not None and self.b is not None
+        """Vérifie si la case est complètement occupée (toutes les files)."""
+        return all(r is not None for r in self.runners)
 
     def get_runner(self, lane: int) -> Optional[Runner]:
         """Retourne le coureur dans une file (ou None)."""
-        return self.a if lane == 0 else self.b
+        return self.runners[lane] if 0 <= lane < len(self.runners) else None
 
     def set_runner(self, runner: Runner, lane: int) -> bool:
         """Place un coureur dans une file. Retourne True si succès."""
         if not self.is_empty(lane):
             return False
-        if lane == 0:
-            self.a = runner
-        else:
-            self.b = runner
+        self.runners[lane] = runner
         runner.x, runner.y = self.x, lane
         return True
 
     def remove_runner(self, lane: int) -> Optional[Runner]:
         """Retire un coureur d'une file."""
         runner = self.get_runner(lane)
-        if lane == 0:
-            self.a = None
-        else:
-            self.b = None
+        if 0 <= lane < len(self.runners):
+            self.runners[lane] = None
         return runner
-
-
-# Nombre de cases le long de la route selon le type de tuile (officiel) :
-# virages = 2 cases, droites = 6 cases, arrivée = 5 cases après la ligne.
-TILE_CELLS = {
-    TileType.START: 4,
-    TileType.FINISH: 5,
-    TileType.STRAIGHT: 6,
-    TileType.LIGHT_TURN: 2,
-    TileType.SHARP_TURN: 2,
-}
 
 
 @dataclass
 class Tile:
-    """Représente une tuile de piste (2 files A/B par case, `length` cases).
+    """Une tuile de piste.
 
-    Le relief n'est PAS une propriété de la tuile : il est porté case par
-    case (`terrains[i]` = relief de la i-ème case, FLAT par défaut).
+    - `cells` : la tuile case par case (longueur = len(cells)) ; chaque case
+      porte sa géographie (plat/montée/descente) et une éventuelle ligne.
+    - `width` : nombre de files de la tuile (2 en jeu de base, 1 ou 3 avec
+      les extensions).
+    - `turn` : (angle en radians, sens +1/-1) pour un virage, None = droite.
     """
-    type: TileType
+    letter: str = ''  # lettre de la tuile ('a'..'u', majuscule = face montagne)
     x: int = 0  # Position X (en cases) du début de la tuile
-    direction: int = 1  # Sens du virage (+1/-1) ; purement visuel
-    length: int = 2  # nombre de cases le long de la route
-    terrains: Optional[List['Terrain']] = None  # relief case par case
+    width: int = 2  # nombre de files
     cells: List[Cell] = field(default_factory=list)
+    turn: Optional[Tuple[float, int]] = None  # (angle, sens) ; None = droite
 
-    def __post_init__(self):
-        if not self.cells:
-            self.cells = [Cell() for _ in range(self.length)]
-        for i, cell in enumerate(self.cells):
-            cell.x = self.x + i
-            if self.terrains is not None and i < len(self.terrains):
-                cell.terrain = self.terrains[i] or Terrain.FLAT
+    @property
+    def length(self) -> int:
+        return len(self.cells)
+
+    @property
+    def direction(self) -> int:
+        """Sens du virage (+1/-1) ; 1 pour une droite (sans effet)."""
+        return self.turn[1] if self.turn else 1
 
 
-# Angles des virages (pièces officielles : 45° = léger, 90° = serré)
-TURN_ANGLE = {
-    TileType.LIGHT_TURN: math.radians(45),
-    TileType.SHARP_TURN: math.radians(90),
-}
+def make_tile(chars: str, turn: Optional[Tuple[float, int]] = None,
+              width: int = 2, letter: str = '') -> Tile:
+    """Construit une tuile depuis son alphabet de cases (ex. "ddddff")."""
+    cells = []
+    for c in chars:
+        geography, run = CELL_CHARS[c]
+        cells.append(Cell(geography=geography, run=run, runners=[None] * width))
+    return Tile(letter=letter, width=width, cells=cells, turn=turn)
 
 
 def path_point_at(points: List[Tuple[float, float]], s: float):
@@ -121,27 +117,29 @@ def path_point_at(points: List[Tuple[float, float]], s: float):
     t = 0.0 if seg == 0 else (s - cum[i - 1]) / seg
     x = x0 + (x1 - x0) * t
     y = y0 + (y1 - y0) * t
-    d = math.hypot(x1 - x0, y1 - y0)
-    if d == 0:
-        return x, y, 1.0, 0.0
-    return x, y, (x1 - x0) / d, (y1 - y0) / d
+    tx, ty = x1 - x0, y1 - y0
+    norm = math.hypot(tx, ty)
+    if norm > 0:
+        tx, ty = tx / norm, ty / norm
+    return x, y, tx, ty
 
 
 def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, float]]:
     """Polyligne du circuit selon la séquence réelle des tuiles.
 
     Chaque tuile avance de sa longueur (cases) le long du chemin ; une tuile
-    de virage courbe le cap de son angle (45° léger, 90° serré) dans sa
-    direction. Retourne la liste des points (en unités de cases), cap initial +x.
+    de virage courbe le cap de son angle dans sa direction. Retourne la liste
+    des points (en unités de cases), cap initial +x.
     """
     pts = [(0.0, 0.0)]
     x, y, heading = 0.0, 0.0, 0.0
     for tile in track.tiles:
         n = tile.length  # une tuile droite fait 6 cases, un virage 2 cases
-        if tile.type in TURN_ANGLE:
+        if tile.turn is not None:
+            angle, direction = tile.turn
             # coordonnées écran (y vers le bas) : angle NÉGATIF = virage à
             # gauche visuel, donc G (+1) -> on inverse le signe
-            theta = -TURN_ANGLE[tile.type] * getattr(tile, "direction", 1)
+            theta = -angle * direction
             arc = n * unit
             radius = arc / abs(theta)
             nx, ny = -math.sin(heading), math.cos(heading)  # normale au cap
@@ -165,30 +163,42 @@ def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, f
 
 @dataclass
 class Track:
-    """Représente la piste complète."""
+    """Représente la piste complète (séquence de tuiles bout à bout)."""
     tiles: List[Tile] = field(default_factory=list)
     length: int = 0  # nombre total de cases
     _starts: List[int] = field(default_factory=list)  # début (en cases) de chaque tuile
 
-    def add_tile(self, tile_type: TileType, direction: int = 1, cells: int = None,
-                 terrains: List['Terrain'] = None) -> None:
-        """Ajoute une tuile. `terrains` = relief case par case (FLAT sinon)."""
-        length = cells if cells is not None else TILE_CELLS.get(tile_type, 2)
-        tile = Tile(tile_type, x=self.length, direction=direction, length=length,
-                    terrains=terrains)
+    def add_tile(self, tile: Tile) -> None:
+        """Ajoute une tuile à la fin de la piste."""
+        tile.x = self.length
+        for i, cell in enumerate(tile.cells):
+            cell.x = tile.x + i
         self.tiles.append(tile)
         self._starts.append(tile.x)
-        self.length += length
+        self.length += tile.length
 
     def tile_index_at(self, x: int) -> int:
         """Index de la tuile contenant la case x."""
         i = bisect_right(self._starts, x) - 1
         return max(0, min(i, len(self.tiles) - 1))
 
-    def terrain_at(self, x: int) -> 'Terrain':
-        """Relief de la case x (Terrain.FLAT si hors piste)."""
+    def geography_at(self, x: int) -> CellGeographyType:
+        """Géographie de la case x (FLAT si hors piste)."""
         cell = self.get_cell(x, 0)
-        return cell.terrain if cell else Terrain.FLAT
+        return cell.geography if cell else CellGeographyType.FLAT
+
+    def run_at(self, x: int) -> CellRunType:
+        """Ligne de course sur la case x (NONE si hors piste)."""
+        cell = self.get_cell(x, 0)
+        return cell.run if cell else CellRunType.NONE
+
+    def end_line_x(self) -> int:
+        """Case de la ligne d'arrivée (dernière case si pas de ligne)."""
+        for tile in self.tiles:
+            for cell in tile.cells:
+                if cell.run == CellRunType.END:
+                    return cell.x
+        return self.length - 1
 
     def get_cell(self, x: int, lane: int) -> Optional[Cell]:
         if x < 0 or x >= self.length:
@@ -196,35 +206,29 @@ class Track:
         tile = self.tiles[self.tile_index_at(x)]
         return tile.cells[x - tile.x]
 
-    def tile_type_at(self, x: int) -> TileType:
-        """Type de la tuile contenant la case x (STRAIGHT si hors piste)."""
-        if x < 0 or x >= self.length:
-            return TileType.STRAIGHT
-        return self.tiles[self.tile_index_at(x)].type
-
     def is_cell_empty(self, x: int, lane: int) -> bool:
         cell = self.get_cell(x, lane)
         return cell is not None and cell.is_empty(lane)
 
     def is_square_empty(self, x: int) -> bool:
-        """Une CASE est vide si ses 2 files sont vides (règles officielles).
+        """Une CASE est vide si toutes ses files sont vides (règles officielles).
 
         Utilisée pour l'aspiration (écart entre packs) et la fatigue
         (« un coureur est fatigué si la CASE devant lui est vide » ;
         une simple file vide devant lui ne suffit pas).
         """
         cell = self.get_cell(x, 0)
-        return cell is not None and cell.a is None and cell.b is None
+        return cell is not None and all(r is None for r in cell.runners)
 
     def get_all_runners(self) -> List[Tuple[int, int, Runner]]:
         """Retourne tous les coureurs avec leur position (x, lane, runner)."""
         runners = []
         for x in range(self.length):
             cell = self.get_cell(x, 0)
-            if cell and cell.a:
-                runners.append((x, 0, cell.a))
-            if cell and cell.b:
-                runners.append((x, 1, cell.b))
+            if cell:
+                for lane, r in enumerate(cell.runners):
+                    if r is not None:
+                        runners.append((x, lane, r))
         return runners
 
     def effective_steps(self, x: int, card_value: int):
@@ -248,22 +252,22 @@ class Track:
         """
         steps = card_value
         reason = None
-        if self.terrain_at(x) == Terrain.DOWNHILL and steps < 5:
+        if self.geography_at(x) == CellGeographyType.DOWNHILL and steps < 5:
             steps = 5
             reason = "minimum 5 (descente)"
         target = min(x + steps, self.length - 1)
         for d, c in enumerate(range(x, target + 1)):
-            if self.terrain_at(c) != Terrain.UPHILL:
+            if self.geography_at(c) != CellGeographyType.UPHILL:
                 continue
             if d <= 5:
                 # entre dans la montée dans les 5 premières cases : plafond 5
                 if steps > 5:
                     steps = 5
-                    reason = "plafonn\u00e9 \u00e0 5 (mont\u00e9e)"
+                    reason = "plafonné à 5 (montée)"
             else:
                 # entrerait à la 6e case ou plus : stoppe juste avant la montée
                 steps = min(steps, d - 1)
-                reason = "arr\u00eat avant la mont\u00e9e"
+                reason = "arrêt avant la montée"
             break
         return steps, reason
 
@@ -286,9 +290,7 @@ class Track:
         """
         if steps <= 0:
             return
-
         steps, _reason = self.effective_steps(runner.x, steps)
-
         target = min(runner.x + steps, self.length - 1)
         x = target
         # Reculer tant que la case est pleine, jusqu'à trouver une file libre
@@ -296,10 +298,8 @@ class Track:
             x -= 1
         if x == runner.x:
             return  # bloqué : toutes les cases devant sont pleines
-
         old_cell = self.get_cell(runner.x, runner.y)
         old_cell.remove_runner(runner.y)
-
         cell = self.get_cell(x, 0)
         if cell.is_empty(0):
             cell.set_runner(runner, 0)  # file A (droite) en priorité
@@ -314,10 +314,8 @@ class Track:
         all_runners = self.get_all_runners()
         # Trier par position x, puis par file (gauche avant droite pour même x)
         all_runners.sort(key=lambda r: (r[0], r[1]))
-
         groups = []
         current_group = []
-
         for x, y, runner in all_runners:
             if not current_group:
                 current_group.append(runner)
@@ -329,7 +327,6 @@ class Track:
                 else:
                     groups.append(current_group)
                     current_group = [runner]
-
         if current_group:
             groups.append(current_group)
         return groups
@@ -358,7 +355,7 @@ class Track:
 
         Règles officielles :
         - "Pack" = un ou plusieurs coureurs sans case vide entre eux.
-        - Si exactement UNE case vide (2 files vides) sépare deux packs,
+        - Si exactement UNE case vide (toutes les files vides) sépare deux packs,
           le pack arrière avance d'une case et FUSIONNE avec celui de devant.
         - On traite les packs de l'arrière vers l'avant ; un pack fusionné
           est IMMÉDIATEMENT revérifié (il peut aspirer plusieurs fois).
@@ -391,7 +388,7 @@ class Track:
             # Montée : le donneur (le coureur le plus en arrière du pack de
             # devant) ne peut pas donner l'aspiration depuis une montée.
             giver = min(packs[i + 1], key=lambda r: pos[r][0])
-            if self.terrain_at(pos[giver][0]) == Terrain.UPHILL:
+            if self.geography_at(pos[giver][0]) == CellGeographyType.UPHILL:
                 i += 1
                 continue
             # Du coureur le plus en avant au plus en arrière : chacun doit
@@ -403,7 +400,7 @@ class Track:
             # though he is in the same pack") : le pack peut se séparer.
             step = []
             for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
-                if self.terrain_at(pos[rid][0]) == Terrain.UPHILL:
+                if self.geography_at(pos[rid][0]) == CellGeographyType.UPHILL:
                     break  # reste sur place ; bloque ceux derrière lui
                 fx, flane = pos[rid]
                 step.append((runners[rid], fx, flane, fx + 1, flane))

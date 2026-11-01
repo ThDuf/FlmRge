@@ -309,11 +309,12 @@ class TestTrackLayout(unittest.TestCase):
 
     def test_sharp_turn_bends_heading_90(self):
         """Un virage serré courbe le cap de 90° (pièce officielle 90°)."""
-        from game.track import Track, TileType, compute_track_path
+        import math
+        from game.track import Track, make_tile, compute_track_path
         track = Track()
-        track.add_tile(TileType.START)
-        track.add_tile(TileType.SHARP_TURN, direction=1)
-        track.add_tile(TileType.FINISH)
+        track.add_tile(make_tile("sssssf"))
+        track.add_tile(make_tile("ff", turn=(math.pi / 2, 1)))
+        track.add_tile(make_tile("effff"))
         pts = compute_track_path(track, 1.0)
         # dernier segment (après le virage + ligne d'arrivée) : vertical
         (x0, y0), (x1, y1) = pts[-2], pts[-1]
@@ -321,12 +322,12 @@ class TestTrackLayout(unittest.TestCase):
         self.assertAlmostEqual(abs(y1 - y0), 5, places=5)
 
     def test_soft_turn_bends_heading_45(self):
-        from game.track import Track, TileType, compute_track_path
+        from game.track import Track, make_tile, compute_track_path
         import math
         track = Track()
-        track.add_tile(TileType.START)
-        track.add_tile(TileType.LIGHT_TURN, direction=1)
-        track.add_tile(TileType.FINISH)
+        track.add_tile(make_tile("sssssf"))
+        track.add_tile(make_tile("ff", turn=(math.pi / 4, 1)))
+        track.add_tile(make_tile("effff"))
         pts = compute_track_path(track, 1.0)
         # cap final = 45° : dernier segment (ligne d'arrivée) à 45°
         (x0, y0), (x1, y1) = pts[-2], pts[-1]
@@ -334,9 +335,9 @@ class TestTrackLayout(unittest.TestCase):
         self.assertAlmostEqual(abs(angle), math.radians(45), places=2)
 
     def test_track_has_turns(self):
-        from game.track import TileType
-        tiles = [t.type for t in self.ui.game.track.tiles]
-        self.assertIn(TileType.SHARP_TURN, tiles)
+        import math
+        turns = [t.turn for t in self.ui.game.track.tiles]
+        self.assertTrue(any(t and abs(t[0] - math.pi / 2) < 1e-9 for t in turns))
 
     def test_panels_and_button_stay_left_of_track(self):
         ui = self.ui
