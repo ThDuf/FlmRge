@@ -874,14 +874,34 @@ class FlammeRougeGame:
                              (px + nx * half, py + ny * half),
                              (px - nx * half, py - ny * half), 1)
 
-        # Départ (vert) à s=0 et arrivée (rouge) à la ligne = début de la tuile FINISH
-        finish_s = track.tiles[-1].x * cell if track.tiles else geo["total"]
-        for s, color in ((0, GREEN), (finish_s, RED)):
+        # Lignes de DÉPART (bande jaune) et d'ARRIVÉE (damier noir/blanc),
+        # bien visibles en travers de toute la route
+        line_specs = [(0.0, "start", "DÉPART"),
+                      (track.end_line_x() * cell, "end", "ARRIVÉE")]
+        for s, kind, label in line_specs:
             px, py, tx, ty = self._path_at(geo, s)
             nx, ny = -ty, tx
-            pygame.draw.line(self.screen, color,
-                             (px + nx * half, py + ny * half),
-                             (px - nx * half, py - ny * half), 5)
+            if kind == "start":
+                pygame.draw.line(self.screen, (250, 220, 60),
+                                 (px + nx * half, py + ny * half),
+                                 (px - nx * half, py - ny * half), 7)
+                pygame.draw.line(self.screen, (60, 50, 10),
+                                 (px + nx * half, py + ny * half),
+                                 (px - nx * half, py - ny * half), 1)
+            else:
+                n = 8  # damier
+                for k in range(n):
+                    t0 = -half + 2 * half * k / n
+                    t1 = -half + 2 * half * (k + 1) / n
+                    c = (25, 25, 25) if k % 2 == 0 else (245, 245, 245)
+                    pygame.draw.line(self.screen, c,
+                                     (px + nx * t0, py + ny * t0),
+                                     (px + nx * t1, py + ny * t1), 7)
+            # libellé à l'extérieur droit de la route
+            lx, ly = px + nx * (half + 22), py + ny * (half + 22)
+            lbl = self.label_font.render(label, True,
+                                         (250, 220, 60) if kind == "start" else WHITE)
+            self.screen.blit(lbl, (lx - lbl.get_width() // 2, ly - lbl.get_height() // 2))
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
