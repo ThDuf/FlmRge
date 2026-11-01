@@ -33,7 +33,7 @@ OFFICIAL_STAGES = {
 # ------------------------------------------------------------------
 TILE_CATALOG = {
     # lettre: (type, angle°, sens, cases) — cases officielles : virages 2, droites 6
-    'a': (TileType.START, 0, 1, 2),     'u': (TileType.FINISH, 0, 1, 5),
+    'a': (TileType.START, 0, 1, 4),     'u': (TileType.FINISH, 0, 1, 5),
     'b': (TileType.STRAIGHT, 0, 1, 6),  'c': (TileType.STRAIGHT, 0, 1, 6),
     'd': (TileType.STRAIGHT, 0, 1, 6),  'f': (TileType.STRAIGHT, 0, 1, 6),
     'l': (TileType.STRAIGHT, 0, 1, 6),  'm': (TileType.STRAIGHT, 0, 1, 6),
@@ -46,14 +46,20 @@ TILE_CATALOG = {
     'o': (TileType.SHARP_TURN, 90, -1, 2), 'p': (TileType.SHARP_TURN, 90, -1, 2),
 }
 
-ASCENT_LETTERS = set("DGKLHJRQN")  # majuscules = montée ; les autres = descente
+ASCENT_LETTERS = set("DGKLHJRQN")    # majuscules = montée (bord rouge)
+DESCENT_LETTERS = set("FIOPS")        # majuscules = descente (bord bleu)
+# (les majuscules restantes des codes officiels, A et U, sont le départ/arrivée)
 
 
 def tile_type_for_letter(ch: str) -> TileType:
     """Type de tuile pour une lettre de code de stage (a-u = normal, A-U = montagne)."""
     low = ch.lower()
     if ch.isupper() and low not in ('a', 'u'):
-        return TileType.UPHILL if ch in ASCENT_LETTERS else TileType.DOWNHILL
+        if ch in ASCENT_LETTERS:
+            return TileType.UPHILL
+        if ch in DESCENT_LETTERS:
+            return TileType.DOWNHILL
+        return TileType.DOWNHILL  # défaut documenté pour toute autre majuscule
     return TILE_CATALOG[low][0]
 
 

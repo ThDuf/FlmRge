@@ -59,7 +59,7 @@ class Cell:
 # Nombre de cases le long de la route selon le type de tuile (officiel) :
 # virages = 2 cases, droites = 6 cases, arrivée = 5 cases après la ligne.
 TILE_CELLS = {
-    TileType.START: 2,
+    TileType.START: 4,
     TileType.FINISH: 5,
     TileType.STRAIGHT: 6,
     TileType.UPHILL: 6,

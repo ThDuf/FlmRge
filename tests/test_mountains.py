@@ -136,10 +136,10 @@ class TestDescentMovement(unittest.TestCase):
         track = make_track([TileType.START, (TileType.DOWNHILL, 6),
                             TileType.STRAIGHT, (TileType.UPHILL, 2),
                             TileType.STRAIGHT, TileType.STRAIGHT])
-        # cases : 0-1 START, 2-7 DOWN, 8-13 STRAIGHT, 14-15 UP, 16-27 STRAIGHT
-        r = place(track, make_runner('r'), 2, 0)
-        track.move_runner(r, 2)   # min 5 -> cible 7, montée à 14 non touchée
-        self.assertEqual(r.x, 7)
+        down = first_cell_of(track, TileType.DOWNHILL)
+        r = place(track, make_runner('r'), down, 0)
+        track.move_runner(r, 2)   # min 5 -> cible down+5, montée loin
+        self.assertEqual(r.x, down + 5)
 
 
 class TestAscentSlipstream(unittest.TestCase):
@@ -180,15 +180,15 @@ class TestAscentSlipstream(unittest.TestCase):
         """Un coureur en montée au milieu d'un pack bloque ceux derrière lui."""
         track = make_track([TileType.START, TileType.STRAIGHT,
                             (TileType.UPHILL, 2), TileType.STRAIGHT, TileType.STRAIGHT])
-        # cases : 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL, 10-21 STRAIGHT
-        front = place(track, make_runner('front'), 10, 0)    # plaine, tête
-        frozen = place(track, make_runner('frozen'), 9, 0)   # MONTÉE
-        rear = place(track, make_runner('rear'), 8, 0)       # MONTÉE
-        place(track, make_runner('giver'), 12, 0)            # gap en 11
+        up = first_cell_of(track, TileType.UPHILL)  # 10-11
+        front = place(track, make_runner('front'), up + 2, 0)   # plaine, tête
+        frozen = place(track, make_runner('frozen'), up + 1, 0)  # MONTÉE
+        rear = place(track, make_runner('rear'), up, 0)          # MONTÉE
+        place(track, make_runner('giver'), up + 4, 0)            # gap en up+3
         run_aspiration(track)
-        self.assertEqual(front.x, 11)
-        self.assertEqual(frozen.x, 9)
-        self.assertEqual(rear.x, 8)
+        self.assertEqual(front.x, up + 3)
+        self.assertEqual(frozen.x, up + 1)
+        self.assertEqual(rear.x, up)
 
     def test_descent_slipstream_is_normal(self):
         """Exemple du rulebook : en descente, l'aspiration s'applique normalement."""
@@ -208,7 +208,7 @@ class TestCircuitStage(unittest.TestCase):
         self.assertIn(TileType.UPHILL, tiles)
         self.assertIn(TileType.DOWNHILL, tiles)
         self.assertIn(TileType.SHARP_TURN, tiles)
-        self.assertEqual(game.track.length, 93)  # circuit perso : 19 tuiles
+        self.assertEqual(game.track.length, 95)  # circuit perso : 19 tuiles
 
 
 if __name__ == '__main__':

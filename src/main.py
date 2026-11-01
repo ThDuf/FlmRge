@@ -499,7 +499,30 @@ class FlammeRougeGame:
         pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
         title = self.label_font.render(name, True, WHITE)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
-        pygame.draw.lines(self.screen, (200, 205, 215), False, screen_pts, 5)
+
+        # Tracé coloré par tuile : départ vert, arrivée rouge, montagnes teintées
+        from game.game import build_stage_track
+        track = build_stage_track(name)
+        s = 0.0
+        for tile in track.tiles:
+            if tile.type == TileType.START:
+                seg_color = (80, 200, 100)
+            elif tile.type == TileType.FINISH:
+                seg_color = (230, 70, 70)
+            elif tile.type == TileType.UPHILL:
+                seg_color = (240, 160, 160)
+            elif tile.type == TileType.DOWNHILL:
+                seg_color = (150, 180, 240)
+            else:
+                seg_color = (200, 205, 215)
+            steps = max(2, int(tile.length * 3))
+            seg = []
+            for k in range(steps + 1):
+                px, py, _tx, _ty = path_point_at(pts, s + tile.length * k / steps)
+                seg.append((ox + px * scale, oy + py * scale))
+            pygame.draw.lines(self.screen, seg_color, False, seg, 5)
+            s += tile.length
+
         # départ (vert) et arrivée (rouge)
         pygame.draw.circle(self.screen, GREEN, screen_pts[0], 5)
         pygame.draw.circle(self.screen, RED, screen_pts[-1], 5)
@@ -650,13 +673,14 @@ class FlammeRougeGame:
         pygame.draw.polygon(self.screen, LIGHT_GRAY, road)
         pygame.draw.polygon(self.screen, GRAY, road, width=2)
 
-        # Teinte des cases spéciales (virages, montées, descentes) + marqueurs
+        # Teinte des cases spéciales : départ (vert), arrivée (rouge),
+        # montées/descentes (les virages se voient à leur forme, sans teinte)
         for x_cell in range(track.length):
             tile_type = track.tiles[track.tile_index_at(x_cell)].type
-            if tile_type == TileType.LIGHT_TURN:
-                color = LIGHT_TURN_FILL
-            elif tile_type == TileType.SHARP_TURN:
-                color = SHARP_TURN_FILL
+            if tile_type == TileType.START:
+                color = (200, 240, 200)
+            elif tile_type == TileType.FINISH:
+                color = (250, 205, 205)
             elif tile_type == TileType.UPHILL:
                 color = UPHILL_FILL
             elif tile_type == TileType.DOWNHILL:
@@ -920,7 +944,7 @@ class FlammeRougeGame:
         legend_y = self.height - 26
         legend_x = self._left_w() + 20
         for swatch, label in ((GREEN, "D\u00e9part"), (RED, "Arriv\u00e9e"),
-                              (SHARP_TURN_FILL, "Virage"), (UPHILL_FILL, "Mont\u00e9e"),
+                              (UPHILL_FILL, "Mont\u00e9e"),
                               (DOWNHILL_FILL, "Descente"), (WHITE, "Files A|B")):
             pygame.draw.rect(self.screen, swatch, (legend_x, legend_y, 14, 14), border_radius=3)
             pygame.draw.rect(self.screen, BLACK, (legend_x, legend_y, 14, 14),

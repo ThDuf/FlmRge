@@ -62,11 +62,23 @@ class TestTileLetters(unittest.TestCase):
                 cum += d
             return 0.0
 
-        # tuile e = 5e tuile : START(2) + 3 droites(6) = 20 cases avant, arc s=20..22
-        self.assertAlmostEqual(math.degrees(heading_at(19.0)), 0, places=0)
-        self.assertAlmostEqual(math.degrees(heading_at(22.5)), -90, places=0)
+        # tuile e = 5e tuile : START(4) + 3 droites(6) = 22 cases avant, arc s=22..24
+        self.assertAlmostEqual(math.degrees(heading_at(21.0)), 0, places=0)
+        self.assertAlmostEqual(math.degrees(heading_at(24.5)), -90, places=0)
 
     def test_letter_mapping(self):
+        # cases officielles : départ 4, arrivée 5, droites 6, virages 2
+        from game.game import TILE_CATALOG
+        self.assertEqual(TILE_CATALOG['a'][3], 4)
+        self.assertEqual(TILE_CATALOG['u'][3], 5)
+        self.assertEqual(TILE_CATALOG['b'][3], 6)
+        self.assertEqual(TILE_CATALOG['e'][3], 2)
+        # montée ET descente explicites
+        from game.game import ASCENT_LETTERS, DESCENT_LETTERS
+        self.assertIn('K', ASCENT_LETTERS)
+        self.assertIn('O', DESCENT_LETTERS)
+        self.assertEqual(tile_type_for_letter('K'), TileType.UPHILL)
+        self.assertEqual(tile_type_for_letter('O'), TileType.DOWNHILL)
         self.assertEqual(tile_type_for_letter('a'), TileType.START)
         self.assertEqual(tile_type_for_letter('u'), TileType.FINISH)
         for c in "bcdf lmn".replace(" ", ""):
@@ -90,7 +102,7 @@ class TestOfficialStages(unittest.TestCase):
         for name, code in OFFICIAL_STAGES.items():
             track = build_track_from_code(code)
             self.assertEqual(len(track.tiles), 21, name)
-            self.assertEqual(track.length, 73, name)
+            self.assertEqual(track.length, 75, name)
             self.assertEqual(track.tiles[0].type, TileType.START, name)
             self.assertEqual(track.tiles[-1].type, TileType.FINISH, name)
 
@@ -110,7 +122,7 @@ class TestOfficialStages(unittest.TestCase):
 
     def test_game_builds_and_plays_on_official_stage(self):
         game = Game(stage="La Haut Montagne", player_count=2)
-        self.assertEqual(game.track.length, 73)
+        self.assertEqual(game.track.length, 75)
         for player in game.players:
             for runner in player.get_runners():
                 self.assertTrue(game.play_card(player, runner, runner.hand[0]))
@@ -119,10 +131,10 @@ class TestOfficialStages(unittest.TestCase):
 
     def test_unknown_stage_falls_back_to_avenue(self):
         game = Game(stage="nimporte-quoi", player_count=2)
-        self.assertEqual(game.track.length, 73)
+        self.assertEqual(game.track.length, 75)
 
     def test_avenue_corso_paseo_shape_is_continuous_flat_course(self):
-        """Corso Paseo : 73 cases, plat (aucune montagne), tracé continu
+        """Corso Paseo : 75 cases, plat (aucune montagne), tracé continu
         (le suit des tuiles bout à bout, virages à leur place)."""
         from game.track import compute_track_path
         track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
@@ -159,7 +171,7 @@ class TestStageMenu(unittest.TestCase):
         ui._select_stage("La Haut Montagne")
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "La Haut Montagne")
-        self.assertEqual(ui.game.track.length, 73)
+        self.assertEqual(ui.game.track.length, 75)
         types = [t.type for t in ui.game.track.tiles]
         self.assertIn(TileType.UPHILL, types)
 
@@ -186,7 +198,7 @@ class TestStageMenu(unittest.TestCase):
         marks, total = ui._preview_tile_marks("Avenue Corso Paseo")
         self.assertEqual(len(marks), 21)
         self.assertEqual([m[1] for m in marks], list("abcdefghijklmnopqrstu"))
-        self.assertEqual(total, 73)  # 73 cases
+        self.assertEqual(total, 75)  # 75 cases
         marks_c, total_c = ui._preview_tile_marks("circuit")
         self.assertEqual(len(marks_c), 19)
         self.assertTrue(all(m[1] is None for m in marks_c))
@@ -216,7 +228,7 @@ class TestStageMenu(unittest.TestCase):
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "Avenue Corso Paseo")
-        self.assertEqual(ui.game.track.length, 73)
+        self.assertEqual(ui.game.track.length, 75)
 
 
 if __name__ == '__main__':
