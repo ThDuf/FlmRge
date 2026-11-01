@@ -26,8 +26,8 @@ OFFICIAL_STAGES = {
 # - face MINUSCULE = côté plat : a=départ, u=arrivée, droites b c d f l m n,
 #   virages légers 45° h k q r s t, virages serrés 90° e g i j o p
 #   (géométrie officielle : 7 droites, 6 virages 45°, 6 virages 90°)
-# - sens du virage : adaptation numérique documentée (les tuiles physiques sont
-#   retournables, la carte d'étape imprimée fixe le sens ; on alterne G/D)
+# - sens du virage : relevés sur la carte imprimée Avenue Corso Paseo
+#   (e=G g=G h=G i=G j=D k=D o=D p=D q=G r=D s=D t=G ; G=+1, D=-1)
 # - face MAJUSCULE = face montagne : montée si lettre dans ASCENT_LETTERS,
 #   sinon descente (répartition non publiée en texte -> documentée ici)
 # ------------------------------------------------------------------
@@ -37,12 +37,12 @@ TILE_CATALOG = {
     'd': (TileType.STRAIGHT, 0, 1),    'f': (TileType.STRAIGHT, 0, 1),
     'l': (TileType.STRAIGHT, 0, 1),    'm': (TileType.STRAIGHT, 0, 1),
     'n': (TileType.STRAIGHT, 0, 1),
-    'h': (TileType.LIGHT_TURN, 45, 1), 'k': (TileType.LIGHT_TURN, 45, -1),
-    'q': (TileType.LIGHT_TURN, 45, 1), 'r': (TileType.LIGHT_TURN, 45, -1),
-    's': (TileType.LIGHT_TURN, 45, 1), 't': (TileType.LIGHT_TURN, 45, -1),
-    'e': (TileType.SHARP_TURN, 90, 1), 'g': (TileType.SHARP_TURN, 90, -1),
-    'i': (TileType.SHARP_TURN, 90, 1), 'j': (TileType.SHARP_TURN, 90, -1),
-    'o': (TileType.SHARP_TURN, 90, 1), 'p': (TileType.SHARP_TURN, 90, -1),
+    'h': (TileType.LIGHT_TURN, 45, 1),  'k': (TileType.LIGHT_TURN, 45, -1),
+    'q': (TileType.LIGHT_TURN, 45, 1),  'r': (TileType.LIGHT_TURN, 45, -1),
+    's': (TileType.LIGHT_TURN, 45, -1), 't': (TileType.LIGHT_TURN, 45, 1),
+    'e': (TileType.SHARP_TURN, 90, 1),  'g': (TileType.SHARP_TURN, 90, 1),
+    'i': (TileType.SHARP_TURN, 90, 1),  'j': (TileType.SHARP_TURN, 90, -1),
+    'o': (TileType.SHARP_TURN, 90, -1), 'p': (TileType.SHARP_TURN, 90, -1),
 }
 
 ASCENT_LETTERS = set("DGKLHJRQN")  # majuscules = montée ; les autres = descente

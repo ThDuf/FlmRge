@@ -36,6 +36,15 @@ class TestTileLetters(unittest.TestCase):
         self.assertEqual(angles[TileType.SHARP_TURN], 90)
         self.assertEqual(angles[TileType.STRAIGHT], 0)
 
+    def test_turn_directions_match_corso_paseo_card(self):
+        """Sens des virages relevés sur la carte imprimée Avenue Corso Paseo
+        (G=+1, D=-1) : e=G g=G h=G i=G j=D k=D o=D p=D q=G r=D s=D t=G."""
+        from game.game import TILE_CATALOG
+        expected = {'e': 1, 'g': 1, 'h': 1, 'i': 1, 'j': -1, 'k': -1,
+                    'o': -1, 'p': -1, 'q': 1, 'r': -1, 's': -1, 't': 1}
+        for letter, direction in expected.items():
+            self.assertEqual(TILE_CATALOG[letter][2], direction, letter)
+
     def test_letter_mapping(self):
         self.assertEqual(tile_type_for_letter('a'), TileType.START)
         self.assertEqual(tile_type_for_letter('u'), TileType.FINISH)
