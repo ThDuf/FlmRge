@@ -19,6 +19,7 @@ OFFICIAL_STAGES = {
     "Ronde van Wevelgem": "abcmgfteqon L P jk I D H r S u",
     "La Haut Montagne": "abcfimet K G L H J sdop R Q N U",  # très montagneuse
     "La Classicissima": "A eb Q R N H P cgik D F s L ojmtu",
+    "Col du Ballon": "AnLHgceqtrMBoipjDFkSu",               # 6e carte de la boîte de base
 }
 
 # ------------------------------------------------------------------

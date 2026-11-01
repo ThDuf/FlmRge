@@ -1,8 +1,9 @@
 """Tests du registre d'étapes officielles et du menu de sélection.
 
-Étapes officielles du rulebook (codes en lettres de tuiles a-u / A-U) :
+Étapes officielles de la boîte de base (codes en lettres de tuiles a-u / A-U) :
 - Avenue Corso Paseo : abcdefghijklmnopqrstu (plate)
-- Firenze - Milano, Ronde van Wevelgem, La Haut Montagne, La Classicissima
+- Firenze - Milano, Ronde van Wevelgem, La Haut Montagne, La Classicissima,
+  Col du Ballon (6e carte de la boîte, code lu sur la carte physique)
 Correspondance tuiles (BGG/rulebook) : a=départ, u=arrivée, droites b c d f l m n,
 virages légers h k q r s t, virages serrés e g i j o p ; majuscule = face montagne
 (retournée : virage en miroir, géographie case par case).
@@ -156,6 +157,14 @@ class TestOfficialStages(unittest.TestCase):
         self.assertNotIn(CellGeographyType.UPHILL, geographies)
         self.assertNotIn(CellGeographyType.DOWNHILL, geographies)
         self.assertTrue(all(g == CellGeographyType.FLAT for g in geographies))
+
+    def test_col_du_ballon_has_mountains(self):
+        track = build_track_from_code(OFFICIAL_STAGES["Col du Ballon"])
+        self.assertEqual(len(track.tiles), 21)
+        self.assertEqual(track.length, 78)
+        geographies = [c.geography for t in track.tiles for c in t.cells]
+        self.assertGreaterEqual(geographies.count(CellGeographyType.UPHILL), 4)
+        self.assertGreaterEqual(geographies.count(CellGeographyType.DOWNHILL), 2)
 
     def test_la_haut_montagne_has_mountains(self):
         track = build_track_from_code(OFFICIAL_STAGES["La Haut Montagne"])

@@ -164,7 +164,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 ## 🗺️ Étapes disponibles
 
-Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours), **avec prévisualisation du tracé** de l'étape survolée à droite (grandes fenêtres). Les **5 étapes officielles du rulebook** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
+Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours), **avec prévisualisation du tracé** de l'étape survolée à droite (grandes fenêtres). Les **6 étapes officielles de la boîte de base** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
 
 | Étape | Code | Profil |
 |-------|------|--------|
@@ -173,6 +173,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 | Ronde van Wevelgem | `abcmgfteqon L P jk I D H r S u` | vallonné |
 | La Haut Montagne | `abcfimet K G L H J sdop R Q N U` | très montagneuse |
 | La Classicissima | `A eb Q R N H P cgik D F s L ojmtu` | vallonné |
+| Col du Ballon | `AnLHgceqtrMBoipjDFkSu` | montagne (Vosges) |
 
 > **Modèle de tuile** : chaque tuile = `(virage, largeur, cases)` dans `src/game/game.py` (`TILE_DEFS`, `MOUNTAIN_DEFS` pour les faces majuscules). `virage` = (angle en radians, sens +1/-1), `None` = droite ; `largeur` = nombre de files (2 en base) ; `cases` = alphabet `CELL_CHARS` de `src/game/track.py` (initiales anglaises : `f`=flat, `u`=uphill, `d`=downhill, `s`=ligne de départ, `e`=ligne d'arrivée) — ex. `a` = `"sssssf"` (6 cases, ligne sur les 5 premières), `B` = `"ddddff"` (descente sur les 4 premières cases seulement). Une tuile majuscule est la tuile **retournée** : virage en miroir (ex. `H` tourne à droite, `h` à gauche) et géographie case par case (`CellGeographyType` : FLAT/UPHILL/DOWNHILL) ; la ligne de course vit sur la case (`CellRunType` : NONE/START/END). Longueurs officielles : départ 6, arrivée 6 (`u` = `"feeeee"`, ligne sur les 5 dernières), droites 6, virages 2 → étapes officielles = 78 cases. Angles des virages officiels : 45° (léger) / 90° (serré). Dans la prévisualisation du menu (panneau de droite), le tracé est coloré **case par case** : départ jaune clair, arrivée jaune vif (deux jaunes différents), montées en rouge vif, descentes en bleu vif, avec la lettre de chaque tuile et un séparateur entre tuiles. Le panneau affiche aussi le **profil d'altitude** de l'étape (montée +1/case, descente -1/case) et, si tu déposes une photo de la vraie carte dans `assets/stages/<nom de l'étape>.jpg`, l'**image de la carte du jeu** à côté de la preview.
 
@@ -192,7 +193,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 - [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
 - [ ] **Ajout des étapes officielles** (Avenue Corso Paseo, etc.)
-- [x] **Choix de l'étape** : menu au lancement parmi les 5 étapes officielles du rulebook (`tests/test_stages.py`)
+- [x] **Choix de l'étape** : menu au lancement parmi les 6 étapes officielles de la boîte de base (`tests/test_stages.py`)
 - [ ] **Éditeur de piste** : créer son propre terrain à partir des tuiles (droites, virages, montées, descentes)
 - [ ] **Extensions** : possibilité d'ajouter des extensions (ex. Peloton : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement)
 - [ ] **Système de sauvegarde/reprise**
