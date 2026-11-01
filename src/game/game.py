@@ -4,7 +4,7 @@ from enum import Enum, auto
 from .player import Player
 from .runner import Runner, RunnerType
 from .card import Card, CardType
-from .track import Track, TileType
+from .track import Track, TileType, TILE_CELLS
 
 
 # ------------------------------------------------------------------
@@ -52,22 +52,27 @@ DESCENT_LETTERS = set("FIOPS")        # majuscules = descente (bord bleu)
 
 
 def tile_info_for_letter(ch: str):
-    """(type, direction, cases, terrain) pour une lettre de code de stage.
+    """(type, direction, cases, terrains) pour une lettre de code de stage.
 
-    a-u = face plate (terrain FLAT) ; A-U = face montagne de la même tuile :
-    même forme, mais chaque case a un relief (UPHILL si lettre dans
-    ASCENT_LETTERS, DOWNHILL si dans DESCENT_LETTERS).
+    `terrains` = relief CASE PAR CASE de la tuile (liste de `cases` Terrain).
+    - a-u = face plate : toutes les cases FLAT.
+    - A-U = face montagne (tuile retournée) : même forme, mais
+      * sens du virage INVERSÉ (miroir : H tourne à droite si h va à gauche),
+      * chaque case a un relief : UPHILL si lettre dans ASCENT_LETTERS,
+        DOWNHILL si dans DESCENT_LETTERS (A/U = départ/arrivée, toujours FLAT).
     """
     from .track import Terrain
     low = ch.lower()
     ttype, _angle, direction, cells = TILE_CATALOG[low]
     if ch.isupper() and low not in ('a', 'u'):
         if ch in ASCENT_LETTERS:
-            return ttype, direction, cells, Terrain.UPHILL
-        if ch in DESCENT_LETTERS:
-            return ttype, direction, cells, Terrain.DOWNHILL
-        return ttype, direction, cells, Terrain.DOWNHILL  # défaut documenté
-    return ttype, direction, cells, Terrain.FLAT
+            terrain = Terrain.UPHILL
+        elif ch in DESCENT_LETTERS:
+            terrain = Terrain.DOWNHILL
+        else:
+            terrain = Terrain.DOWNHILL  # défaut documenté
+        return ttype, -direction, cells, [terrain] * cells
+    return ttype, direction, cells, [Terrain.FLAT] * cells
 
 
 def tile_type_for_letter(ch: str) -> TileType:
@@ -85,14 +90,19 @@ def tile_cells_for_letter(ch: str) -> int:
     return tile_info_for_letter(ch)[2]
 
 
+def tile_terrains_for_letter(ch: str) -> list:
+    """Relief case par case de la tuile pour une lettre de code de stage."""
+    return tile_info_for_letter(ch)[3]
+
+
 def build_track_from_code(code: str) -> Track:
     """Construit une piste en mettant les tuiles bout à bout, dans l'ordre
     du code de stage (lettres a-u / A-U, espaces ignorés)."""
     track = Track()
     for ch in code:
         if ch.strip():
-            ttype, direction, cells, terrain = tile_info_for_letter(ch)
-            track.add_tile(ttype, direction=direction, cells=cells, terrain=terrain)
+            ttype, direction, cells, terrains = tile_info_for_letter(ch)
+            track.add_tile(ttype, direction=direction, cells=cells, terrains=terrains)
     return track
 
 
@@ -108,7 +118,8 @@ def build_stage_track(name: str) -> Track:
         track = Track()
 
         def add(t, d=1, terrain=Terrain.FLAT):
-            track.add_tile(t, direction=d, terrain=terrain)
+            n = TILE_CELLS[t]
+            track.add_tile(t, direction=d, terrains=[terrain] * n)
 
         add(TileType.START)
         for _ in range(2):
@@ -148,8 +159,9 @@ def available_stages() -> List[tuple]:
     for name in ["circuit", *OFFICIAL_STAGES]:
         track = build_stage_track(name)
         from .track import Terrain
-        n_up = sum(1 for t in track.tiles if t.terrain == Terrain.UPHILL)
-        n_down = sum(1 for t in track.tiles if t.terrain == Terrain.DOWNHILL)
+        cells = [c for t in track.tiles for c in t.cells]
+        n_up = sum(1 for c in cells if c.terrain == Terrain.UPHILL)
+        n_down = sum(1 for c in cells if c.terrain == Terrain.DOWNHILL)
         n_sharp = sum(1 for t in track.tiles if t.type == TileType.SHARP_TURN)
         parts = [f"{track.length} cases"]
         if n_sharp:

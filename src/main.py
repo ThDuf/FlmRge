@@ -500,30 +500,30 @@ class FlammeRougeGame:
         title = self.label_font.render(name, True, WHITE)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
 
-        # Tracé coloré par tuile : départ vert, arrivée rouge,
-        # montées ROUGE vif, descentes BLEU vif
+        # Tracé coloré CASE PAR CASE : départ vert, arrivée rouge,
+        # montée ROUGE vif, descente BLEU vif, plat gris clair
         from game.game import build_stage_track
         from game.track import Terrain
         track = build_stage_track(name)
-        s = 0.0
         for tile in track.tiles:
-            if tile.type == TileType.START:
-                seg_color = (80, 200, 100)
-            elif tile.type == TileType.FINISH:
-                seg_color = (230, 70, 70)
-            elif tile.terrain == Terrain.UPHILL:
-                seg_color = (220, 50, 50)
-            elif tile.terrain == Terrain.DOWNHILL:
-                seg_color = (50, 90, 220)
-            else:
-                seg_color = (200, 205, 215)
-            steps = max(2, int(tile.length * 3))
-            seg = []
-            for k in range(steps + 1):
-                px, py, _tx, _ty = path_point_at(pts, s + tile.length * k / steps)
-                seg.append((ox + px * scale, oy + py * scale))
-            pygame.draw.lines(self.screen, seg_color, False, seg, 5)
-            s += tile.length
+            for cell in tile.cells:
+                s0 = float(cell.x)
+                if tile.type == TileType.START:
+                    seg_color = (80, 200, 100)
+                elif tile.type == TileType.FINISH:
+                    seg_color = (230, 70, 70)
+                elif cell.terrain == Terrain.UPHILL:
+                    seg_color = (220, 50, 50)
+                elif cell.terrain == Terrain.DOWNHILL:
+                    seg_color = (50, 90, 220)
+                else:
+                    seg_color = (200, 205, 215)
+                steps = 3
+                seg = []
+                for k in range(steps + 1):
+                    px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
+                    seg.append((ox + px * scale, oy + py * scale))
+                pygame.draw.lines(self.screen, seg_color, False, seg, 5)
 
         # départ (vert) et arrivée (rouge)
         pygame.draw.circle(self.screen, GREEN, screen_pts[0], 5)

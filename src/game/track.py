@@ -79,22 +79,25 @@ TILE_CELLS = {
 
 @dataclass
 class Tile:
-    """Représente une tuile de piste (2 files A/B par case, `length` cases)."""
+    """Représente une tuile de piste (2 files A/B par case, `length` cases).
+
+    Le relief n'est PAS une propriété de la tuile : il est porté case par
+    case (`terrains[i]` = relief de la i-ème case, FLAT par défaut).
+    """
     type: TileType
     x: int = 0  # Position X (en cases) du début de la tuile
     direction: int = 1  # Sens du virage (+1/-1) ; purement visuel
     length: int = 2  # nombre de cases le long de la route
-    terrain: 'Terrain' = None  # relief uniforme de la tuile (majuscule)
+    terrains: Optional[List['Terrain']] = None  # relief case par case
     cells: List[Cell] = field(default_factory=list)
 
     def __post_init__(self):
-        if self.terrain is None:
-            self.terrain = Terrain.FLAT
         if not self.cells:
             self.cells = [Cell() for _ in range(self.length)]
         for i, cell in enumerate(self.cells):
             cell.x = self.x + i
-            cell.terrain = self.terrain
+            if self.terrains is not None and i < len(self.terrains):
+                cell.terrain = self.terrains[i] or Terrain.FLAT
 
 
 # Angles des virages (pièces officielles : 45° = léger, 90° = serré)
@@ -168,10 +171,11 @@ class Track:
     _starts: List[int] = field(default_factory=list)  # début (en cases) de chaque tuile
 
     def add_tile(self, tile_type: TileType, direction: int = 1, cells: int = None,
-                 terrain: 'Terrain' = None) -> None:
+                 terrains: List['Terrain'] = None) -> None:
+        """Ajoute une tuile. `terrains` = relief case par case (FLAT sinon)."""
         length = cells if cells is not None else TILE_CELLS.get(tile_type, 2)
         tile = Tile(tile_type, x=self.length, direction=direction, length=length,
-                    terrain=terrain)
+                    terrains=terrains)
         self.tiles.append(tile)
         self._starts.append(tile.x)
         self.length += length

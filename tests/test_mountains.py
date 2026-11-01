@@ -14,7 +14,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from game.track import Track, TileType, Terrain  # noqa: E402
+from game.track import Track, TileType, Terrain, TILE_CELLS  # noqa: E402
 from game.runner import Runner, RunnerType  # noqa: E402
 from game.game import Game  # noqa: E402
 
@@ -29,7 +29,8 @@ def make_track(spec):
             terrain = item[2] if len(item) > 2 else Terrain.FLAT
         else:
             t, cells, terrain = item, None, Terrain.FLAT
-        track.add_tile(t, cells=cells, terrain=terrain)
+        n = cells if cells is not None else TILE_CELLS[t]
+        track.add_tile(t, cells=cells, terrains=[terrain] * n)
     return track
 
 
@@ -210,7 +211,7 @@ class TestCircuitStage(unittest.TestCase):
     def test_circuit_contains_mountains(self):
         game = Game(stage="circuit", player_count=2)
         tiles = [t.type for t in game.track.tiles]
-        terrains = [t.terrain for t in game.track.tiles]
+        terrains = [c.terrain for t in game.track.tiles for c in t.cells]
         self.assertIn(Terrain.UPHILL, terrains)
         self.assertIn(Terrain.DOWNHILL, terrains)
         self.assertIn(TileType.SHARP_TURN, tiles)
