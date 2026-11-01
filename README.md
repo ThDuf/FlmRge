@@ -60,7 +60,7 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 | **D** | Afficher/Masquer les cartes restantes |
 | **R** | Recommencer la partie |
 
-**Disposition de l'écran** : un **bandeau de titre** (fanion rouge, FLAMME ROUGE, étape et tour en cours) et un **bandeau de phase** coloré avec description (bleu = énergie, vert = mouvement, orange = aspiration, rouge = arrivée) surplombent la fenêtre. En dessous : les panneaux de cartes des joueurs empilés en colonne à gauche ; tout l'écran à droite affiche le **circuit complet** — un chemin continu « organique » de rangées droites reliées par de **vrais virages à 180°** (demi-cercles), les cases étant contiguës le long du chemin (aucun saut). Une légende en bas d'écran explique les couleurs : **vert = départ, rouge = arrivée, orange = virage, rouge clair + triangle rouge = montée, bleu clair + triangle bleu = descente**, ligne blanche = séparation des files A (droite) et B (gauche). La fenêtre est **redimensionnable** (minimum 900x600), la taille des cases s'adapte.
+**Disposition de l'écran** : un **bandeau de titre** (fanion rouge, FLAMME ROUGE, étape et tour en cours) et un **bandeau de phase** coloré avec description (bleu = énergie, vert = mouvement, orange = aspiration, rouge = arrivée) surplombent la fenêtre. En dessous : les panneaux de cartes des joueurs empilés en colonne à gauche ; tout l'écran à droite affiche le **circuit complet**, tracé en suivant la séquence réelle des tuiles (chaque tuile = 2 cases, virages 45°/90° selon leur sens) et automatiquement mis à l'échelle pour tenir dans la zone. Une légende en bas d'écran explique les couleurs : **vert = départ, rouge = arrivée, orange = virage, rouge clair + triangle rouge = montée, bleu clair + triangle bleu = descente**, ligne blanche = séparation des files A (droite) et B (gauche). La fenêtre est **redimensionnable** (minimum 900x600).
 
 ---
 
@@ -164,7 +164,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 ## 🗺️ Étapes disponibles
 
-Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours). Les **5 étapes officielles du rulebook** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
+Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours), **avec prévisualisation du tracé** de l'étape survolée à droite (grandes fenêtres). Les **5 étapes officielles du rulebook** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
 
 | Étape | Code | Profil |
 |-------|------|--------|
@@ -173,7 +173,9 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 | Ronde van Wevelgem | `abcmgfteqon L P jk I D H r S u` | vallonné |
 | La Haut Montagne | `abcfimet K G L H J sdop R Q N U` | très montagneuse |
 | La Classicissima | `A eb Q R N H P cgik D F s L ojmtu` | vallonné |
-| Circuit de montagne | perso | 60 cases, montée + descente, virages 180° |
+| Circuit de montagne | perso | 66 cases, boucle à 4 virages 90°, montée + descente |
+
+> Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens gauche/droite de chaque virage ne sont pas publiés en texte (les tuiles physiques sont retournables, la carte d'étape fixe le sens) ; les adaptations numériques sont documentées dans `src/game/game.py` (`ASCENT_LETTERS`, `TURN_DIRECTION_LETTER`). Angles des virages officiels : 45° (léger) / 90° (serré).
 
 > Note : la répartition exacte lettre→montée/descente des faces majuscules n'est pas publiée en texte ; l'adaptation numérique est documentée dans `src/game/game.py` (`ASCENT_LETTERS`).
 

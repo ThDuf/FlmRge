@@ -267,7 +267,7 @@ class TestCircuitStage(unittest.TestCase):
         self.assertIn(TileType.UPHILL, tiles)
         self.assertIn(TileType.DOWNHILL, tiles)
         self.assertIn(TileType.SHARP_TURN, tiles)
-        self.assertEqual(game.track.length, 60)
+        self.assertEqual(game.track.length, 66)  # circuit perso : 33 tuiles
 
 
 if __name__ == '__main__':

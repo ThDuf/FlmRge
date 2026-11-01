@@ -37,6 +37,12 @@ TILE_LETTER_LOWER = {
 # majuscules de ASCENT_LETTERS sont des montées, les autres des descentes.
 ASCENT_LETTERS = set("DGKLHJRQN")
 
+# Sens des virages par lettre (adaptation numérique documentée : les tuiles
+# physiques sont retournables, la carte d'étape fixe le sens ; on alterne
+# gauche/droite dans l'ordre alphabétique des tuiles de virage).
+_TURN_LETTERS = "egijop" + "hkqrst"  # virages serrés puis légers
+TURN_DIRECTION_LETTER = {c: (1 if i % 2 == 0 else -1) for i, c in enumerate(_TURN_LETTERS)}
+
 
 def tile_type_for_letter(ch: str) -> TileType:
     """Type de tuile pour une lettre de code de stage (a-u = normal, A-U = montagne)."""
@@ -50,12 +56,22 @@ def tile_type_for_letter(ch: str) -> TileType:
     return TILE_LETTER_LOWER[low]
 
 
+def tile_direction_for_letter(ch: str) -> int:
+    """Sens du virage (+1/-1) pour une lettre ; une majuscule = tuile retournée
+    (le sens est inversé). Les tuiles non-virage donnent +1 (sans effet)."""
+    low = ch.lower()
+    if low in TURN_DIRECTION_LETTER:
+        d = TURN_DIRECTION_LETTER[low]
+        return -d if ch.isupper() else d
+    return 1
+
+
 def build_track_from_code(code: str) -> Track:
     """Construit une piste à partir d'un code de stage en lettres (a-u, A-U)."""
     track = Track()
     for ch in code:
         if ch.strip():
-            track.add_tile(tile_type_for_letter(ch))
+            track.add_tile(tile_type_for_letter(ch), direction=tile_direction_for_letter(ch))
     return track
 
 
@@ -64,28 +80,33 @@ def build_stage_track(name: str) -> Track:
     if name in OFFICIAL_STAGES:
         return build_track_from_code(OFFICIAL_STAGES[name])
     if name == "circuit":
-        # Circuit perso : rangées de 16 cases (14 droites + virage 180°),
-        # avec montée et descente. 30 tuiles = 60 cases.
+        # Circuit perso en boucle (4 virages serrés de 90° dans le même sens) :
+        # montée à l'aller, descente au retour. 33 tuiles = 66 cases.
         track = Track()
-        track.add_tile(TileType.START)
-        for _ in range(4):
-            track.add_tile(TileType.STRAIGHT)
+
+        def add(t, d=1):
+            track.add_tile(t, direction=d)
+
+        add(TileType.START)
+        for _ in range(6):
+            add(TileType.STRAIGHT)
         for _ in range(2):
-            track.add_tile(TileType.UPHILL)
-        track.add_tile(TileType.SHARP_TURN)
-        for _ in range(2):
-            track.add_tile(TileType.STRAIGHT)
-        for _ in range(3):
-            track.add_tile(TileType.DOWNHILL)
-        for _ in range(2):
-            track.add_tile(TileType.STRAIGHT)
-        track.add_tile(TileType.SHARP_TURN)
-        for _ in range(7):
-            track.add_tile(TileType.STRAIGHT)
-        track.add_tile(TileType.SHARP_TURN)
+            add(TileType.UPHILL)
+        add(TileType.SHARP_TURN, +1)
         for _ in range(5):
-            track.add_tile(TileType.STRAIGHT)
-        track.add_tile(TileType.FINISH)
+            add(TileType.STRAIGHT)
+        add(TileType.SHARP_TURN, +1)
+        for _ in range(4):
+            add(TileType.STRAIGHT)
+        for _ in range(2):
+            add(TileType.DOWNHILL)
+        add(TileType.SHARP_TURN, +1)
+        for _ in range(5):
+            add(TileType.STRAIGHT)
+        add(TileType.SHARP_TURN, +1)
+        for _ in range(3):
+            add(TileType.STRAIGHT)
+        add(TileType.FINISH)
         return track
     if name == "test":
         track = Track()

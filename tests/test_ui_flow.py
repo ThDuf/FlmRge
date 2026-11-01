@@ -307,13 +307,31 @@ class TestTrackLayout(unittest.TestCase):
             self.assertLessEqual(dist, cell * 1.25,
                                  f"saut entre les cases {x} et {x + 1} ({dist:.0f}px)")
 
-    def test_real_turns_reverse_direction(self):
-        """Les virages à 180° inversent réellement le sens de marche."""
-        ui = self.ui
-        _, _, tx0, _ = ui._cell_anchor(10)   # rangée 0 : vers la droite
-        self.assertGreater(tx0, 0.7)
-        _, _, tx1, _ = ui._cell_anchor(20)   # rangée 1 : vers la gauche
-        self.assertLess(tx1, -0.7)
+    def test_sharp_turn_bends_heading_90(self):
+        """Un virage serré courbe le cap de 90° (pièce officielle 90°)."""
+        from game.track import Track, TileType, compute_track_path
+        track = Track()
+        track.add_tile(TileType.START)
+        track.add_tile(TileType.SHARP_TURN, direction=1)
+        track.add_tile(TileType.FINISH)
+        pts = compute_track_path(track, 1.0)
+        # dernier segment (après le virage + ligne d'arrivée) : vertical
+        (x0, y0), (x1, y1) = pts[-2], pts[-1]
+        self.assertAlmostEqual(x1 - x0, 0, places=5)
+        self.assertAlmostEqual(abs(y1 - y0), 2, places=5)
+
+    def test_soft_turn_bends_heading_45(self):
+        from game.track import Track, TileType, compute_track_path
+        import math
+        track = Track()
+        track.add_tile(TileType.START)
+        track.add_tile(TileType.LIGHT_TURN, direction=1)
+        track.add_tile(TileType.FINISH)
+        pts = compute_track_path(track, 1.0)
+        # cap final = 45° : dernier segment (ligne d'arrivée) à 45°
+        (x0, y0), (x1, y1) = pts[-2], pts[-1]
+        angle = math.atan2(y1 - y0, x1 - x0)
+        self.assertAlmostEqual(abs(angle), math.radians(45), places=2)
 
     def test_track_has_turns(self):
         from game.track import TileType

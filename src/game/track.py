@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from enum import Enum, auto
+import math
 from .runner import Runner
 
 
@@ -60,10 +61,51 @@ class Tile:
     type: TileType
     cells: List[Cell] = field(default_factory=lambda: [Cell(), Cell()])
     x: int = 0  # Position X de la tuile
+    direction: int = 1  # Sens du virage (+1/-1) ; purement visuel (pas de règle)
 
     def __post_init__(self):
         for i, cell in enumerate(self.cells):
             cell.x = self.x * 2 + i
+
+
+# Angles des virages (pièces officielles : 45° = léger, 90° = serré)
+TURN_ANGLE = {
+    TileType.LIGHT_TURN: math.radians(45),
+    TileType.SHARP_TURN: math.radians(90),
+}
+
+
+def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, float]]:
+    """Polyligne du circuit selon la séquence réelle des tuiles.
+
+    Chaque tuile avance de 2*unit le long du chemin ; une tuile de virage
+    courbe le cap de son angle (45° léger, 90° serré) dans sa direction.
+    Retourne la liste des points (en unités de cases), cap initial vers +x.
+    """
+    pts = [(0.0, 0.0)]
+    x, y, heading = 0.0, 0.0, 0.0
+    for tile in track.tiles:
+        if tile.type in TURN_ANGLE:
+            theta = TURN_ANGLE[tile.type] * getattr(tile, "direction", 1)
+            arc = 2 * unit
+            radius = arc / abs(theta)
+            nx, ny = -math.sin(heading), math.cos(heading)  # normale au cap
+            s = 1 if theta > 0 else -1
+            cx = x + s * radius * nx
+            cy = y + s * radius * ny
+            vx, vy = -s * radius * nx, -s * radius * ny  # vecteur centre -> point
+            steps = max(4, int(abs(theta) / (math.pi / 16)))
+            for i in range(1, steps + 1):
+                phi = theta * i / steps
+                c, sn = math.cos(phi), math.sin(phi)
+                pts.append((cx + vx * c - vy * sn, cy + vx * sn + vy * c))
+            x, y = pts[-1]
+            heading += theta
+        else:
+            x += 2 * unit * math.cos(heading)
+            y += 2 * unit * math.sin(heading)
+            pts.append((x, y))
+    return pts
 
 
 @dataclass
@@ -75,9 +117,9 @@ class Track:
     def __post_init__(self):
         self.length = len(self.tiles) * 2
 
-    def add_tile(self, tile_type: TileType) -> None:
+    def add_tile(self, tile_type: TileType, direction: int = 1) -> None:
         x = len(self.tiles)
-        tile = Tile(tile_type, x=x)
+        tile = Tile(tile_type, x=x, direction=direction)
         self.tiles.append(tile)
         self.length = len(self.tiles) * 2
 

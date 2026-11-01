@@ -114,6 +114,22 @@ class TestStageMenu(unittest.TestCase):
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, name)
 
+    def test_menu_preview_points_within_panel(self):
+        """La prévisualisation du tracé tient dans son panneau (grandes fenêtres)."""
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        rect = ui._preview_rect()
+        for name, _desc, _code in __import__('game.game', fromlist=['available_stages']).available_stages():
+            pts = ui._stage_preview_points(name)
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            bb_w = max(xs) - min(xs)
+            bb_h = max(ys) - min(ys)
+            scale = min((rect.w - 30) / max(bb_w, 1e-9), (rect.h - 60) / max(bb_h, 1e-9))
+            self.assertGreater(scale, 0)
+            self.assertLessEqual(bb_w * scale, rect.w - 30, name)
+            self.assertLessEqual(bb_h * scale, rect.h - 60, name)
+
     def test_escape_returns_to_menu_and_r_restarts_stage(self):
         ui = main.FlammeRougeGame(stage="circuit")
         import pygame

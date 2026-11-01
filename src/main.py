@@ -14,8 +14,8 @@ SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 800
 MIN_WIDTH = 900    # taille minimale de la fenêtre
 MIN_HEIGHT = 600
-CELLS_PER_ROW = 16  # cases par rangée du circuit (14 droites + virage 180° = 2)
-CELL_MIN = 32       # taille de case (s'adapte à la largeur de la fenêtre)
+CELLS_PER_ROW = None  # (obsolète : le tracé suit désormais la séquence des tuiles)
+CELL_MIN = 10       # plancher absolu de taille de case (le tracé tient toujours à l'écran)
 CELL_MAX = 60
 HEADER_H = 60       # bandeau de titre (toute la largeur)
 PHASE_H = 44        # bandeau de phase (toute la largeur)
@@ -88,6 +88,7 @@ class FlammeRougeGame:
         self.stage = stage  # None -> menu de sélection d'étape affiché
         self.game = Game(stage=stage, player_count=2) if stage else None
         self.menu_index = 0
+        self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
@@ -114,69 +115,49 @@ class FlammeRougeGame:
         """Largeur de la colonne de gauche (panneaux de cartes des joueurs)."""
         return min(340, max(280, self.width // 2))
 
-    def _cells_per_row(self) -> int:
-        """Nombre de cases par rangée du circuit (fixe, aligné sur le moteur)."""
-        return CELLS_PER_ROW
-
     def _track_geometry(self) -> dict:
-        """Géométrie du circuit organique (mise en cache).
+        """Géométrie du circuit (mise en cache), ajustée à la fenêtre.
 
-        Le circuit serpente : rangées droites reliées par de VRAIS virages
-        à 180° (demi-cercles). L'arc total vaut exactement
-        track.length * cell : chaque case occupe `cell` pixels d'arc, et les
-        2 dernières cases d'une rangée tombent sur le demi-cercle. Les cases
-        sont donc contiguës le long du chemin : AUCUN saut.
+        Le tracé suit la SÉQUENCE RÉELLE des tuiles (compute_track_path :
+        chaque tuile avance de 2 cases, les virages courbent le cap de
+        45°/90° selon leur direction), puis est mis à l'échelle et centré
+        dans la zone de droite. Chaque case occupe exactement `cell` pixels
+        d'arc : les cases restent contiguës, aucun saut.
         """
-        key = (self.width, self.height, self.game.track.length)
+        key = (self.width, self.height, self.game.stage)
         if getattr(self, "_geo_key", None) == key:
             return self._geo
 
-        left_w = self._left_w()
-        avail = self.width - left_w - 24
-        # 14 cases droites + les bombés des virages + la largeur de route
-        # doivent tenir de part et d'autre
-        cell = max(CELL_MIN, min(CELL_MAX, int((avail - 80) / 14.7)))
-        radius = 2 * cell / math.pi
-        lane_w = max(16, min(26, cell // 2))
-        half = lane_w
-        # Le bord gauche de la route (bombé du virage - demi-largeur) reste
-        # à 16px de la colonne de panneaux
-        track_left = left_w + 16 + radius + half
-        length = self.game.track.length
+        from game.track import compute_track_path
+        pts_units = compute_track_path(self.game.track, unit=1.0)
 
-        rows = -(-length // CELLS_PER_ROW)  # ceil
-        rows_h = (rows - 1) * 2 * radius + 2 * half
-        top = TOP_H + INFO_H + max(0, (self.height - TOP_H - INFO_H - 20 - rows_h) // 2)
+        left = self._left_w() + 12
+        right = self.width - 12
+        top = TOP_H + INFO_H + 6
+        bottom = self.height - 34  # légende en bas
+        avail_w = max(50.0, right - left)
+        avail_h = max(50.0, bottom - top)
 
-        # Construction du chemin : segments droits + demi-cercles
-        points = []
-        x, y, direction = track_left, top, 1
-        remaining = length
-        while remaining > 0:
-            in_row = min(CELLS_PER_ROW, remaining)
-            hairpin = remaining > CELLS_PER_ROW  # pas de virage sur la rangée finale
-            straight = in_row - (2 if hairpin else 0)
-            points.append((x, y))
-            x += direction * straight * cell
-            points.append((x, y))
-            remaining -= straight
-            if hairpin:
-                cx, cy = x, y + radius
-                for i in range(1, 25):
-                    phi = math.pi * i / 24
-                    points.append((cx + direction * radius * math.sin(phi),
-                                   cy - radius * math.cos(phi)))
-                y += 2 * radius
-                remaining -= 2
-                direction = -direction
+        xs = [p[0] for p in pts_units]
+        ys = [p[1] for p in pts_units]
+        bb_w = max(xs) - min(xs)
+        bb_h = max(ys) - min(ys)
+        # marge de 30px de chaque côté pour la demi-largeur de la route
+        scale = min((avail_w - 60) / max(bb_w, 1e-9), (avail_h - 60) / max(bb_h, 1e-9))
+        cell = max(CELL_MIN, min(CELL_MAX, scale))
+        ox = left + (avail_w - bb_w * cell) / 2 - min(xs) * cell
+        oy = top + (avail_h - bb_h * cell) / 2 - min(ys) * cell
+
+        points = [(ox + px * cell, oy + py * cell) for px, py in pts_units]
 
         # Longueurs cumulées (abscisse curviligne)
         cum = [0.0]
         for (x0, y0), (x1, y1) in zip(points, points[1:]):
             cum.append(cum[-1] + math.hypot(x1 - x0, y1 - y0))
 
-        geo = {"cell": cell, "radius": radius, "lane_w": lane_w, "half": half,
-               "points": points, "cum": cum, "total": cum[-1], "top": top}
+        lane_w = max(14, min(26, int(cell * 0.45)))
+        geo = {"cell": cell, "lane_w": lane_w, "half": lane_w,
+               "points": points, "cum": cum, "total": cum[-1]}
         self._geo_key = key
         self._geo = geo
         return geo
@@ -459,17 +440,84 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _menu_entries(self):
-        """Entrées du menu : [(nom, description, code, rect), ...]."""
+        """Entrées du menu : [(nom, description, code, rect), ...].
+
+        Si la fenêtre est assez large, une colonne de droite est réservée
+        à la prévisualisation du tracé de l'étape survolée/sélectionnée.
+        """
         from game.game import available_stages
-        entries = []
-        w = min(680, self.width - 60)
-        x = (self.width - w) // 2
+        preview_w = 380 if self.width >= 1100 else 0
+        w = min(680, self.width - 60 - preview_w)
+        x = 20 if preview_w else (self.width - w) // 2
         y = TOP_H + 46
+        entries = []
         for name, desc, code in available_stages():
             rect = pygame.Rect(x, y, w, 58)
             entries.append((name, desc, code, rect))
             y += 66
         return entries
+
+    def _preview_rect(self):
+        """Zone de prévisualisation du tracé (colonne de droite du menu)."""
+        return pygame.Rect(self.width - 350, TOP_H + 40, 330, 300)
+
+    def _stage_preview_points(self, name):
+        """Polyligne (unités de cases) du tracé d'une étape, mise en cache."""
+        if name not in self._preview_cache:
+            from game.game import build_stage_track
+            from game.track import compute_track_path
+            self._preview_cache[name] = compute_track_path(build_stage_track(name), 1.0)
+        return self._preview_cache[name]
+
+    def _draw_menu_preview(self, name, rect):
+        """Mini-carte du tracé de l'étape (chemin + départ/arrivée)."""
+        pts = self._stage_preview_points(name)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        bb_w = max(xs) - min(xs)
+        bb_h = max(ys) - min(ys)
+        scale = min((rect.w - 30) / max(bb_w, 1e-9), (rect.h - 60) / max(bb_h, 1e-9))
+        ox = rect.x + (rect.w - bb_w * scale) / 2 - min(xs) * scale
+        oy = rect.y + 40 + (rect.h - 60 - bb_h * scale) / 2 - min(ys) * scale
+        screen_pts = [(ox + px * scale, oy + py * scale) for px, py in pts]
+
+        pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
+        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+        title = self.label_font.render(name, True, WHITE)
+        self.screen.blit(title, (rect.x + 12, rect.y + 10))
+        pygame.draw.lines(self.screen, (200, 205, 215), False, screen_pts, 5)
+        # départ (vert) et arrivée (rouge)
+        pygame.draw.circle(self.screen, GREEN, screen_pts[0], 5)
+        pygame.draw.circle(self.screen, RED, screen_pts[-1], 5)
+
+    def _draw_menu(self):
+        """Menu de sélection de l'étape (affiché quand self.game is None)."""
+        mouse = pygame.mouse.get_pos()
+        title = self.title_font.render("Choisis ton étape", True, WHITE)
+        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
+        hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, (150, 155, 165))
+        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
+
+        entries = self._menu_entries()
+        for i, (name, desc, code, rect) in enumerate(entries):
+            selected = (i == self.menu_index)
+            hovered = rect.collidepoint(mouse)
+            fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
+            border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
+                             border_radius=8)
+            name_surf = self.phase_font.render(name, True, WHITE)
+            self.screen.blit(name_surf, (rect.x + 16, rect.y + 8))
+            desc_surf = self.label_font.render(desc, True, (180, 185, 195))
+            self.screen.blit(desc_surf, (rect.x + 16, rect.y + 32))
+            if code:
+                code_surf = self.small_font.render(code, True, (120, 125, 135))
+                self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 10))
+
+        # Prévisualisation du tracé de l'étape sélectionnée (grandes fenêtres)
+        if self.width >= 1100 and entries:
+            self._draw_menu_preview(entries[self.menu_index][0], self._preview_rect())
 
     def _select_stage(self, name: str):
         """Démarre une partie sur l'étape choisie (depuis le menu ou R)."""
@@ -505,30 +553,6 @@ class FlammeRougeGame:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
                 self._select_stage(entries[self.menu_index][0])
-
-    def _draw_menu(self):
-        """Menu de sélection de l'étape (affiché quand self.game is None)."""
-        mouse = pygame.mouse.get_pos()
-        title = self.title_font.render("Choisis ton étape", True, WHITE)
-        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
-        hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, (150, 155, 165))
-        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
-
-        for i, (name, desc, code, rect) in enumerate(self._menu_entries()):
-            selected = (i == self.menu_index)
-            hovered = rect.collidepoint(mouse)
-            fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
-            border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
-            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
-                             border_radius=8)
-            name_surf = self.phase_font.render(name, True, WHITE)
-            self.screen.blit(name_surf, (rect.x + 16, rect.y + 8))
-            desc_surf = self.label_font.render(desc, True, (180, 185, 195))
-            self.screen.blit(desc_surf, (rect.x + 16, rect.y + 32))
-            if code:
-                code_surf = self.small_font.render(code, True, (120, 125, 135))
-                self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 10))
 
     def _handle_click(self, pos):
         """Gère un clic : jouer une carte via les zones du layout des mains."""
