@@ -48,32 +48,40 @@ TILE_DEFS = {
     'o': ((math.pi / 2, -1), 2, "ff"),  'p': ((math.pi / 2, -1), 2, "ff"),
 }
 
-# Faces montagne (majuscules) : définition COMPLÈTE (virage en miroir,
-# largeur, cases case par case). Lettres non listées : repli = toutes les
-# cases montagne (montée si lettre dans ASCENT_LETTERS, descente si dans
-# DESCENT_LETTERS) avec le virage miroir de la face plate.
-ASCENT_LETTERS = set("DGKLHJRQN")    # face montagne = montée (bord rouge)
-DESCENT_LETTERS = set("FIOPS")        # face montagne = descente (bord bleu)
+# Faces montagne (majuscules) : définition COMPLÈTE relevée sur les tuiles
+# physiques (virage, largeur, cases case par case). Attention : le virage de
+# la face montagne n'est PAS toujours le miroir de la face plate (ex. K
+# tourne à droite, comme k). droite = sens -1, gauche = sens +1.
 MOUNTAIN_DEFS = {
-    'A': (None, 2, "ssssff"),           # départ, face retournée
-    'B': (None, 2, "ddddff"),           # descente sur les 4 premières cases seulement
-    'U': (None, 2, "feeeee"),           # arrivée, toujours plate
+    'A': (None, 2, "ssssff"),            # départ
+    'B': (None, 2, "ddddff"),            # descente sur les 4 premières cases
+    'C': (None, 2, "fffuuu"),
+    'D': (None, 2, "uuuuud"),
+    'E': ((math.pi / 2, -1), 2, "uu"),   # virage 90° droite
+    'F': (None, 2, "dddfff"),
+    'G': ((math.pi / 2, -1), 2, "uu"),   # virage 90° droite
+    'H': ((math.pi / 4, -1), 2, "dd"),   # virage 45° droite
+    'I': ((math.pi / 2, -1), 2, "ff"),   # virage 90° droite
+    'J': ((math.pi / 2, 1), 2, "ff"),    # virage 90° gauche
+    'K': ((math.pi / 4, -1), 2, "uu"),   # virage 45° droite
+    'L': (None, 2, "uuuddd"),
+    'M': (None, 2, "ffuuuu"),
+    'N': (None, 2, "uuuuuu"),
+    'O': ((math.pi / 2, 1), 2, "uu"),    # virage 90° gauche
+    'P': ((math.pi / 2, 1), 2, "dd"),    # virage 90° gauche
+    'Q': ((math.pi / 4, -1), 2, "uu"),   # virage 45° droite
+    'R': ((math.pi / 4, 1), 2, "uu"),    # virage 45° gauche
+    'S': ((math.pi / 4, 1), 2, "ff"),    # virage 45° gauche
+    'T': ((math.pi / 4, -1), 2, "ff"),   # virage 45° droite
+    'U': (None, 2, "uueeee"),            # arrivée : 2 cases de montée puis la ligne
 }
 
 
 def tile_def_for_letter(ch: str):
     """(virage, largeur, cases) pour une lettre de code de stage (a-u / A-U)."""
-    low = ch.lower()
-    turn, width, chars = TILE_DEFS[low]
     if ch.isupper():
-        if ch in MOUNTAIN_DEFS:
-            return MOUNTAIN_DEFS[ch]
-        if low in ('a', 'u'):
-            return turn, width, chars  # départ/arrivée : toujours plats
-        terrain = 'u' if ch in ASCENT_LETTERS else 'd'
-        mirrored = (turn[0], -turn[1]) if turn else None  # tuile retournée = miroir
-        return mirrored, width, terrain * len(chars)
-    return turn, width, chars
+        return MOUNTAIN_DEFS[ch]
+    return TILE_DEFS[ch]
 
 
 def build_tile(ch: str) -> 'Tile':

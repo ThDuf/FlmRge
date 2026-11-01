@@ -85,12 +85,15 @@ class TestTileLetters(unittest.TestCase):
             turn, width, chars = tile_def_for_letter(c)
             self.assertAlmostEqual(turn[0], math.pi / 2)
             self.assertEqual(chars, "ff")
-        # face montagne : géographie case par case explicite ou repli uniforme
-        self.assertEqual(tile_def_for_letter('K')[2], "uu")       # montée
-        self.assertEqual(tile_def_for_letter('O')[2], "dd")       # descente
-        self.assertEqual(tile_def_for_letter('B'), (None, 2, "ddddff"))  # explicite
+        # faces montagne : définitions explicites relevées sur les tuiles physiques
+        self.assertEqual(tile_def_for_letter('B'), (None, 2, "ddddff"))
         self.assertEqual(tile_def_for_letter('A'), (None, 2, "ssssff"))
-        self.assertEqual(tile_def_for_letter('U'), (None, 2, "feeeee"))
+        self.assertEqual(tile_def_for_letter('U'), (None, 2, "uueeee"))
+        self.assertEqual(tile_def_for_letter('C'), (None, 2, "fffuuu"))
+        self.assertEqual(tile_def_for_letter('D'), (None, 2, "uuuuud"))
+        self.assertEqual(tile_def_for_letter('L'), (None, 2, "uuuddd"))
+        self.assertEqual(tile_def_for_letter('K')[2], "uu")
+        self.assertEqual(tile_def_for_letter('O')[2], "uu")
         # les tuiles construites portent la géographie sur chaque case
         tile = build_tile('B')
         self.assertEqual([c.geography for c in tile.cells],
@@ -100,16 +103,33 @@ class TestTileLetters(unittest.TestCase):
                          [CellRunType.START] * 5 + [CellRunType.NONE])
         self.assertEqual(len(tile_a.cells[0].runners), 2)  # 2 files
 
-    def test_uppercase_mirrors_turn_direction(self):
-        """Face montagne = tuile retournée : le virage est en miroir.
-        H tourne à droite (-1) puisque h va à gauche (+1)."""
-        for c in "hkqrstegijop":
-            turn_low = tile_def_for_letter(c)[0]
-            turn_up = tile_def_for_letter(c.upper())[0]
-            self.assertAlmostEqual(turn_up[0], turn_low[0], msg=c)
-            self.assertEqual(turn_up[1], -turn_low[1], c)
+    def test_uppercase_turn_directions(self):
+        """Sens des virages des faces montagne, relevés sur les tuiles physiques
+        (droite = -1, gauche = +1). Ce n'est PAS toujours le miroir de la face
+        plate : ex. H tourne à droite (-1) alors que h va à gauche (+1),
+        et K tourne à droite (-1) comme k (-1)."""
+        expected = {'E': -1, 'G': -1, 'H': -1, 'I': -1, 'J': 1, 'K': -1,
+                    'O': 1, 'P': 1, 'Q': -1, 'R': 1, 'S': 1, 'T': -1}
+        angles = {'E': math.pi / 2, 'G': math.pi / 2, 'I': math.pi / 2,
+                  'J': math.pi / 2, 'O': math.pi / 2, 'P': math.pi / 2,
+                  'H': math.pi / 4, 'K': math.pi / 4, 'Q': math.pi / 4,
+                  'R': math.pi / 4, 'S': math.pi / 4, 'T': math.pi / 4}
+        for c, direction in expected.items():
+            turn = tile_def_for_letter(c)[0]
+            self.assertIsNotNone(turn, c)
+            self.assertEqual(turn[1], direction, c)
+            self.assertAlmostEqual(turn[0], angles[c], msg=c)
         self.assertEqual(tile_def_for_letter('h')[0][1], 1)
-        self.assertEqual(tile_def_for_letter('H')[0][1], -1)
+        self.assertEqual(tile_def_for_letter('H')[0][1], -1)  # H tourne à droite
+
+    def test_all_uppercase_have_explicit_defs(self):
+        """Les 21 faces montagne sont définies explicitement (plus de repli)."""
+        import string
+        for ch in string.ascii_uppercase[:21]:
+            self.assertIn(ch, MOUNTAIN_DEFS, ch)
+            turn, width, chars = tile_def_for_letter(ch)
+            self.assertEqual(width, 2)
+            self.assertEqual(len(chars), len(TILE_DEFS[ch.lower()][2]), ch)
 
     def test_code_ignores_spaces(self):
         t1 = build_track_from_code("ab c")
@@ -141,8 +161,8 @@ class TestOfficialStages(unittest.TestCase):
         track = build_track_from_code(OFFICIAL_STAGES["La Haut Montagne"])
         geographies = [c.geography for t in track.tiles for c in t.cells]
         self.assertGreaterEqual(geographies.count(CellGeographyType.UPHILL), 4)
-        # départ/arrivée (A/U) restent plats : aucune descente sur cette étape
-        self.assertEqual(geographies.count(CellGeographyType.DOWNHILL), 0)
+        # L = "uuuddd" et H = "dd" : l'étape contient aussi des descentes
+        self.assertGreaterEqual(geographies.count(CellGeographyType.DOWNHILL), 2)
 
     def test_game_builds_and_plays_on_official_stage(self):
         game = Game(stage="La Haut Montagne", player_count=2)
