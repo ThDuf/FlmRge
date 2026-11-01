@@ -177,7 +177,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 
 > Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens gauche/droite de chaque virage ne sont pas publiés en texte (les tuiles physiques sont retournables, la carte d'étape fixe le sens) ; les adaptations numériques sont documentées dans `src/game/game.py` (`ASCENT_LETTERS`, `TURN_DIRECTION_LETTER`). Angles des virages officiels : 45° (léger) / 90° (serré).
 
-> Note : la répartition exacte lettre→montée/descente des faces majuscules n'est pas publiée en texte ; l'adaptation numérique est documentée dans `src/game/game.py` (`ASCENT_LETTERS`).
+> Catalogue complet des 21 tuiles dans `src/game/game.py` (`TILE_CATALOG` : lettre → type + angle 45°/90° + sens). Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens G/D de chaque virage ne sont pas publiés en texte (tuiles retournables, la carte imprimée fixe le sens) ; les adaptations numériques sont documentées dans le code (`ASCENT_LETTERS`, sens alternés dans `TILE_CATALOG`).
 
 ## 🎯 Roadmap
 

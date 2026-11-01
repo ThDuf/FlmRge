@@ -20,54 +20,53 @@ OFFICIAL_STAGES = {
     "La Classicissima": "A eb Q R N H P cgik D F s L ojmtu",
 }
 
-# Correspondance lettres -> type de tuile pour la face MINUSCULE (officielle :
-# a = départ, u = arrivée ; droites b c d f l m n ; virages légers h k q r s t ;
-# virages serrés e g i j o p).
-TILE_LETTER_LOWER = {
-    'a': TileType.START,
-    'u': TileType.FINISH,
-    **{c: TileType.STRAIGHT for c in "bcdf lmn".replace(" ", "")},
-    **{c: TileType.LIGHT_TURN for c in "hkqrst"},
-    **{c: TileType.SHARP_TURN for c in "egijop"},
+# ------------------------------------------------------------------
+# Catalogue complet des 21 tuiles officielles (a-u), une entrée par lettre.
+#   (type, angle en degrés, sens du virage +1/-1)
+# - face MINUSCULE = côté plat : a=départ, u=arrivée, droites b c d f l m n,
+#   virages légers 45° h k q r s t, virages serrés 90° e g i j o p
+#   (géométrie officielle : 7 droites, 6 virages 45°, 6 virages 90°)
+# - sens du virage : adaptation numérique documentée (les tuiles physiques sont
+#   retournables, la carte d'étape imprimée fixe le sens ; on alterne G/D)
+# - face MAJUSCULE = face montagne : montée si lettre dans ASCENT_LETTERS,
+#   sinon descente (répartition non publiée en texte -> documentée ici)
+# ------------------------------------------------------------------
+TILE_CATALOG = {
+    'a': (TileType.START, 0, 1),       'u': (TileType.FINISH, 0, 1),
+    'b': (TileType.STRAIGHT, 0, 1),    'c': (TileType.STRAIGHT, 0, 1),
+    'd': (TileType.STRAIGHT, 0, 1),    'f': (TileType.STRAIGHT, 0, 1),
+    'l': (TileType.STRAIGHT, 0, 1),    'm': (TileType.STRAIGHT, 0, 1),
+    'n': (TileType.STRAIGHT, 0, 1),
+    'h': (TileType.LIGHT_TURN, 45, 1), 'k': (TileType.LIGHT_TURN, 45, -1),
+    'q': (TileType.LIGHT_TURN, 45, 1), 'r': (TileType.LIGHT_TURN, 45, -1),
+    's': (TileType.LIGHT_TURN, 45, 1), 't': (TileType.LIGHT_TURN, 45, -1),
+    'e': (TileType.SHARP_TURN, 90, 1), 'g': (TileType.SHARP_TURN, 90, -1),
+    'i': (TileType.SHARP_TURN, 90, 1), 'j': (TileType.SHARP_TURN, 90, -1),
+    'o': (TileType.SHARP_TURN, 90, 1), 'p': (TileType.SHARP_TURN, 90, -1),
 }
 
-# Face MAJUSCULE d'une tuile = face montagne (règles spéciales : montée bord
-# rouge, descente bord bleue). La répartition exacte lettre->montée/descente
-# n'est pas publiée en texte ; adaptation numérique documentée ici : les
-# majuscules de ASCENT_LETTERS sont des montées, les autres des descentes.
-ASCENT_LETTERS = set("DGKLHJRQN")
-
-# Sens des virages par lettre (adaptation numérique documentée : les tuiles
-# physiques sont retournables, la carte d'étape fixe le sens ; on alterne
-# gauche/droite dans l'ordre alphabétique des tuiles de virage).
-_TURN_LETTERS = "egijop" + "hkqrst"  # virages serrés puis légers
-TURN_DIRECTION_LETTER = {c: (1 if i % 2 == 0 else -1) for i, c in enumerate(_TURN_LETTERS)}
+ASCENT_LETTERS = set("DGKLHJRQN")  # majuscules = montée ; les autres = descente
 
 
 def tile_type_for_letter(ch: str) -> TileType:
     """Type de tuile pour une lettre de code de stage (a-u = normal, A-U = montagne)."""
     low = ch.lower()
-    if low == 'a':
-        return TileType.START
-    if low == 'u':
-        return TileType.FINISH
-    if ch.isupper():
+    if ch.isupper() and low not in ('a', 'u'):
         return TileType.UPHILL if ch in ASCENT_LETTERS else TileType.DOWNHILL
-    return TILE_LETTER_LOWER[low]
+    return TILE_CATALOG[low][0]
 
 
 def tile_direction_for_letter(ch: str) -> int:
-    """Sens du virage (+1/-1) pour une lettre ; une majuscule = tuile retournée
-    (le sens est inversé). Les tuiles non-virage donnent +1 (sans effet)."""
+    """Sens du virage (+1/-1) pour une lettre de virage (1 sinon, sans effet)."""
     low = ch.lower()
-    if low in TURN_DIRECTION_LETTER:
-        d = TURN_DIRECTION_LETTER[low]
-        return -d if ch.isupper() else d
+    if low in TILE_CATALOG and TILE_CATALOG[low][1] != 0:
+        return TILE_CATALOG[low][2]
     return 1
 
 
 def build_track_from_code(code: str) -> Track:
-    """Construit une piste à partir d'un code de stage en lettres (a-u, A-U)."""
+    """Construit une piste en mettant les tuiles bout à bout, dans l'ordre
+    du code de stage (lettres a-u / A-U, espaces ignorés)."""
     track = Track()
     for ch in code:
         if ch.strip():

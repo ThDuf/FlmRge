@@ -20,6 +20,22 @@ import main  # noqa: E402
 
 
 class TestTileLetters(unittest.TestCase):
+    def test_catalog_is_complete(self):
+        """Les 21 tuiles officielles sont toutes dans le catalogue."""
+        from game.game import TILE_CATALOG
+        self.assertEqual(sorted(TILE_CATALOG.keys()), list("abcdefghijklmnopqrstu"))
+        types = [v[0] for v in TILE_CATALOG.values()]
+        self.assertEqual(types.count(TileType.STRAIGHT), 7)
+        self.assertEqual(types.count(TileType.LIGHT_TURN), 6)
+        self.assertEqual(types.count(TileType.SHARP_TURN), 6)
+        self.assertEqual(types.count(TileType.START), 1)
+        self.assertEqual(types.count(TileType.FINISH), 1)
+        # angles officiels : 45° léger, 90° serré
+        angles = {v[0]: v[1] for v in TILE_CATALOG.values()}
+        self.assertEqual(angles[TileType.LIGHT_TURN], 45)
+        self.assertEqual(angles[TileType.SHARP_TURN], 90)
+        self.assertEqual(angles[TileType.STRAIGHT], 0)
+
     def test_letter_mapping(self):
         self.assertEqual(tile_type_for_letter('a'), TileType.START)
         self.assertEqual(tile_type_for_letter('u'), TileType.FINISH)
@@ -74,6 +90,25 @@ class TestOfficialStages(unittest.TestCase):
     def test_unknown_stage_falls_back_to_avenue(self):
         game = Game(stage="nimporte-quoi", player_count=2)
         self.assertEqual(game.track.length, 42)
+
+    def test_avenue_corso_paseo_shape_is_continuous_flat_course(self):
+        """Corso Paseo : 42 cases, plat (aucune montagne), tracé continu
+        (le suit des tuiles bout à bout, virages à leur place)."""
+        from game.track import compute_track_path
+        track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
+        types = [t.type for t in track.tiles]
+        self.assertNotIn(TileType.UPHILL, types)
+        self.assertNotIn(TileType.DOWNHILL, types)
+        pts = compute_track_path(track, 1.0)
+        # continuité : chaque segment du polyligne est court (pas de saut)
+        import math
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            self.assertLessEqual(math.hypot(x1 - x0, y1 - y0), 2.0)
+        # le tracé tient dans une forme raisonnable (pas de boucle délirante)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        self.assertLess(max(xs) - min(xs), 40)
+        self.assertLess(max(ys) - min(ys), 25)
 
     def test_available_stages_lists_circuit_and_official(self):
         names = [name for name, _desc, _code in available_stages()]
