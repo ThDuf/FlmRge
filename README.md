@@ -170,6 +170,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 - [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)
 - [x] **Montées/descentes** (plafond 5 / minimum 5, pas d'aspiration en montée — vérifiées par `tests/test_mountains.py`)
 - [ ] **Amélioration de l'UI** (boutons, animations)
+- [ ] **Animations des déplacements des coureurs** : animer les coureurs case par case lors des phases de mouvement, d'aspiration et de fatigue (glissade fluide le long du circuit, sans téléportation)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)
 - [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
