@@ -469,8 +469,22 @@ class FlammeRougeGame:
             self._preview_cache[name] = compute_track_path(build_stage_track(name), 1.0)
         return self._preview_cache[name]
 
+    def _preview_tile_marks(self, name):
+        """[(s au milieu de la tuile, lettre ou None), ...] pour la preview."""
+        from game.game import OFFICIAL_STAGES, build_stage_track
+        track = build_stage_track(name)
+        letters = [c for c in OFFICIAL_STAGES.get(name, "") if c.strip()]
+        marks = []
+        s = 0.0
+        for i, tile in enumerate(track.tiles):
+            marks.append((s + tile.length / 2, letters[i] if i < len(letters) else None))
+            s += tile.length
+        return marks, s  # s final = longueur totale (cases)
+
     def _draw_menu_preview(self, name, rect):
-        """Mini-carte du tracé de l'étape (chemin + départ/arrivée)."""
+        """Mini-carte du tracé de l'étape : chemin + séparateurs de tuiles
+        + lettres des tuiles (a, b, c...) + départ/arrivée."""
+        from game.track import path_point_at
         pts = self._stage_preview_points(name)
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
@@ -489,6 +503,28 @@ class FlammeRougeGame:
         # départ (vert) et arrivée (rouge)
         pygame.draw.circle(self.screen, GREEN, screen_pts[0], 5)
         pygame.draw.circle(self.screen, RED, screen_pts[-1], 5)
+
+        # Séparateurs de tuiles + lettres au milieu de chaque tuile
+        marks, total = self._preview_tile_marks(name)
+        s = 0.0
+        from game.game import build_stage_track
+        track = build_stage_track(name)
+        for i, tile in enumerate(track.tiles):
+            s += tile.length
+            if i < len(track.tiles) - 1:  # petite ligne à la jonction
+                px, py, tx, ty = path_point_at(pts, s)
+                sx, sy = ox + px * scale, oy + py * scale
+                nx, ny = -ty, tx
+                pygame.draw.line(self.screen, (120, 125, 135),
+                                 (sx + nx * 7, sy + ny * 7), (sx - nx * 7, sy - ny * 7), 1)
+        for s_mid, letter in marks:
+            if not letter:
+                continue
+            px, py, tx, ty = path_point_at(pts, s_mid)
+            sx, sy = ox + px * scale, oy + py * scale
+            nx, ny = -ty, tx
+            lbl = self.small_font.render(letter, True, (170, 175, 185))
+            self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
 
     def _draw_menu(self):
         """Menu de sélection de l'étape (affiché quand self.game is None)."""

@@ -179,6 +179,18 @@ class TestStageMenu(unittest.TestCase):
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, name)
 
+    def test_preview_tile_marks_letters(self):
+        """La preview marque chaque tuile avec sa lettre (a..u) pour les
+        étapes officielles, sans lettre pour le circuit perso."""
+        ui = main.FlammeRougeGame()
+        marks, total = ui._preview_tile_marks("Avenue Corso Paseo")
+        self.assertEqual(len(marks), 21)
+        self.assertEqual([m[1] for m in marks], list("abcdefghijklmnopqrstu"))
+        self.assertEqual(total, 73)  # 73 cases
+        marks_c, total_c = ui._preview_tile_marks("circuit")
+        self.assertEqual(len(marks_c), 19)
+        self.assertTrue(all(m[1] is None for m in marks_c))
+
     def test_menu_preview_points_within_panel(self):
         """La prévisualisation du tracé tient dans son panneau (grandes fenêtres)."""
         ui = main.FlammeRougeGame()

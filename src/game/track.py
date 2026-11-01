@@ -92,6 +92,26 @@ TURN_ANGLE = {
 }
 
 
+def path_point_at(points: List[Tuple[float, float]], s: float):
+    """Point (x, y, tx, ty) à l'abscisse curviligne s d'une polyligne."""
+    cum = [0.0]
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        cum.append(cum[-1] + math.hypot(x1 - x0, y1 - y0))
+    total = cum[-1]
+    s = max(0.0, min(s, total))
+    i = max(1, min(bisect_right(cum, s), len(points) - 1))
+    x0, y0 = points[i - 1]
+    x1, y1 = points[i]
+    seg = cum[i] - cum[i - 1]
+    t = 0.0 if seg == 0 else (s - cum[i - 1]) / seg
+    x = x0 + (x1 - x0) * t
+    y = y0 + (y1 - y0) * t
+    d = math.hypot(x1 - x0, y1 - y0)
+    if d == 0:
+        return x, y, 1.0, 0.0
+    return x, y, (x1 - x0) / d, (y1 - y0) / d
+
+
 def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, float]]:
     """Polyligne du circuit selon la séquence réelle des tuiles.
 
