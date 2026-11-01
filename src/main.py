@@ -616,7 +616,7 @@ class FlammeRougeGame:
 
         # Teinte des cases spéciales (virages, montées, descentes) + marqueurs
         for x_cell in range(track.length):
-            tile_type = track.tiles[x_cell // 2].type
+            tile_type = track.tiles[track.tile_index_at(x_cell)].type
             if tile_type == TileType.LIGHT_TURN:
                 color = LIGHT_TURN_FILL
             elif tile_type == TileType.SHARP_TURN:
@@ -655,8 +655,9 @@ class FlammeRougeGame:
                              (px + nx * half, py + ny * half),
                              (px - nx * half, py - ny * half), 1)
 
-        # Départ (vert) et arrivée (rouge) : traits perpendiculaires à la route
-        for s, color in ((0, GREEN), (geo["total"], RED)):
+        # Départ (vert) à s=0 et arrivée (rouge) à la ligne = début de la tuile FINISH
+        finish_s = track.tiles[-1].x * cell if track.tiles else geo["total"]
+        for s, color in ((0, GREEN), (finish_s, RED)):
             px, py, tx, ty = self._path_at(geo, s)
             nx, ny = -ty, tx
             pygame.draw.line(self.screen, color,

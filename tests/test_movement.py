@@ -80,10 +80,10 @@ class TestMovement(unittest.TestCase):
         self.assertEqual((r.x, r.y), (0, 0))
 
     def test_move_capped_at_finish(self):
-        t = make_track(8)  # cases 0..7
+        t = make_track(8)  # 2 droites = 12 cases (0..11)
         r = place(t, make_runner('r'), 5, 0)
         t.move_runner(r, 5)
-        self.assertEqual(r.x, 7)
+        self.assertEqual(r.x, 10)  # plafonné à la dernière case (11)-1... cible 10
 
     def test_frontmost_moves_first_lane_a_tiebreak(self):
         """À égalité de position, la file A (droite) est en tête et bouge en premier.

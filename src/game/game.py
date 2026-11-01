@@ -32,17 +32,18 @@ OFFICIAL_STAGES = {
 #   sinon descente (répartition non publiée en texte -> documentée ici)
 # ------------------------------------------------------------------
 TILE_CATALOG = {
-    'a': (TileType.START, 0, 1),       'u': (TileType.FINISH, 0, 1),
-    'b': (TileType.STRAIGHT, 0, 1),    'c': (TileType.STRAIGHT, 0, 1),
-    'd': (TileType.STRAIGHT, 0, 1),    'f': (TileType.STRAIGHT, 0, 1),
-    'l': (TileType.STRAIGHT, 0, 1),    'm': (TileType.STRAIGHT, 0, 1),
-    'n': (TileType.STRAIGHT, 0, 1),
-    'h': (TileType.LIGHT_TURN, 45, 1),  'k': (TileType.LIGHT_TURN, 45, -1),
-    'q': (TileType.LIGHT_TURN, 45, 1),  'r': (TileType.LIGHT_TURN, 45, -1),
-    's': (TileType.LIGHT_TURN, 45, -1), 't': (TileType.LIGHT_TURN, 45, 1),
-    'e': (TileType.SHARP_TURN, 90, 1),  'g': (TileType.SHARP_TURN, 90, 1),
-    'i': (TileType.SHARP_TURN, 90, 1),  'j': (TileType.SHARP_TURN, 90, -1),
-    'o': (TileType.SHARP_TURN, 90, -1), 'p': (TileType.SHARP_TURN, 90, -1),
+    # lettre: (type, angle°, sens, cases) — cases officielles : virages 2, droites 6
+    'a': (TileType.START, 0, 1, 2),     'u': (TileType.FINISH, 0, 1, 5),
+    'b': (TileType.STRAIGHT, 0, 1, 6),  'c': (TileType.STRAIGHT, 0, 1, 6),
+    'd': (TileType.STRAIGHT, 0, 1, 6),  'f': (TileType.STRAIGHT, 0, 1, 6),
+    'l': (TileType.STRAIGHT, 0, 1, 6),  'm': (TileType.STRAIGHT, 0, 1, 6),
+    'n': (TileType.STRAIGHT, 0, 1, 6),
+    'h': (TileType.LIGHT_TURN, 45, 1, 2),  'k': (TileType.LIGHT_TURN, 45, -1, 2),
+    'q': (TileType.LIGHT_TURN, 45, 1, 2),  'r': (TileType.LIGHT_TURN, 45, -1, 2),
+    's': (TileType.LIGHT_TURN, 45, -1, 2), 't': (TileType.LIGHT_TURN, 45, 1, 2),
+    'e': (TileType.SHARP_TURN, 90, 1, 2),  'g': (TileType.SHARP_TURN, 90, 1, 2),
+    'i': (TileType.SHARP_TURN, 90, 1, 2),  'j': (TileType.SHARP_TURN, 90, -1, 2),
+    'o': (TileType.SHARP_TURN, 90, -1, 2), 'p': (TileType.SHARP_TURN, 90, -1, 2),
 }
 
 ASCENT_LETTERS = set("DGKLHJRQN")  # majuscules = montée ; les autres = descente
@@ -64,13 +65,20 @@ def tile_direction_for_letter(ch: str) -> int:
     return 1
 
 
+def tile_cells_for_letter(ch: str) -> int:
+    """Nombre de cases d'une tuile (identique sur les deux faces)."""
+    return TILE_CATALOG[ch.lower()][3]
+
+
 def build_track_from_code(code: str) -> Track:
     """Construit une piste en mettant les tuiles bout à bout, dans l'ordre
     du code de stage (lettres a-u / A-U, espaces ignorés)."""
     track = Track()
     for ch in code:
         if ch.strip():
-            track.add_tile(tile_type_for_letter(ch), direction=tile_direction_for_letter(ch))
+            track.add_tile(tile_type_for_letter(ch),
+                           direction=tile_direction_for_letter(ch),
+                           cells=tile_cells_for_letter(ch))
     return track
 
 
@@ -80,37 +88,36 @@ def build_stage_track(name: str) -> Track:
         return build_track_from_code(OFFICIAL_STAGES[name])
     if name == "circuit":
         # Circuit perso en boucle (4 virages serrés de 90° dans le même sens) :
-        # montée à l'aller, descente au retour. 33 tuiles = 66 cases.
+        # montée à l'aller, descente au retour. 17 tuiles = 93 cases.
         track = Track()
 
         def add(t, d=1):
             track.add_tile(t, direction=d)
 
         add(TileType.START)
-        for _ in range(6):
+        for _ in range(2):
             add(TileType.STRAIGHT)
         for _ in range(2):
             add(TileType.UPHILL)
         add(TileType.SHARP_TURN, +1)
-        for _ in range(5):
+        for _ in range(2):
             add(TileType.STRAIGHT)
         add(TileType.SHARP_TURN, +1)
-        for _ in range(4):
+        for _ in range(2):
             add(TileType.STRAIGHT)
         for _ in range(2):
             add(TileType.DOWNHILL)
         add(TileType.SHARP_TURN, +1)
-        for _ in range(5):
+        for _ in range(2):
             add(TileType.STRAIGHT)
         add(TileType.SHARP_TURN, +1)
-        for _ in range(3):
-            add(TileType.STRAIGHT)
+        add(TileType.STRAIGHT)
         add(TileType.FINISH)
         return track
     if name == "test":
         track = Track()
         track.add_tile(TileType.START)
-        for _ in range(13):
+        for _ in range(4):
             track.add_tile(TileType.STRAIGHT)
         track.add_tile(TileType.FINISH)
         return track
@@ -408,11 +415,16 @@ class Game:
     def _check_win_condition(self) -> bool:
         """Vérifie si un coureur a franchi la ligne d'arrivée.
 
-        Règle officielle : si plusieurs coureurs franchissent la ligne dans
-        le même tour, le plus loin devant gagne ; à égalité, la file A
-        (file de droite) est considérée en tête.
+        Règle officielle : la course se termine quand un coureur franchit la
+        ligne d'arrivée (début de la tuile d'arrivée, qui offre 5 cases au-delà
+        de la ligne) ; si plusieurs franchissent dans le même tour, le plus
+        loin devant gagne ; à égalité, la file A (file de droite) est en tête.
         """
-        finish_x = self.track.length - 1
+        track = self.track
+        if track.tiles and track.tiles[-1].type == TileType.FINISH:
+            finish_x = track.tiles[-1].x  # la ligne = début de la tuile d'arrivée
+        else:
+            finish_x = track.length - 1
         best = None
         for player in self.players:
             for runner in player.get_runners():

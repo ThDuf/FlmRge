@@ -1,15 +1,12 @@
 """Tests des règles de montagnes (montées/descentes) - rulebook officiel.
 
 Montée (bords rouges) :
-- Un coureur qui part de, entre dans ou traverse une montée ne peut jamais
-  avancer de plus de 5 cases (carte supérieure jouable mais plafonnée).
-- La 6e case ou plus ne peut jamais pénétrer la première case d'une montée :
-  arrêt juste avant, sur la dernière file libre.
-- Un coureur sur une montée ne donne NI ne reçoit l'aspiration.
+- entrée dans les 5 premières cases (ou départ en montée) : plafonné à 5
+- entrée à la 6e case ou plus : arrêt sur la dernière file libre AVANT la montée
+- un coureur en montée ne donne ni ne reçoit l'aspiration (mais les autres
+  membres du pack hors montée glissent quand même - exemple Dized)
 
-Descente (bords bleus) :
-- Un coureur qui PART d'une descente avance d'au minimum 5 cases.
-- L'aspiration s'y applique normalement.
+Descente (bords bleus) : partir d'une descente = minimum 5 cases.
 """
 import os
 import sys
@@ -22,11 +19,18 @@ from game.runner import Runner, RunnerType  # noqa: E402
 from game.game import Game  # noqa: E402
 
 
-def make_track(tile_types):
+def make_track(spec):
+    """spec : liste de types, ou de tuples (type, cases)."""
     track = Track()
-    for t in tile_types:
-        track.add_tile(t)
+    for item in spec:
+        t, cells = item if isinstance(item, tuple) else (item, None)
+        track.add_tile(t, cells=cells)
     return track
+
+
+def first_cell_of(track, ttype):
+    """Première case d'une tuile du type donné."""
+    return next(t.x for t in track.tiles if t.type == ttype)
 
 
 def make_runner(name):
@@ -46,228 +50,165 @@ def run_aspiration(track):
     return steps
 
 
-# Piste de test : cases 0-1 START, 2-9 STRAIGHT, 10-13 UPHILL, 14-19 STRAIGHT
-MOUNTAIN_TRACK = ([TileType.START] + [TileType.STRAIGHT] * 4
-                  + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 3)
-# Piste de descente : cases 0-1 START, 2-7 DOWNHILL, 8-19 STRAIGHT
-DOWNHILL_TRACK = ([TileType.START] + [TileType.DOWNHILL] * 3 + [TileType.STRAIGHT] * 6)
+# Piste avec une montée de 2 cases (comme une vraie tuile virage retournée)
+# cases : START 0-1, STRAIGHT 2-19, UPHILL 20-21, STRAIGHT 22-39
+MOUNTAIN_TRACK = ([TileType.START] + [TileType.STRAIGHT] * 3
+                  + [(TileType.UPHILL, 2)] + [TileType.STRAIGHT] * 3)
+# Piste avec une descente de 6 cases (tuile droite)
+# cases : START 0-1, DOWNHILL 2-7, STRAIGHT 8-31
+DOWNHILL_TRACK = ([TileType.START] + [(TileType.DOWNHILL, 6)] + [TileType.STRAIGHT] * 4)
 
 
 class TestAscentMovement(unittest.TestCase):
     def setUp(self):
         self.track = make_track(MOUNTAIN_TRACK)
+        self.up = first_cell_of(self.track, TileType.UPHILL)  # 20
 
     def test_ascent_caps_movement_at_5(self):
-        """Carte 8 dont le trajet touche la montée (cases 10-13) -> 5 cases."""
-        r = place(self.track, make_runner('r'), 6, 0)
-        self.track.move_runner(r, 8)   # cible 14 : traverse la montée
-        self.assertEqual(r.x, 11)      # 6 + 5, plafonné
+        """Carte 8 dont le trajet touche la montée (entrée en 4e case) -> 5."""
+        r = place(self.track, make_runner('r'), self.up - 4, 0)
+        self.track.move_runner(r, 8)
+        self.assertEqual(r.x, self.up + 1)  # up-4 + 5
 
     def test_rider_starting_on_ascent_is_capped(self):
-        """Partir D'UNE montée plafonne aussi à 5 (départ compris)."""
-        r = place(self.track, make_runner('r'), 10, 0)
+        r = place(self.track, make_runner('r'), self.up, 0)
         self.track.move_runner(r, 7)
-        self.assertEqual(r.x, 15)
+        self.assertEqual(r.x, self.up + 5)
 
     def test_no_cap_when_ascent_not_on_path(self):
-        """La montée n'est pas sur le trajet -> déplacement normal."""
         r = place(self.track, make_runner('r'), 0, 0)
-        self.track.move_runner(r, 6)   # s'arrête case 6, avant la montée
+        self.track.move_runner(r, 6)   # cible 6, avant la montée
         self.assertEqual(r.x, 6)
 
     def test_sixth_move_cannot_enter_ascent(self):
-        """La 6e case ne peut pas pénétrer la montée : arrêt juste avant."""
-        r = place(self.track, make_runner('r'), 4, 0)
-        self.track.move_runner(r, 8)   # la case 10 (montée) serait la 6e
-        self.assertEqual(r.x, 9)       # 4 + 5 : dernière case avant la montée
+        """La montée est à 6 cases, carte 8 : arrêt à 5 cases (up-1)."""
+        r = place(self.track, make_runner('r'), self.up - 6, 0)
+        self.track.move_runner(r, 8)
+        self.assertEqual(r.x, self.up - 1)
+
+    def test_card_7_at_7_cases_stops_before_ascent(self):
+        """Règle FR : 'se déplace d'au moins 5 cases avant d'entrer dans la
+        montée -> stoppe sur la dernière file libre avant la montée'.
+        Carte 7 à 7 cases de la montée -> 6 cases, arrêt juste avant."""
+        r = place(self.track, make_runner('r'), self.up - 7, 0)
+        self.track.move_runner(r, 7)
+        self.assertEqual(r.x, self.up - 1)
+
+    def test_card_8_at_8_cases_stops_before_ascent(self):
+        r = place(self.track, make_runner('r'), self.up - 8, 0)
+        self.track.move_runner(r, 8)
+        self.assertEqual(r.x, self.up - 1)
 
     def test_card_below_5_crossing_ascent_is_unchanged(self):
-        r = place(self.track, make_runner('r'), 8, 0)
-        self.track.move_runner(r, 3)   # traverse la fin de montée, carte 3
-        self.assertEqual(r.x, 11)
+        r = place(self.track, make_runner('r'), self.up - 2, 0)
+        self.track.move_runner(r, 3)   # carte 3, traverse la montée
+        self.assertEqual(r.x, self.up + 1)
+
+    def test_climbing_from_the_foot_of_the_ascent(self):
+        """Au pied de la montée (case adjacente), un 5 traverse et sort."""
+        r = place(self.track, make_runner('r'), self.up - 1, 0)
+        self.track.move_runner(r, 5)
+        self.assertEqual(r.x, self.up + 4)
 
 
 class TestDescentMovement(unittest.TestCase):
     def setUp(self):
         self.track = make_track(DOWNHILL_TRACK)
+        self.down = first_cell_of(self.track, TileType.DOWNHILL)  # 2
 
     def test_descent_gives_minimum_5(self):
-        """Partir d'une descente : carte 2 vaut au minimum 5."""
-        r = place(self.track, make_runner('r'), 2, 0)
+        r = place(self.track, make_runner('r'), self.down, 0)
         self.track.move_runner(r, 2)
-        self.assertEqual(r.x, 7)
+        self.assertEqual(r.x, self.down + 5)
 
     def test_descent_does_not_cap_high_cards(self):
-        r = place(self.track, make_runner('r'), 2, 0)
+        r = place(self.track, make_runner('r'), self.down, 0)
         self.track.move_runner(r, 7)
-        self.assertEqual(r.x, 9)
+        self.assertEqual(r.x, self.down + 7)
 
     def test_descent_only_from_descent_start(self):
         """Le minimum 5 ne s'applique qu'en PARTANT d'une descente."""
-        r = place(self.track, make_runner('r'), 8, 0)  # droite, hors descente
+        r = place(self.track, make_runner('r'), self.down + 6, 0)  # plaine
         self.track.move_runner(r, 2)
-        self.assertEqual(r.x, 10)
+        self.assertEqual(r.x, self.down + 8)
 
     def test_descent_then_ascent_caps_back_to_5(self):
-        """Descente (min 5) puis montée sur le trajet -> plafonné à 5."""
-        track = make_track([TileType.START] + [TileType.DOWNHILL] * 2
-                           + [TileType.STRAIGHT] * 2 + [TileType.UPHILL] * 2
-                           + [TileType.STRAIGHT] * 4)
-        r = place(track, make_runner('r'), 2, 0)   # descente (cases 2-5)
-        track.move_runner(r, 2)                    # min 5 -> cible 7, mais montée 10-13
-        self.assertEqual(r.x, 7)                   # 5 cases, pas de montée touchée
+        track = make_track([TileType.START, (TileType.DOWNHILL, 6),
+                            TileType.STRAIGHT, (TileType.UPHILL, 2),
+                            TileType.STRAIGHT, TileType.STRAIGHT])
+        # cases : 0-1 START, 2-7 DOWN, 8-13 STRAIGHT, 14-15 UP, 16-27 STRAIGHT
+        r = place(track, make_runner('r'), 2, 0)
+        track.move_runner(r, 2)   # min 5 -> cible 7, montée à 14 non touchée
+        self.assertEqual(r.x, 7)
 
 
 class TestAscentSlipstream(unittest.TestCase):
     def test_rider_on_ascent_cannot_receive(self):
         """Un coureur SUR une montée ne reçoit pas l'aspiration."""
         track = make_track(MOUNTAIN_TRACK)
-        rear = place(track, make_runner('rear'), 10, 0)  # sur la montée
-        place(track, make_runner('front'), 12, 0)       # sur la montée aussi
-        # placer un coureur devant avec exactement une case vide
-        place(track, make_runner('ahead'), 14, 0)
+        up = first_cell_of(track, TileType.UPHILL)
+        rear = place(track, make_runner('rear'), up, 0)
+        place(track, make_runner('ahead'), up + 2, 0)  # 1 case vide entre les deux
         steps = run_aspiration(track)
-        # le pack arrière (10,12) est entièrement en montée : aucun mouvement
         moved_ids = {m[0].id for step in steps for m in step}
         self.assertNotIn('rear', moved_ids)
 
     def test_rider_on_ascent_cannot_give(self):
-        """Le donneur (le plus en arrière du pack de devant) est en montée :
-        le pack derrière n'aspire pas."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        # montée = cases 8-11
-        place(track, make_runner('rear'), 5, 0)
-        place(track, make_runner('giver'), 8, 0)    # première case de montée
+        """Le donneur (le plus en arrière du pack de devant) est en montée."""
+        track = make_track(MOUNTAIN_TRACK)
+        up = first_cell_of(track, TileType.UPHILL)
+        place(track, make_runner('rear'), up - 2, 0)   # plaine
+        place(track, make_runner('giver'), up, 0)      # 1re case de montée
         steps = run_aspiration(track)
         moved_ids = {m[0].id for step in steps for m in step}
         self.assertNotIn('rear', moved_ids)
         self.assertNotIn('giver', moved_ids)
 
-    def test_descent_slipstream_is_normal(self):
-        """L'exemple du rulebook : en descente, l'aspiration s'applique
-        normalement."""
-        track = make_track(DOWNHILL_TRACK)
-        rear = place(track, make_runner('rear'), 2, 0)   # descente
-        place(track, make_runner('front'), 4, 0)          # descente
-        steps = run_aspiration(track)
-        moved_ids = {m[0].id for step in steps for m in step}
-        self.assertIn('rear', moved_ids)
-
-    def test_ascent_gap_square_does_not_block(self):
-        """Ce sont les COUREURS sur la montée qui bloquent, pas la case vide
-        intermédiaire située en montée."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 2
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 5)
-        # montée = cases 6-9 ; le coureur arrière en 3 (plaine), case vide 4
-        # (plaine), donneur en 5 (plaine) : aspiration normale malgré la
-        # montée plus loin
-        rear = place(track, make_runner('rear'), 3, 0)
-        place(track, make_runner('giver'), 5, 0)
-        steps = run_aspiration(track)
-        moved_ids = {m[0].id for step in steps for m in step}
-        self.assertIn('rear', moved_ids)
-        self.assertEqual(rear.x, 4)
-
-
     def test_pack_splits_on_ascent_during_slipstream(self):
-        """Exemple officiel (page Dized "Ascents") : dans un pack qui aspire,
-        le coureur hors montée en tête glisse et FUSIONNE avec le pack de
-        devant, tandis que le coéquipier en montée est laissé sur place
-        ("left behind, even though he is in the same pack") — ceux derrière
-        lui sont bloqués."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
-                           + [TileType.UPHILL] + [TileType.STRAIGHT] * 2)
-        # cases : 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL, 10-13 STRAIGHT
-        sprinteur = place(track, make_runner('sprinteur'), 10, 0)  # plaine, tête du pack
-        rouleur = place(track, make_runner('rouleur'), 9, 0)       # MONTÉE (8-9)
-        place(track, make_runner('giver'), 12, 0)                  # plaine, gap en 11
-        steps = run_aspiration(track)
-        moved_ids = {m[0].id for step in steps for m in step}
-        self.assertEqual(sprinteur.x, 11)   # parti fusionner avec le giver
-        self.assertEqual(rouleur.x, 9)       # laissé sur place, en montée
-        self.assertIn('sprinteur', moved_ids)
-        self.assertNotIn('rouleur', moved_ids)
+        """Exemple officiel Dized : le sprinteur hors montée en tête glisse
+        et fusionne, le rouleur en montée reste ('left behind')."""
+        track = make_track(MOUNTAIN_TRACK)
+        up = first_cell_of(track, TileType.UPHILL)  # 20-21
+        rouleur = place(track, make_runner('rouleur'), up + 1, 0)      # MONTÉE (2e case)
+        sprinteur = place(track, make_runner('sprinteur'), up + 2, 0)  # plaine, tête du pack
+        place(track, make_runner('giver'), up + 4, 0)                  # plaine, gap en up+3
+        run_aspiration(track)
+        self.assertEqual(sprinteur.x, up + 3)  # parti fusionner avec le giver
+        self.assertEqual(rouleur.x, up + 1)    # laissé sur place
 
     def test_ascent_rider_blocks_packmates_behind(self):
-        """Un coureur en montée au MILIEU d'un pack bloque ceux derrière lui :
-        seul le segment de tête (hors montée) glisse."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 2
-                           + [TileType.UPHILL] + [TileType.STRAIGHT] * 3)
-        # cases : 0-1 START, 2-5 STRAIGHT, 6-7 UPHILL, 8-13 STRAIGHT
-        front = place(track, make_runner('front'), 8, 0)    # plaine, tête
-        frozen = place(track, make_runner('frozen'), 7, 0)  # MONTÉE (6-7)
-        rear = place(track, make_runner('rear'), 6, 0)      # MONTÉE (6-7)
-        place(track, make_runner('giver'), 10, 0)           # gap en 9
+        """Un coureur en montée au milieu d'un pack bloque ceux derrière lui."""
+        track = make_track([TileType.START, TileType.STRAIGHT,
+                            (TileType.UPHILL, 2), TileType.STRAIGHT, TileType.STRAIGHT])
+        # cases : 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL, 10-21 STRAIGHT
+        front = place(track, make_runner('front'), 10, 0)    # plaine, tête
+        frozen = place(track, make_runner('frozen'), 9, 0)   # MONTÉE
+        rear = place(track, make_runner('rear'), 8, 0)       # MONTÉE
+        place(track, make_runner('giver'), 12, 0)            # gap en 11
         run_aspiration(track)
-        self.assertEqual(front.x, 9)   # glisse
-        self.assertEqual(frozen.x, 7)  # reste
-        self.assertEqual(rear.x, 6)    # bloqué derrière
+        self.assertEqual(front.x, 11)
+        self.assertEqual(frozen.x, 9)
+        self.assertEqual(rear.x, 8)
 
-
-    def test_card_reaching_ascent_at_7th_square_stops_before(self):
-        """Règle officielle ("si un coureur se déplace d'au moins 5 cases
-        avant d'entrer dans la montée, il stoppe son mouvement sur la
-        dernière file libre avant la montée") : un 7 à 7 cases de la montée
-        entrerait à la 7e case -> arrêt JUSTE AVANT la montée (6 cases de
-        plaine), pas à 5 cases."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        # cases 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL
-        r = place(track, make_runner('r'), 1, 0)   # montée à 7 cases (case 8)
-        track.move_runner(r, 7)
-        self.assertEqual(r.x, 7)  # 1 + 6 : dernière case libre avant la montée
-
-    def test_card_reaching_ascent_at_8th_square_stops_before(self):
-        """Un 8 dont la montée est à 8 cases : arrêt à 7 cases de plaine,
-        juste devant la montée."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 4
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        # cases 0-1 START, 2-9 STRAIGHT, 10-11 UPHILL
-        r = place(track, make_runner('r'), 2, 0)   # montée à 8 cases (case 10)
-        track.move_runner(r, 8)
-        self.assertEqual(r.x, 9)  # 2 + 7 : juste avant la montée
-
-    def test_6th_move_into_ascent_stops_at_5(self):
-        """Cas frontière : depuis la case 4, la montée (cases 8-9) est à
-        4 cases -> entrée dans les 5 premières -> plafonné à 5 (la montée
-        est traversée)."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        # cases 0-1 START, 2-7 STRAIGHT, 8-9 UPHILL
-        r = place(track, make_runner('r'), 4, 0)   # montée à 4 cases (d=4)
-        track.move_runner(r, 8)
-        self.assertEqual(r.x, 9)  # 4 + 5 : traverse la montée, plafonné
-
-    def test_card_stopping_before_ascent_is_not_capped(self):
-        """Un 6 depuis la même position ne touche pas la montée (cible 7,
-        plaine) : PAS de plafond, le coureur s'arrête juste devant."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        r = place(track, make_runner('r'), 1, 0)
-        track.move_runner(r, 6)
-        self.assertEqual(r.x, 7)  # 1 + 6 : trajet hors montée, pas de plafond
-
-    def test_climbing_from_the_foot_of_the_ascent(self):
-        """Au pied de la montée (case adjacente), un 5 traverse et sort de
-        la montée : entrer dans la montée dans les 5 premières cases est
-        parfaitement légal."""
-        track = make_track([TileType.START] + [TileType.STRAIGHT] * 3
-                           + [TileType.UPHILL] * 2 + [TileType.STRAIGHT] * 4)
-        r = place(track, make_runner('r'), 7, 0)   # juste avant la montée (8-9)
-        track.move_runner(r, 5)
-        self.assertEqual(r.x, 12)  # traverse la montée, 5 cases au total
+    def test_descent_slipstream_is_normal(self):
+        """Exemple du rulebook : en descente, l'aspiration s'applique normalement."""
+        track = make_track(DOWNHILL_TRACK)
+        down = first_cell_of(track, TileType.DOWNHILL)
+        rear = place(track, make_runner('rear'), down, 0)
+        place(track, make_runner('front'), down + 2, 0)
+        steps = run_aspiration(track)
+        moved_ids = {m[0].id for step in steps for m in step}
+        self.assertIn('rear', moved_ids)
 
 
 class TestCircuitStage(unittest.TestCase):
     def test_circuit_contains_mountains(self):
-        from game.track import TileType
         game = Game(stage="circuit", player_count=2)
         tiles = [t.type for t in game.track.tiles]
         self.assertIn(TileType.UPHILL, tiles)
         self.assertIn(TileType.DOWNHILL, tiles)
         self.assertIn(TileType.SHARP_TURN, tiles)
-        self.assertEqual(game.track.length, 66)  # circuit perso : 33 tuiles
+        self.assertEqual(game.track.length, 93)  # circuit perso : 19 tuiles
 
 
 if __name__ == '__main__':

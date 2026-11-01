@@ -173,7 +173,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 | Ronde van Wevelgem | `abcmgfteqon L P jk I D H r S u` | vallonné |
 | La Haut Montagne | `abcfimet K G L H J sdop R Q N U` | très montagneuse |
 | La Classicissima | `A eb Q R N H P cgik D F s L ojmtu` | vallonné |
-| Circuit de montagne | perso | 66 cases, boucle à 4 virages 90°, montée + descente |
+| Circuit de montagne | perso | 93 cases, boucle à 4 virages 90°, montée + descente |
 
 > Notes : la répartition exacte lettre→montée/descente des faces majuscules et le sens gauche/droite de chaque virage ne sont pas publiés en texte (les tuiles physiques sont retournables, la carte d'étape fixe le sens) ; les adaptations numériques sont documentées dans `src/game/game.py` (`ASCENT_LETTERS`, `TURN_DIRECTION_LETTER`). Angles des virages officiels : 45° (léger) / 90° (serré).
 

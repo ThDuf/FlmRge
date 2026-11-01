@@ -62,9 +62,9 @@ class TestTileLetters(unittest.TestCase):
                 cum += d
             return 0.0
 
-        # tuile e = 5e tuile = arc s=8..10 ; on mesure avant/après
-        self.assertAlmostEqual(math.degrees(heading_at(7.0)), 0, places=0)
-        self.assertAlmostEqual(math.degrees(heading_at(10.5)), -90, places=0)
+        # tuile e = 5e tuile : START(2) + 3 droites(6) = 20 cases avant, arc s=20..22
+        self.assertAlmostEqual(math.degrees(heading_at(19.0)), 0, places=0)
+        self.assertAlmostEqual(math.degrees(heading_at(22.5)), -90, places=0)
 
     def test_letter_mapping(self):
         self.assertEqual(tile_type_for_letter('a'), TileType.START)
@@ -90,7 +90,7 @@ class TestOfficialStages(unittest.TestCase):
         for name, code in OFFICIAL_STAGES.items():
             track = build_track_from_code(code)
             self.assertEqual(len(track.tiles), 21, name)
-            self.assertEqual(track.length, 42, name)
+            self.assertEqual(track.length, 73, name)
             self.assertEqual(track.tiles[0].type, TileType.START, name)
             self.assertEqual(track.tiles[-1].type, TileType.FINISH, name)
 
@@ -110,7 +110,7 @@ class TestOfficialStages(unittest.TestCase):
 
     def test_game_builds_and_plays_on_official_stage(self):
         game = Game(stage="La Haut Montagne", player_count=2)
-        self.assertEqual(game.track.length, 42)
+        self.assertEqual(game.track.length, 73)
         for player in game.players:
             for runner in player.get_runners():
                 self.assertTrue(game.play_card(player, runner, runner.hand[0]))
@@ -119,10 +119,10 @@ class TestOfficialStages(unittest.TestCase):
 
     def test_unknown_stage_falls_back_to_avenue(self):
         game = Game(stage="nimporte-quoi", player_count=2)
-        self.assertEqual(game.track.length, 42)
+        self.assertEqual(game.track.length, 73)
 
     def test_avenue_corso_paseo_shape_is_continuous_flat_course(self):
-        """Corso Paseo : 42 cases, plat (aucune montagne), tracé continu
+        """Corso Paseo : 73 cases, plat (aucune montagne), tracé continu
         (le suit des tuiles bout à bout, virages à leur place)."""
         from game.track import compute_track_path
         track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
@@ -130,15 +130,15 @@ class TestOfficialStages(unittest.TestCase):
         self.assertNotIn(TileType.UPHILL, types)
         self.assertNotIn(TileType.DOWNHILL, types)
         pts = compute_track_path(track, 1.0)
-        # continuité : chaque segment du polyligne est court (pas de saut)
+        # continuité : un segment du polyligne = une tuile (6 cases max pour une droite)
         import math
         for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-            self.assertLessEqual(math.hypot(x1 - x0, y1 - y0), 2.0)
+            self.assertLessEqual(math.hypot(x1 - x0, y1 - y0), 6.0)
         # le tracé tient dans une forme raisonnable (pas de boucle délirante)
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
-        self.assertLess(max(xs) - min(xs), 40)
-        self.assertLess(max(ys) - min(ys), 25)
+        self.assertLess(max(xs) - min(xs), 80)
+        self.assertLess(max(ys) - min(ys), 40)
 
     def test_available_stages_lists_circuit_and_official(self):
         names = [name for name, _desc, _code in available_stages()]
@@ -159,7 +159,7 @@ class TestStageMenu(unittest.TestCase):
         ui._select_stage("La Haut Montagne")
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "La Haut Montagne")
-        self.assertEqual(ui.game.track.length, 42)
+        self.assertEqual(ui.game.track.length, 73)
         types = [t.type for t in ui.game.track.tiles]
         self.assertIn(TileType.UPHILL, types)
 
@@ -204,7 +204,7 @@ class TestStageMenu(unittest.TestCase):
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "Avenue Corso Paseo")
-        self.assertEqual(ui.game.track.length, 42)
+        self.assertEqual(ui.game.track.length, 73)
 
 
 if __name__ == '__main__':

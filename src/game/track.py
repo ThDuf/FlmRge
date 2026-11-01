@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from enum import Enum, auto
+from bisect import bisect_right
 import math
 from .runner import Runner
 
@@ -55,17 +56,33 @@ class Cell:
         return runner
 
 
+# Nombre de cases le long de la route selon le type de tuile (officiel) :
+# virages = 2 cases, droites = 6 cases, arrivée = 5 cases après la ligne.
+TILE_CELLS = {
+    TileType.START: 2,
+    TileType.FINISH: 5,
+    TileType.STRAIGHT: 6,
+    TileType.UPHILL: 6,
+    TileType.DOWNHILL: 6,
+    TileType.LIGHT_TURN: 2,
+    TileType.SHARP_TURN: 2,
+}
+
+
 @dataclass
 class Tile:
-    """Représente une tuile de piste (composée de 2 cases)."""
+    """Représente une tuile de piste (2 files A/B par case, `length` cases)."""
     type: TileType
-    cells: List[Cell] = field(default_factory=lambda: [Cell(), Cell()])
-    x: int = 0  # Position X de la tuile
-    direction: int = 1  # Sens du virage (+1/-1) ; purement visuel (pas de règle)
+    x: int = 0  # Position X (en cases) du début de la tuile
+    direction: int = 1  # Sens du virage (+1/-1) ; purement visuel
+    length: int = 2  # nombre de cases le long de la route
+    cells: List[Cell] = field(default_factory=list)
 
     def __post_init__(self):
+        if not self.cells:
+            self.cells = [Cell() for _ in range(self.length)]
         for i, cell in enumerate(self.cells):
-            cell.x = self.x * 2 + i
+            cell.x = self.x + i
 
 
 # Angles des virages (pièces officielles : 45° = léger, 90° = serré)
@@ -78,18 +95,19 @@ TURN_ANGLE = {
 def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, float]]:
     """Polyligne du circuit selon la séquence réelle des tuiles.
 
-    Chaque tuile avance de 2*unit le long du chemin ; une tuile de virage
-    courbe le cap de son angle (45° léger, 90° serré) dans sa direction.
-    Retourne la liste des points (en unités de cases), cap initial vers +x.
+    Chaque tuile avance de sa longueur (cases) le long du chemin ; une tuile
+    de virage courbe le cap de son angle (45° léger, 90° serré) dans sa
+    direction. Retourne la liste des points (en unités de cases), cap initial +x.
     """
     pts = [(0.0, 0.0)]
     x, y, heading = 0.0, 0.0, 0.0
     for tile in track.tiles:
+        n = tile.length  # une tuile droite fait 6 cases, un virage 2 cases
         if tile.type in TURN_ANGLE:
             # coordonnées écran (y vers le bas) : angle NÉGATIF = virage à
             # gauche visuel, donc G (+1) -> on inverse le signe
             theta = -TURN_ANGLE[tile.type] * getattr(tile, "direction", 1)
-            arc = 2 * unit
+            arc = n * unit
             radius = arc / abs(theta)
             nx, ny = -math.sin(heading), math.cos(heading)  # normale au cap
             s = 1 if theta > 0 else -1
@@ -104,8 +122,8 @@ def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, f
             x, y = pts[-1]
             heading += theta
         else:
-            x += 2 * unit * math.cos(heading)
-            y += 2 * unit * math.sin(heading)
+            x += n * unit * math.cos(heading)
+            y += n * unit * math.sin(heading)
             pts.append((x, y))
     return pts
 
@@ -114,31 +132,32 @@ def compute_track_path(track: 'Track', unit: float = 1.0) -> List[Tuple[float, f
 class Track:
     """Représente la piste complète."""
     tiles: List[Tile] = field(default_factory=list)
-    length: int = 0
+    length: int = 0  # nombre total de cases
+    _starts: List[int] = field(default_factory=list)  # début (en cases) de chaque tuile
 
-    def __post_init__(self):
-        self.length = len(self.tiles) * 2
-
-    def add_tile(self, tile_type: TileType, direction: int = 1) -> None:
-        x = len(self.tiles)
-        tile = Tile(tile_type, x=x, direction=direction)
+    def add_tile(self, tile_type: TileType, direction: int = 1, cells: int = None) -> None:
+        length = cells if cells is not None else TILE_CELLS.get(tile_type, 2)
+        tile = Tile(tile_type, x=self.length, direction=direction, length=length)
         self.tiles.append(tile)
-        self.length = len(self.tiles) * 2
+        self._starts.append(tile.x)
+        self.length += length
+
+    def tile_index_at(self, x: int) -> int:
+        """Index de la tuile contenant la case x."""
+        i = bisect_right(self._starts, x) - 1
+        return max(0, min(i, len(self.tiles) - 1))
 
     def get_cell(self, x: int, lane: int) -> Optional[Cell]:
         if x < 0 or x >= self.length:
             return None
-        tile_index = x // 2
-        cell_index = x % 2
-        if tile_index < len(self.tiles):
-            return self.tiles[tile_index].cells[cell_index]
-        return None
+        tile = self.tiles[self.tile_index_at(x)]
+        return tile.cells[x - tile.x]
 
     def tile_type_at(self, x: int) -> TileType:
         """Type de la tuile contenant la case x (STRAIGHT si hors piste)."""
         if x < 0 or x >= self.length:
             return TileType.STRAIGHT
-        return self.tiles[x // 2].type
+        return self.tiles[self.tile_index_at(x)].type
 
     def is_cell_empty(self, x: int, lane: int) -> bool:
         cell = self.get_cell(x, lane)
