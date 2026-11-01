@@ -13,7 +13,7 @@ def consistency(game):
         assert (r.x, r.y) == (x, y), f"{r.id} desynchronise"
 
 random.seed(7)
-game = Game(stage="circuit", player_count=2)
+game = Game(stage="La Haut Montagne", player_count=2)
 print(f"Circuit : {game.track.length} cases, {len(game.track.tiles)} tuiles")
 for turn in range(80):
     for player in game.players:
@@ -35,4 +35,4 @@ consistency(game)
 decks = [len(r.energy_deck) + len(r.discard_pile) + len(r.hand)
          for p in game.players for r in p.get_runners()]
 print(f"Cartes restantes par coureur en fin de partie : {decks}")
-print("Partie complete sur circuit OK")
+print("Partie complete sur La Haut Montagne OK")

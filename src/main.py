@@ -58,7 +58,6 @@ PLAYER_COLORS = {
 
 # Noms d'affichage des étapes
 STAGE_NAMES = {
-    "circuit": "Circuit de montagne",
     "test": "Piste d'essai",
     "Avenue Corso Paseo": "Avenue Corso Paseo",
 }

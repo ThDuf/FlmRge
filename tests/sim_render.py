@@ -18,7 +18,7 @@ for w, h in [(900, 600), (1200, 800), (1600, 1000)]:
         assert rect.bottom <= h, f"entrée menu {name} hors écran"
 print("MENU: rendu OK a 3 tailles, toutes les entrées visibles")
 
-ui = main.FlammeRougeGame(stage="circuit")
+ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
 def render_all():
     ui.screen.fill(main.WHITE)

@@ -18,7 +18,7 @@ from game.game import Game
 from game.track import CellGeographyType
 
 random.seed(42)
-game = Game(stage="circuit", player_count=2)
+game = Game(stage="La Haut Montagne", player_count=2)
 track = game.track
 
 def check_blocking(start, stop, target_x):

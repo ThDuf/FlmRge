@@ -30,7 +30,7 @@ def sum_positions(ui):
 
 class TestUiFlow(unittest.TestCase):
     def setUp(self):
-        self.ui = main.FlammeRougeGame(stage="circuit")
+        self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
     def _play_energy_phase(self):
         """Joue la première carte de chaque coureur, comme les clics souris."""
@@ -158,7 +158,7 @@ class TestUiFlow(unittest.TestCase):
 
 class TestHandLayout(unittest.TestCase):
     def setUp(self):
-        self.ui = main.FlammeRougeGame(stage="circuit")
+        self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
     def test_panels_fit_window(self):
         layout = ui_layout = self.ui._hand_layout()
@@ -235,7 +235,7 @@ class TestHandLayout(unittest.TestCase):
 
 class TestRemainingCounts(unittest.TestCase):
     def setUp(self):
-        self.ui = main.FlammeRougeGame(stage="circuit")
+        self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
     def test_counts_full_deck_at_start(self):
         runner = self.ui.game.players[0].sprinter
@@ -271,7 +271,7 @@ class TestTrackLayout(unittest.TestCase):
     """Circuit organique : chemin continu, cases contiguës, tout visible."""
 
     def setUp(self):
-        self.ui = main.FlammeRougeGame(stage="circuit")
+        self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
     def test_all_cells_fit_on_screen(self):
         ui = self.ui
@@ -352,8 +352,10 @@ class TestTrackLayout(unittest.TestCase):
         chaque case occupe `cell` pixels de chemin, sans trou ni saut."""
         ui = self.ui
         geo = ui._track_geometry()
+        # tolérance : les virages sont approchés par une polyligne inscrite,
+        # l'erreur cumulée croît avec le nombre de virages de l'étape
         self.assertAlmostEqual(geo["total"], ui.game.track.length * geo["cell"],
-                               delta=1.0)
+                               delta=2.0)
 
 
     def test_action_banner_describes_each_step(self):

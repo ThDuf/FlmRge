@@ -102,32 +102,9 @@ def build_track_from_code(code: str) -> Track:
 
 
 def build_stage_track(name: str) -> Track:
-    """Construit la piste d'une étape nommée (officielle, 'circuit' ou 'test')."""
+    """Construit la piste d'une étape nommée (officielle, ou 'test')."""
     if name in OFFICIAL_STAGES:
         return build_track_from_code(OFFICIAL_STAGES[name])
-    if name == "circuit":
-        # Circuit perso en boucle (4 virages serrés de 90° dans le même sens) :
-        # montée à l'aller, descente au retour (géographie au niveau des cases).
-        # 19 tuiles = 98 cases.
-        track = Track()
-
-        def add(chars, turn=None):
-            track.add_tile(make_tile(chars, turn=turn))
-
-        add("sssssf")                          # départ
-        add("ffffff"); add("ffffff")
-        add("uuuuuu"); add("uuuuuu")           # montée
-        add("ff", turn=(math.pi / 2, 1))
-        add("ffffff"); add("ffffff")
-        add("ff", turn=(math.pi / 2, 1))
-        add("ffffff"); add("ffffff")
-        add("dddddd"); add("dddddd")           # descente
-        add("ff", turn=(math.pi / 2, 1))
-        add("ffffff"); add("ffffff")
-        add("ff", turn=(math.pi / 2, 1))
-        add("ffffff")
-        add("feeeee")                          # arrivée
-        return track
     if name == "test":
         track = Track()
         track.add_tile(make_tile("sssssf"))
@@ -140,10 +117,10 @@ def build_stage_track(name: str) -> Track:
 
 
 def available_stages() -> List[tuple]:
-    """Étapes jouables : [(nom, description, code), ...] — 'circuit' perso
-    puis les étapes officielles du rulebook."""
+    """Étapes jouables : [(nom, description, code), ...] — les étapes
+    officielles du rulebook."""
     result = []
-    for name in ["circuit", *OFFICIAL_STAGES]:
+    for name in OFFICIAL_STAGES:
         track = build_stage_track(name)
         cells = [c for t in track.tiles for c in t.cells]
         n_up = sum(1 for c in cells if c.geography == CellGeographyType.UPHILL)
@@ -244,7 +221,7 @@ class Game:
         return [Card(value, CardType.ENERGY, runner_str) for value in values]
 
     def _build_track(self, stage: str) -> Track:
-        """Construit la piste de l'étape choisie (officielle, 'circuit', 'test')."""
+        """Construit la piste de l'étape choisie (officielle ou 'test')."""
         return build_stage_track(stage)
 
     def _place_runner_at_start(self, runner: Runner) -> None:

@@ -194,9 +194,9 @@ class TestOfficialStages(unittest.TestCase):
         self.assertLess(max(xs) - min(xs), 80)
         self.assertLess(max(ys) - min(ys), 40)
 
-    def test_available_stages_lists_circuit_and_official(self):
+    def test_available_stages_lists_official_only(self):
         names = [name for name, _desc, _code in available_stages()]
-        self.assertEqual(names, ["circuit", *OFFICIAL_STAGES.keys()])
+        self.assertEqual(names, list(OFFICIAL_STAGES.keys()))
         for name, desc, code in available_stages():
             self.assertIn("cases", desc)
 
@@ -206,7 +206,7 @@ class TestStageMenu(unittest.TestCase):
         ui = main.FlammeRougeGame()
         self.assertIsNone(ui.game)
         entries = ui._menu_entries()
-        self.assertEqual(len(entries), 6)
+        self.assertEqual(len(entries), len(OFFICIAL_STAGES))
 
     def test_select_stage_starts_game(self):
         ui = main.FlammeRougeGame()
@@ -253,7 +253,7 @@ class TestStageMenu(unittest.TestCase):
         # borné à 4 : deux RIGHT de plus -> 4, puis on reste à 4
         ui2 = main.FlammeRougeGame()
         ui2.menu_step = "players"
-        ui2._pending_stage = "circuit"
+        ui2._pending_stage = "Avenue Corso Paseo"
         ui2.player_count = 4
         ui2._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
         self.assertEqual(ui2.player_count, 4)
@@ -263,7 +263,7 @@ class TestStageMenu(unittest.TestCase):
         # clic sur le bouton "4"
         ui3 = main.FlammeRougeGame()
         ui3.menu_step = "players"
-        ui3._pending_stage = "circuit"
+        ui3._pending_stage = "Avenue Corso Paseo"
         count, rect = ui3._player_count_rects()[-1]
         ui3._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                            pos=rect.center))
@@ -277,16 +277,12 @@ class TestStageMenu(unittest.TestCase):
         self.assertEqual(len(Game(stage="test", player_count=9).players), 4)
 
     def test_preview_tile_marks_letters(self):
-        """La preview marque chaque tuile avec sa lettre (a..u) pour les
-        étapes officielles, sans lettre pour le circuit perso."""
+        """La preview marque chaque tuile avec sa lettre (a..u)."""
         ui = main.FlammeRougeGame()
         marks, total = ui._preview_tile_marks("Avenue Corso Paseo")
         self.assertEqual(len(marks), 21)
         self.assertEqual([m[1] for m in marks], list("abcdefghijklmnopqrstu"))
         self.assertEqual(total, 78)  # 78 cases
-        marks_c, total_c = ui._preview_tile_marks("circuit")
-        self.assertEqual(len(marks_c), 19)
-        self.assertTrue(all(m[1] is None for m in marks_c))
 
     def test_menu_preview_points_within_panel(self):
         """La prévisualisation du tracé tient dans son panneau (grandes fenêtres)."""
@@ -305,7 +301,7 @@ class TestStageMenu(unittest.TestCase):
             self.assertLessEqual(bb_h * scale, rect.h - 60, name)
 
     def test_escape_returns_to_menu_and_r_restarts_stage(self):
-        ui = main.FlammeRougeGame(stage="circuit")
+        ui = main.FlammeRougeGame(stage="Firenze - Milano")
         import pygame
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
         self.assertIsNone(ui.game)

@@ -195,15 +195,15 @@ class TestAscentSlipstream(unittest.TestCase):
         self.assertIn('rear', moved_ids)
 
 
-class TestCircuitStage(unittest.TestCase):
-    def test_circuit_contains_mountains(self):
-        game = Game(stage="circuit", player_count=2)
+class TestMountainStage(unittest.TestCase):
+    def test_haut_montagne_contains_mountains(self):
+        game = Game(stage="La Haut Montagne", player_count=2)
         turns = [t.turn for t in game.track.tiles]
         geographies = [c.geography for t in game.track.tiles for c in t.cells]
         self.assertIn(CellGeographyType.UPHILL, geographies)
         self.assertIn(CellGeographyType.DOWNHILL, geographies)
         self.assertTrue(any(t and abs(t[0]) >= math.pi / 2 for t in turns))
-        self.assertEqual(game.track.length, 98)  # circuit perso : 19 tuiles
+        self.assertEqual(game.track.length, 78)  # étape officielle : 21 tuiles
 
 
 if __name__ == '__main__':
