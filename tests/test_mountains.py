@@ -203,7 +203,7 @@ class TestCircuitStage(unittest.TestCase):
         self.assertIn(CellGeographyType.UPHILL, geographies)
         self.assertIn(CellGeographyType.DOWNHILL, geographies)
         self.assertTrue(any(t and abs(t[0]) >= math.pi / 2 for t in turns))
-        self.assertEqual(game.track.length, 97)  # circuit perso : 19 tuiles
+        self.assertEqual(game.track.length, 98)  # circuit perso : 19 tuiles
 
 
 if __name__ == '__main__':

@@ -31,10 +31,11 @@ OFFICIAL_STAGES = {
 # - largeur = nombre de files de la tuile (2 en jeu de base)
 # - cases = alphabet CELL_CHARS de track.py (f=plat, u=montée, d=descente,
 #   s=ligne de départ, e=ligne d'arrivée) ; une droite fait 6 cases,
-#   un virage 2, le départ 6, l'arrivée 5 (ligne sur la 1re case)
+#   un virage 2, le départ 6 (ligne sur les 5 premières), l'arrivée 6
+#   (ligne sur les 5 dernières)
 # ------------------------------------------------------------------
 TILE_DEFS = {
-    'a': (None, 2, "sssssf"),   'u': (None, 2, "effff"),
+    'a': (None, 2, "sssssf"),   'u': (None, 2, "feeeee"),
     'b': (None, 2, "ffffff"),   'c': (None, 2, "ffffff"),
     'd': (None, 2, "ffffff"),   'f': (None, 2, "ffffff"),
     'l': (None, 2, "ffffff"),   'm': (None, 2, "ffffff"),
@@ -56,7 +57,7 @@ DESCENT_LETTERS = set("FIOPS")        # face montagne = descente (bord bleu)
 MOUNTAIN_DEFS = {
     'A': (None, 2, "ssssff"),           # départ, face retournée
     'B': (None, 2, "ddddff"),           # descente sur les 4 premières cases seulement
-    'U': (None, 2, "effff"),            # arrivée, toujours plate
+    'U': (None, 2, "feeeee"),           # arrivée, toujours plate
 }
 
 
@@ -99,7 +100,7 @@ def build_stage_track(name: str) -> Track:
     if name == "circuit":
         # Circuit perso en boucle (4 virages serrés de 90° dans le même sens) :
         # montée à l'aller, descente au retour (géographie au niveau des cases).
-        # 19 tuiles = 97 cases.
+        # 19 tuiles = 98 cases.
         track = Track()
 
         def add(chars, turn=None):
@@ -117,14 +118,14 @@ def build_stage_track(name: str) -> Track:
         add("ffffff"); add("ffffff")
         add("ff", turn=(math.pi / 2, 1))
         add("ffffff")
-        add("effff")                           # arrivée
+        add("feeeee")                          # arrivée
         return track
     if name == "test":
         track = Track()
         track.add_tile(make_tile("sssssf"))
         for _ in range(4):
             track.add_tile(make_tile("ffffff"))
-        track.add_tile(make_tile("effff"))
+        track.add_tile(make_tile("feeeee"))
         return track
     # Inconnu -> étape tutorielle par défaut
     return build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])

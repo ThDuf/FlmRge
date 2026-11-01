@@ -314,12 +314,12 @@ class TestTrackLayout(unittest.TestCase):
         track = Track()
         track.add_tile(make_tile("sssssf"))
         track.add_tile(make_tile("ff", turn=(math.pi / 2, 1)))
-        track.add_tile(make_tile("effff"))
+        track.add_tile(make_tile("feeeee"))
         pts = compute_track_path(track, 1.0)
         # dernier segment (après le virage + ligne d'arrivée) : vertical
         (x0, y0), (x1, y1) = pts[-2], pts[-1]
         self.assertAlmostEqual(x1 - x0, 0, places=5)
-        self.assertAlmostEqual(abs(y1 - y0), 5, places=5)
+        self.assertAlmostEqual(abs(y1 - y0), 6, places=5)
 
     def test_soft_turn_bends_heading_45(self):
         from game.track import Track, make_tile, compute_track_path
@@ -327,7 +327,7 @@ class TestTrackLayout(unittest.TestCase):
         track = Track()
         track.add_tile(make_tile("sssssf"))
         track.add_tile(make_tile("ff", turn=(math.pi / 4, 1)))
-        track.add_tile(make_tile("effff"))
+        track.add_tile(make_tile("feeeee"))
         pts = compute_track_path(track, 1.0)
         # cap final = 45° : dernier segment (ligne d'arrivée) à 45°
         (x0, y0), (x1, y1) = pts[-2], pts[-1]

@@ -31,16 +31,16 @@ class TestTileLetters(unittest.TestCase):
         self.assertEqual(sum(1 for t in turns if t and abs(t[0] - math.pi / 4) < 1e-9), 6)
         self.assertEqual(sum(1 for t in turns if t and abs(t[0] - math.pi / 2) < 1e-9), 6)
         self.assertTrue(all(v[1] == 2 for v in TILE_DEFS.values()))  # 2 files
-        # longueurs officielles : départ 6, arrivée 5, droites 6, virages 2
+        # longueurs officielles : départ 6, arrivée 6, droites 6, virages 2
         self.assertEqual(len(TILE_DEFS['a'][2]), 6)
-        self.assertEqual(len(TILE_DEFS['u'][2]), 5)
+        self.assertEqual(len(TILE_DEFS['u'][2]), 6)
         for c in "bcdf lmn".replace(" ", ""):
             self.assertEqual(len(TILE_DEFS[c][2]), 6)
         for c in "hkqrstegijop":
             self.assertEqual(len(TILE_DEFS[c][2]), 2)
         # lignes : départ sur les 5 premières cases de 'a', arrivée sur 'u'
         self.assertEqual(TILE_DEFS['a'][2], "sssssf")
-        self.assertEqual(TILE_DEFS['u'][2], "effff")
+        self.assertEqual(TILE_DEFS['u'][2], "feeeee")
 
     def test_turn_directions_match_corso_paseo_card(self):
         """Sens des virages relevés sur la carte imprimée Avenue Corso Paseo
@@ -72,9 +72,9 @@ class TestTileLetters(unittest.TestCase):
         self.assertAlmostEqual(math.degrees(heading_at(26.5)), -90, places=0)
 
     def test_letter_mapping(self):
-        # cases officielles : départ 6 (ligne sur 5), arrivée 5 (ligne en 1re)
+        # cases officielles : départ 6 (ligne sur 5 premières), arrivée 6 (ligne sur 5 dernières)
         self.assertEqual(tile_def_for_letter('a')[2], "sssssf")
-        self.assertEqual(tile_def_for_letter('u')[2], "effff")
+        self.assertEqual(tile_def_for_letter('u')[2], "feeeee")
         for c in "bcdf lmn".replace(" ", ""):
             self.assertEqual(tile_def_for_letter(c), (None, 2, "ffffff"))
         for c in "hkqrst":
@@ -90,7 +90,7 @@ class TestTileLetters(unittest.TestCase):
         self.assertEqual(tile_def_for_letter('O')[2], "dd")       # descente
         self.assertEqual(tile_def_for_letter('B'), (None, 2, "ddddff"))  # explicite
         self.assertEqual(tile_def_for_letter('A'), (None, 2, "ssssff"))
-        self.assertEqual(tile_def_for_letter('U'), (None, 2, "effff"))
+        self.assertEqual(tile_def_for_letter('U'), (None, 2, "feeeee"))
         # les tuiles construites portent la géographie sur chaque case
         tile = build_tile('B')
         self.assertEqual([c.geography for c in tile.cells],
@@ -122,7 +122,7 @@ class TestOfficialStages(unittest.TestCase):
         for name, code in OFFICIAL_STAGES.items():
             track = build_track_from_code(code)
             self.assertEqual(len(track.tiles), 21, name)
-            self.assertEqual(track.length, 77, name)  # départ 6 + arrivée 5 + 7x6 + 12x2
+            self.assertEqual(track.length, 78, name)  # départ 6 + arrivée 6 + 7x6 + 12x2
             self.assertEqual(track.tiles[0].letter.lower(), 'a', name)
             self.assertEqual(track.tiles[-1].letter.lower(), 'u', name)
 
@@ -146,7 +146,7 @@ class TestOfficialStages(unittest.TestCase):
 
     def test_game_builds_and_plays_on_official_stage(self):
         game = Game(stage="La Haut Montagne", player_count=2)
-        self.assertEqual(game.track.length, 77)
+        self.assertEqual(game.track.length, 78)
         for player in game.players:
             for runner in player.get_runners():
                 self.assertTrue(game.play_card(player, runner, runner.hand[0]))
@@ -155,10 +155,10 @@ class TestOfficialStages(unittest.TestCase):
 
     def test_unknown_stage_falls_back_to_avenue(self):
         game = Game(stage="nimporte-quoi", player_count=2)
-        self.assertEqual(game.track.length, 77)
+        self.assertEqual(game.track.length, 78)
 
     def test_avenue_corso_paseo_shape_is_continuous_flat_course(self):
-        """Corso Paseo : 77 cases, plat (aucune montagne), tracé continu
+        """Corso Paseo : 78 cases, plat (aucune montagne), tracé continu
         (le suit des tuiles bout à bout, virages à leur place)."""
         track = build_track_from_code(OFFICIAL_STAGES["Avenue Corso Paseo"])
         geographies = [c.geography for t in track.tiles for c in t.cells]
@@ -193,7 +193,7 @@ class TestStageMenu(unittest.TestCase):
         ui._select_stage("La Haut Montagne")
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "La Haut Montagne")
-        self.assertEqual(ui.game.track.length, 77)
+        self.assertEqual(ui.game.track.length, 78)
         geographies = [c.geography for t in ui.game.track.tiles for c in t.cells]
         self.assertIn(CellGeographyType.UPHILL, geographies)
 
@@ -263,7 +263,7 @@ class TestStageMenu(unittest.TestCase):
         marks, total = ui._preview_tile_marks("Avenue Corso Paseo")
         self.assertEqual(len(marks), 21)
         self.assertEqual([m[1] for m in marks], list("abcdefghijklmnopqrstu"))
-        self.assertEqual(total, 77)  # 77 cases
+        self.assertEqual(total, 78)  # 78 cases
         marks_c, total_c = ui._preview_tile_marks("circuit")
         self.assertEqual(len(marks_c), 19)
         self.assertTrue(all(m[1] is None for m in marks_c))
@@ -293,7 +293,7 @@ class TestStageMenu(unittest.TestCase):
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_r))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, "Avenue Corso Paseo")
-        self.assertEqual(ui.game.track.length, 77)
+        self.assertEqual(ui.game.track.length, 78)
 
 
 if __name__ == '__main__':
