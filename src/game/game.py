@@ -229,17 +229,17 @@ class Game:
         """Place un coureur au départ dans la première file libre.
 
         Règle officielle : les coureurs sont placés DERNIÈRE la ligne de
-        départ (cases x < start_line_x()), dans n'importe quelle file libre ;
-        une case vide se remplit toujours par la file de droite (A) d'abord.
-        On remplit ici les cases de départ de la case 0 vers l'avant, file A
-        puis B.
+        départ (cases x < start_line_x()), AU PLUS PROCHE de la ligne, dans
+        n'importe quelle file libre ; une case vide se remplit toujours par
+        la file de droite (A) d'abord. On remplit donc depuis la case
+        limit-1 (la plus proche de la ligne) vers l'arrière, file A puis B.
 
         IMPORTANT : ne jamais laisser un coureur hors piste — un coureur
         non placé devient un « fantôme » dont le premier mouvement retirerait
         un autre coureur de sa case.
         """
         limit = self.track.start_line_x()  # la ligne est après les cases START
-        for x in range(limit):
+        for x in range(limit - 1, -1, -1):
             for lane in (0, 1):
                 cell = self.track.get_cell(x, lane)
                 if cell and cell.is_empty(lane):

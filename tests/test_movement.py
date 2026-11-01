@@ -176,7 +176,8 @@ class TestStartPlacement(unittest.TestCase):
 
     def test_riders_start_behind_the_start_line(self):
         """Règle officielle : tous les coureurs sont placés derrière la ligne
-        de départ (x < start_line_x()), file A prioritaire sur case vide."""
+        de départ (x < start_line_x()), AU PLUS PROCHE de la ligne, file A
+        prioritaire sur case vide."""
         game = Game(stage="test", player_count=4)  # 8 coureurs
         limit = game.track.start_line_x()
         self.assertEqual(limit, 5)
@@ -184,6 +185,10 @@ class TestStartPlacement(unittest.TestCase):
         self.assertEqual(len(runners), 8)
         for x, lane, r in runners:
             self.assertLess(x, limit, f"{r.id} placé sur/après la ligne ({x})")
+        # 8 coureurs = 4 cases les plus proches de la ligne (2 files chacune) :
+        # la case 0 (la plus éloignée) reste vide
+        occupied_x = sorted({x for x, _l, _r in runners})
+        self.assertEqual(occupied_x, [1, 2, 3, 4])
         # file A remplie avant la file B sur chaque case de départ
         for x in range(limit):
             cell = game.track.get_cell(x, 0)
