@@ -114,8 +114,9 @@ class FlammeRougeGame:
         self.show_decks = False  # Panneau des cartes restantes (touche D)
         self.show_history = False  # Panneau historique des coups (touche J)
         self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
-        self.pan_x = 0.0    # panoramique horizontal (flèches)
+        self.pan_x = 0.0    # panoramique horizontal (flèches ou clic droit)
         self.pan_y = 0.0
+        self._cam_drag = None  # dernier point du drag caméra (clic droit)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -319,6 +320,34 @@ class FlammeRougeGame:
         """Bouton « Podium » en haut à droite de l'écran de fin (avec TAB)."""
         return pygame.Rect(self.width - 140, TOP_H + 8, 128, 40)
 
+    def _camera_button_rects(self):
+        """Boutons caméra en haut à droite : zoom sur le peloton / vue d'ensemble."""
+        return {"peloton": pygame.Rect(self.width - 292, TOP_H + 8, 140, 36),
+                "ensemble": pygame.Rect(self.width - 146, TOP_H + 8, 134, 36)}
+
+    def _camera_button_at(self, pos):
+        for key, rect in self._camera_button_rects().items():
+            if rect.collidepoint(pos):
+                return key
+        return None
+
+    def _zoom_on_peloton(self):
+        """Zoom sur le peloton : zoom x2 et caméra centrée sur le coureur de tête."""
+        self.zoom = 2.0
+        geo = self._track_geometry()  # recalculée avec le nouveau zoom
+        cell = geo["cell"]
+        runners = self.game.track.get_all_runners()
+        if not runners:
+            return
+        lead = max(runners, key=lambda t: (t[0], -t[1]))  # plus loin, file A
+        px, py, _tx, _ty = self._path_at(geo, (lead[0] + 0.5) * cell)
+        left = self._left_w() + 12
+        top = TOP_H + INFO_H + 6
+        target_x = left + (self.width - 12 - left) / 2
+        target_y = top + (self.height - 34 - top) / 2
+        self.pan_x += target_x - px
+        self.pan_y += target_y - py
+
     def _button_info(self):
         """(libellé, couleur) du bouton d'action, ou None s'il n'y en a pas.
 
@@ -494,10 +523,26 @@ class FlammeRougeGame:
         """Événements quand une partie est en cours."""
         if event.type == pygame.MOUSEWHEEL:
             self.zoom = min(3.0, max(0.5, self.zoom * (1.25 if event.y > 0 else 0.8)))
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+            self._cam_drag = event.pos  # début du drag caméra (clic droit)
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 3:
+            self._cam_drag = None
+        elif event.type == pygame.MOUSEMOTION and self._cam_drag is not None:
+            dx = event.pos[0] - self._cam_drag[0]
+            dy = event.pos[1] - self._cam_drag[1]
+            self.pan_x += dx
+            self.pan_y += dy
+            self._cam_drag = event.pos
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 if self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
                     self.show_podium = not self.show_podium  # podium <-> circuit final
+                elif not self.game.game_over and self._camera_button_at(event.pos) == "peloton":
+                    self._zoom_on_peloton()
+                    return
+                elif not self.game.game_over and self._camera_button_at(event.pos) == "ensemble":
+                    self.zoom, self.pan_x, self.pan_y = 1.0, 0.0, 0.0
+                    return
                 elif not self._try_button_click(event.pos):
                     if self.game.current_phase == Phase.PLACEMENT:
                         self._placement_click(event.pos)
@@ -1932,6 +1977,17 @@ class FlammeRougeGame:
             text_surf = self.label_font.render(label, True, BLACK)
             self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
             legend_x += 18 + text_surf.get_width() + 14
+
+        # Boutons caméra (zoom peloton / vue d'ensemble), en haut à droite
+        if not self.game.game_over:
+            for key, rect in self._camera_button_rects().items():
+                hovered = rect.collidepoint(pygame.mouse.get_pos())
+                fill = (70, 80, 95) if not hovered else (95, 105, 120)
+                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+                label = "Voir le peloton" if key == "peloton" else "Vue d'ensemble"
+                txt = self.small_font.render(label, True, WHITE)
+                self.screen.blit(txt, txt.get_rect(center=rect.center))
 
         # Écran de victoire : bouton Podium en haut à droite + overlay podium
         # (TAB ou le bouton basculent avec l'état final du circuit)
