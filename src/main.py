@@ -834,13 +834,16 @@ class FlammeRougeGame:
                      if q in s["name"].lower() or q in s["code"].lower()]
         row, header_h = self.MENU_ROW, self.MENU_HEADER_H
         area = self._menu_list_area()
-        content_h = (2 + len(base) + (1 if perso else 0) + len(perso) + 1) * (row + 6) \
+        # zone scrollable = liste moins la ligne épinglée « Créer un circuit » en bas
+        scroll_area = pygame.Rect(area.x, area.y, area.w, area.h - row)
+        self._menu_scroll_area = scroll_area
+        content_h = (2 + len(base) + (1 if perso else 0) + len(perso)) * (row + 6) \
             + 2 * (header_h + 6)
-        max_scroll = max(0, content_h - area.h)
+        max_scroll = max(0, content_h - scroll_area.h)
         self._menu_content_h = content_h
         self._menu_max_scroll = max_scroll
         self.menu_scroll = max(0, min(max_scroll, self.menu_scroll))
-        y = area.y - self.menu_scroll
+        y = scroll_area.y - self.menu_scroll
         entries = []
 
         def add(name, desc, code, kind, h):
@@ -858,7 +861,10 @@ class FlammeRougeGame:
             for s in perso:
                 add(s["name"], f"{len(s['code'])} tuiles · code {s['code']}",
                     s["code"], "perso", row)
-        add("Créer un circuit", "éditeur de piste (roue crantée)", "", "editor", row)
+        # « Créer un circuit » : TOUJOURS visible, épinglé en bas de la zone liste
+        # (hors scroll, hors filtre de recherche)
+        entries.append(("Créer un circuit", "éditeur de piste (roue crantée)", "",
+                        pygame.Rect(x, scroll_area.bottom, w, row), "editor"))
         return entries
 
     def _preview_rect(self):
@@ -1617,9 +1623,11 @@ class FlammeRougeGame:
         self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
 
         entries = self._menu_entries()
-        area = self._menu_list_area()
-        self.screen.set_clip(area)  # la liste est scrollable dans sa zone
+        area = getattr(self, "_menu_scroll_area", self._menu_list_area())
+        self.screen.set_clip(area)  # la liste scrollable est clippée (l'entrée épinglée reste en dessous)
         for i, (name, desc, code, rect, kind) in enumerate(entries):
+            if kind == "editor":
+                continue  # dessinée à part, toujours visible en bas
             if kind == "header":
                 hdr = self.label_font.render(name, True, (150, 155, 165))
                 self.screen.blit(hdr, (rect.x + 4, rect.y + 4))
@@ -1644,6 +1652,20 @@ class FlammeRougeGame:
                                              rect.centery - name_surf.get_height() // 2))
 
         self.screen.set_clip(None)  # fin de la zone scrollable
+        # entrée « Créer un circuit » épinglée en bas, toujours visible
+        for name, desc, code, rect, kind in entries:
+            if kind == "editor":
+                selected = (entries.index((name, desc, code, rect, kind)) == self.menu_index)
+                hovered = rect.collidepoint(pygame.mouse.get_pos())
+                fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
+                border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
+                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
+                                 border_radius=8)
+                self._draw_gear((rect.x + 34, rect.centery), 15,
+                                (240, 210, 60) if (selected or hovered) else (200, 205, 215))
+                name_surf = self.label_font.render(name, True, WHITE)
+                self.screen.blit(name_surf, (rect.x + 60, rect.centery - 9))
         # barre de scroll verticale à gauche de la liste (si contenu > zone)
         track, thumb = self._menu_scrollbar_rects()
         if thumb is not None:

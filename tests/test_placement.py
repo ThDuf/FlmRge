@@ -1100,3 +1100,30 @@ class TestCircuitZoom(unittest.TestCase):
         ui2._menu_entries()
         _t, th = ui2._menu_scrollbar_rects()
         self.assertIsNone(th)
+
+    def test_create_circuit_entry_always_visible(self):
+        """L'entrée 'Créer un circuit' est épinglée en bas de la liste : toujours
+        visible même quand on scrolle ou qu'on filtre la recherche."""
+        import tempfile, pygame
+        from game.game import save_track_json
+        ui = main.FlammeRougeGame()
+        ui.saves_dir = tempfile.mkdtemp()
+        for i in range(12):
+            save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
+        ui.width, ui.height = 900, 600
+        ui.screen = pygame.display.set_mode((900, 600))
+        ui._draw_menu()
+        entries = ui._menu_entries()
+        editor = [e for e in entries if e[4] == "editor"]
+        self.assertEqual(len(editor), 1)
+        area = ui._menu_list_area()
+        self.assertEqual(editor[0][3].bottom, area.bottom)  # épinglée en bas
+        # même scrollée à fond ou filtrée, elle reste à la même place
+        ui.menu_scroll = 10 ** 9
+        ui._menu_entries()
+        e2 = [e for e in ui._menu_entries() if e[4] == "editor"][0]
+        self.assertEqual(e2[3].bottom, area.bottom)
+        ui.menu_search = "zzzzqui ne matche rien"
+        e3 = [e for e in ui._menu_entries() if e[4] == "editor"][0]
+        self.assertEqual(e3[3].bottom, area.bottom)
+        ui._draw_menu()
