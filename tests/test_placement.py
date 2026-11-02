@@ -714,15 +714,25 @@ class TestCircuitZoom(unittest.TestCase):
         g1 = ui._track_geometry()
         self.assertAlmostEqual(g1["points"][0][0], p0[0] + 60, places=1)
         self.assertAlmostEqual(g1["points"][0][1], p0[1] + 30, places=1)
-        # bouton "Voir le peloton" : zoom x2 et caméra centrée sur la tête
+        # bouton "Tête de course" : zoom x2 et caméra centrée sur la tête
         ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
-                                          pos=ui._camera_button_rects()["peloton"].center))
+                                          pos=ui._frame_button_rects()["tete"].center))
         self.assertEqual(ui.zoom, 2.0)
         geo = ui._track_geometry()
         lead = max(ui.game.track.get_all_runners(), key=lambda t: (t[0], -t[1]))
         px, py, _tx, _ty = ui._path_at(geo, (lead[0] + 0.5) * geo["cell"])
-        left = ui._left_w() + 12
-        cx = left + (ui.width - 12 - left) / 2
+        frame = ui._frame_rect()
+        cx = frame.x + frame.w / 2
+        self.assertAlmostEqual(px, cx, delta=geo["cell"])
+        # bouton "Peloton" : centré sur le plus gros pack
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._frame_button_rects()["peloton"].center))
+        pos = {r.id: (r.x, r.y) for _x, _y, r in ui.game.track.get_all_runners()}
+        packs = ui.game.track._packs_from_positions(pos)
+        biggest = max(packs, key=len)
+        avg_x = sum(pos[rid][0] for rid in biggest) / len(biggest)
+        geo = ui._track_geometry()
+        px, py, _tx, _ty = ui._path_at(geo, (avg_x + 0.5) * geo["cell"])
         self.assertAlmostEqual(px, cx, delta=geo["cell"])
         # bouton "Vue d'ensemble" : reset
         ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,

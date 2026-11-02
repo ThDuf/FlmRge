@@ -386,6 +386,11 @@ class FlammeRougeGame:
             pygame.draw.circle(self.screen, text_color, (cx, cy), 7, 2)
             pygame.draw.line(self.screen, text_color, (cx - 4, cy), (cx + 4, cy), 2)
             tx = rect.x + 32
+        elif icon == "groupe":
+            cy = rect.centery
+            for dx, r in ((-6, 4), (0, 5), (6, 4)):
+                pygame.draw.circle(self.screen, text_color, (rect.x + 18 + dx, cy), r)
+            tx = rect.x + 34
         # libellé tronqué pour tenir dans le bouton
         max_w = rect.right - 6 - tx
         while label and self.small_font.render(label, True, (0, 0, 0)).get_width() > max_w:
@@ -396,12 +401,13 @@ class FlammeRougeGame:
 
     def _frame_button_rects(self):
         """Boutons caméra à côté de la légende, en bas à droite du cadre :
-        Zoom peloton (loupe), Vue d'ensemble (dezoom)."""
+        Tête de course (loupe), Peloton (groupe), Vue d'ensemble (dezoom)."""
         frame = self._frame_rect()
-        w, h = 150, 30
+        w, h, gap = 150, 30, 6
         y = frame.bottom - h - 6
-        return {"peloton": pygame.Rect(frame.right - 8 - w, y, w, h),
-                "ensemble": pygame.Rect(frame.right - 16 - 2 * w, y, w, h)}
+        return {"tete": pygame.Rect(frame.right - 8 - w, y, w, h),
+                "peloton": pygame.Rect(frame.right - 8 - 2 * w - gap, y, w, h),
+                "ensemble": pygame.Rect(frame.right - 8 - 3 * w - 2 * gap, y, w, h)}
 
     def _purple_button_rects(self):
         """Bouton violet en bas à droite de la barre, à côté des logs :
@@ -422,22 +428,38 @@ class FlammeRougeGame:
                 return key
         return None
 
-    def _zoom_on_peloton(self):
-        """Zoom sur le peloton : zoom x2 et caméra centrée sur le coureur de tête."""
+    def _center_camera_on(self, x_cell):
+        """Zoom x2 et centre la caméra sur la case x_cell du tracé."""
         self.zoom = 2.0
         geo = self._track_geometry()  # recalculée avec le nouveau zoom
-        cell = geo["cell"]
+        s = (x_cell + 0.5) * geo["cell"]  # abscisse calculée AVEC le nouveau cell
+        px, py, _tx, _ty = self._path_at(geo, s)
+        frame = self._frame_rect()
+        target_x = frame.x + frame.w / 2
+        target_y = frame.y + frame.h / 2
+        self.pan_x += target_x - px
+        self.pan_y += target_y - py
+
+    def _zoom_on_leader(self):
+        """Bouton Tête de course : zoom sur le coureur le plus en avant (file A)."""
         runners = self.game.track.get_all_runners()
         if not runners:
             return
-        lead = max(runners, key=lambda t: (t[0], -t[1]))  # plus loin, file A
-        px, py, _tx, _ty = self._path_at(geo, (lead[0] + 0.5) * cell)
-        left = self._left_w() + 12
-        top = TOP_H + INFO_H + 6
-        target_x = left + (self.width - 12 - left) / 2
-        target_y = top + (self.height - 34 - top) / 2
-        self.pan_x += target_x - px
-        self.pan_y += target_y - py
+        lead = max(runners, key=lambda t: (t[0], -t[1]))
+        self._center_camera_on(lead[0])
+
+    def _zoom_on_peloton(self):
+        """Bouton Peloton : zoom sur le plus gros pack (groupe de coureurs
+        sans case vide entre eux), centré au milieu du pack."""
+        pos = {r.id: (r.x, r.y) for _x, _y, r in self.game.track.get_all_runners()}
+        if not pos:
+            return
+        packs = self.game.track._packs_from_positions(pos)
+        if not packs:
+            return
+        biggest = max(packs, key=len)
+        avg_x = sum(pos[rid][0] for rid in biggest) / len(biggest)
+        self._center_camera_on(avg_x)
 
     def _button_info(self):
         """(libellé, couleur) du bouton d'action, ou None s'il n'y en a pas.
@@ -646,6 +668,9 @@ class FlammeRougeGame:
                     self.show_podium = not self.show_podium  # podium <-> circuit final
                 elif not self.game.game_over and fbtns["ensemble"].collidepoint(event.pos):
                     self.zoom, self.pan_x, self.pan_y = 1.0, 0.0, 0.0
+                    return
+                elif not self.game.game_over and fbtns["tete"].collidepoint(event.pos):
+                    self._zoom_on_leader()
                     return
                 elif not self.game.game_over and fbtns["peloton"].collidepoint(event.pos):
                     self._zoom_on_peloton()
@@ -2041,8 +2066,9 @@ class FlammeRougeGame:
 
     def _draw_frame_buttons(self, mouse):
         """Boutons caméra à côté de la légende (bas droite du cadre) :
-        Zoom peloton (loupe), Vue d'ensemble (dezoom)."""
-        labels = {"peloton": ("Zoom peloton", (70, 80, 95), not self.game.game_over, "loupe"),
+        Tête de course (loupe), Peloton (groupe), Vue d'ensemble (dezoom)."""
+        labels = {"tete": ("Tête de course", (70, 80, 95), not self.game.game_over, "loupe"),
+                  "peloton": ("Peloton", (70, 80, 95), not self.game.game_over, "groupe"),
                   "ensemble": ("Vue d'ensemble", (70, 80, 95), True, "dezoom")}
         for key, rect in self._frame_button_rects().items():
             label, color, enabled, icon = labels[key]
