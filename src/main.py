@@ -96,6 +96,8 @@ class FlammeRougeGame:
         self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
         self.editor_hover_letter = 'a'  # tuile prévisualisée dans l'éditeur
         self.editor_message = ""  # message (sauvegarde/chargement) dans l'éditeur
+        self.editor_naming = False  # saisie du nom de parcours en cours
+        self.editor_name = ""       # nom saisi pour la sauvegarde
         import os as _os
         self.saves_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                        '..', 'saves')
@@ -813,10 +815,15 @@ class FlammeRougeGame:
         return rects
 
     def _editor_save(self):
-        """Sauvegarde le parcours édité en JSON dans saves/."""
+        """Sauvegarde le parcours édité en JSON dans saves/, avec le nom saisi
+        (ou un nom par défaut horodaté)."""
+        import datetime
         from game.game import save_track_json
-        path = save_track_json(self.editor_code, self.saves_dir)
+        name = self.editor_name.strip() or f"parcours_{datetime.datetime.now():%Y%m%d_%H%M%S}"
+        path = save_track_json(self.editor_code, self.saves_dir, name=name)
         self.editor_message = f"Sauvegardé : {path}"
+        self.editor_naming = False
+        self.editor_name = ""
 
     def _editor_load_latest(self):
         """Charge le parcours sauvegardé le plus récent (saves/*.json)."""
@@ -832,6 +839,19 @@ class FlammeRougeGame:
 
     def _editor_event(self, event):
         """Événements de l'éditeur : clic palette/boutons ou clavier."""
+        if self.editor_naming:
+            # saisie du nom de parcours : ENTRÉE valide, Échap annule
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    self._editor_save()
+                elif event.key == pygame.K_ESCAPE:
+                    self.editor_naming = False
+                    self.editor_name = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    self.editor_name = self.editor_name[:-1]
+                elif len(self.editor_name) < 40 and event.unicode and event.unicode.isprintable():
+                    self.editor_name += event.unicode
+            return
         if event.type == pygame.MOUSEMOTION:
             for ch, rect in self._editor_palette_rects():
                 if rect.collidepoint(event.pos):
@@ -851,7 +871,10 @@ class FlammeRougeGame:
                     elif key == "effacer":
                         self._editor_clear()
                     elif key == "sauver":
-                        self._editor_save()
+                        # passe en mode saisie du nom avant de sauvegarder
+                        import datetime
+                        self.editor_naming = True
+                        self.editor_name = f"parcours_{datetime.datetime.now():%Y%m%d_%H%M%S}"
                     elif key == "charger":
                         self._editor_load_latest()
                     elif key == "jouer":
@@ -888,7 +911,16 @@ class FlammeRougeGame:
         # code en cours + message (sauvegarde/chargement)
         code_surf = self.font.render(f"Code : {self.editor_code}", True, (240, 210, 60))
         self.screen.blit(code_surf, (20, TOP_H + 66))
-        if self.editor_message:
+        if self.editor_naming:
+            # champ de saisie du nom de parcours
+            box = pygame.Rect(20 + code_surf.get_width() + 20, TOP_H + 60, 320, 30)
+            pygame.draw.rect(self.screen, (24, 28, 34), box, border_radius=6)
+            pygame.draw.rect(self.screen, (240, 210, 60), box, width=2, border_radius=6)
+            label = self.label_font.render("Nom du parcours : ", True, (150, 155, 165))
+            self.screen.blit(label, (box.x, box.y - 20))
+            name_surf = self.font.render(self.editor_name + ("|" if pygame.time.get_ticks() // 500 % 2 else ""), True, WHITE)
+            self.screen.blit(name_surf, (box.x + 8, box.y + 6))
+        elif self.editor_message:
             msg = self.label_font.render(self.editor_message, True, (120, 220, 140))
             self.screen.blit(msg, (20 + code_surf.get_width() + 20, TOP_H + 68))
 

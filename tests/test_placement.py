@@ -467,3 +467,35 @@ class TestMenuCategories(unittest.TestCase):
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.custom_code, "abKcdfu")
         self.assertEqual([t.letter for t in ui.game.track.tiles], list("abKcdfu"))
+
+    def test_editor_save_with_name(self):
+        """Clic sur Sauver -> saisie du nom au clavier -> fichier nommé."""
+        import tempfile, os, pygame
+        ui = main.FlammeRougeGame()
+        ui.saves_dir = tempfile.mkdtemp()
+        ui.editor_code = "abKcdfu"
+        ui.menu_step = "editor"
+        # clic sur le bouton Sauver -> mode saisie
+        for key, (_l, rect) in ui._editor_action_rects().items():
+            if key == "sauver":
+                ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                                  pos=rect.center))
+        self.assertTrue(ui.editor_naming)
+        # on efface le nom proposé et on tape le nôtre
+        for _ in range(40):
+            ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_BACKSPACE,
+                                              unicode=''))
+        for ch in "mon col":
+            ui._menu_event(pygame.event.Event(pygame.KEYDOWN,
+                                              key=pygame.K_UNKNOWN, unicode=ch))
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN,
+                                          unicode='\r'))
+        self.assertFalse(ui.editor_naming)
+        files = os.listdir(ui.saves_dir)
+        self.assertEqual(files, ["mon col.json"])
+        self.assertIn("mon col.json", ui.editor_message)
+        # Échap annule la saisie
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._editor_action_rects()["sauver"][1].center))
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, unicode=''))
+        self.assertFalse(ui.editor_naming)
