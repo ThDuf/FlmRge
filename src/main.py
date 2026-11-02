@@ -91,6 +91,7 @@ class FlammeRougeGame:
         self.phase_font = pygame.font.SysFont("Arial", 20, bold=True)
         self.card_font = pygame.font.SysFont("Arial", 18)
         self.label_font = pygame.font.SysFont("Arial", 16)
+        self.bold_font = pygame.font.SysFont("Arial", 16, bold=True)
         self.small_font = pygame.font.SysFont("Arial", 12)
 
         self.stage = stage  # None -> menu de sélection d'étape affiché
@@ -2192,24 +2193,36 @@ class FlammeRougeGame:
         self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
 
     def _history_lines(self):
-        """Lignes d'historique (texte, couleur), ORDRE CHRONOLOGIQUE
-        (la plus ancienne en premier, la plus récente en dernier)."""
+        """Lignes d'historique (texte, couleur, gras), ORDRE CHRONOLOGIQUE.
+        - une ligne vide avant chaque nouveau tour
+        - nom du tour et des phases en GRAS
+        - chaque phrase liée à une équipe est dans la couleur de l'équipe."""
         lines = []
         for entry in self.game.history:
-            lines.append((f"Tour {entry['turn']}", (240, 210, 60)))
-            for color, kind, val in entry["cards"]:
-                lines.append((f"  {color} {kind} joue {val}", (200, 205, 215)))
-            for rid, color, fx, tx, val, eff, reason in entry["moves"]:
-                txt = f"  {rid} : {fx}->{tx} (carte {val}"
-                if eff != val:
-                    txt += f" -> {eff}"
-                if reason:
-                    txt += f", {reason}"
-                txt += ")"
-                lines.append((txt, (180, 220, 180)))
-            for slip in entry["slips"]:
-                desc = ", ".join(f"{rid}:{fx}->{tx}" for rid, fx, tx in slip)
-                lines.append((f"  aspiration: {desc}", (255, 200, 120)))
+            if lines:
+                lines.append(("", None, False))  # ligne vide entre les tours
+            lines.append((f"Tour {entry['turn']}", (240, 210, 60), True))
+            if entry["cards"]:
+                lines.append(("Énergie", (200, 205, 215), True))
+                for color, kind, val in entry["cards"]:
+                    team = PLAYER_COLORS.get(color, (200, 205, 215))
+                    lines.append((f"  {kind} joue {val}", team, False))
+            if entry["moves"]:
+                lines.append(("Mouvement", (200, 205, 215), True))
+                for rid, color, fx, tx, val, eff, reason in entry["moves"]:
+                    team = PLAYER_COLORS.get(color, (180, 220, 180))
+                    txt = f"  {fx}->{tx} (carte {val}"
+                    if eff != val:
+                        txt += f" -> {eff}"
+                    if reason:
+                        txt += f", {reason}"
+                    txt += ")"
+                    lines.append((txt, team, False))
+            if entry["slips"]:
+                lines.append(("Aspiration", (200, 205, 215), True))
+                for slip in entry["slips"]:
+                    desc = ", ".join(f"{rid}:{fx}->{tx}" for rid, fx, tx in slip)
+                    lines.append((f"  {desc}", (255, 200, 120), False))
         return lines
 
     def _draw_log_panel(self):
@@ -2218,26 +2231,27 @@ class FlammeRougeGame:
         rect = self._log_panel_rect()
         pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=8)
         pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
-        title = self.small_font.render("Ce qui se passe", True, (150, 155, 165))
-        self.screen.blit(title, (rect.x + 10, rect.y + 6))
         lines = self._history_lines()
         line_h = 15
-        max_lines = (rect.bottom - rect.y - 28) // line_h
+        max_lines = (rect.bottom - rect.y - 10) // line_h
         max_scroll = max(0, len(lines) - max_lines)
         self.log_scroll = max(0, min(max_scroll, self.log_scroll))
         # ancré en bas : les plus récentes en dernier (en bas), les nouvelles
         # poussent les autres vers le haut ; log_scroll = lignes cachées en haut
         start = max(0, len(lines) - max_lines - self.log_scroll)
         visible = lines[start:start + max_lines]
-        y = rect.bottom - 18 - line_h * len(visible)
-        for txt, color in visible:
-            surf = self.small_font.render(txt, True, color)
+        y = rect.bottom - 6 - line_h * len(visible)
+        for txt, color, bold in visible:
+            if not txt:
+                continue  # ligne vide entre les tours
+            font = self.bold_font if bold else self.small_font
+            surf = font.render(txt, True, color if color else (200, 205, 215))
             self.screen.blit(surf, (rect.x + 10, y))
             y += line_h
-        # indicateur de scroll
+        # indicateur de scroll (sans le mot « molette »)
         if max_scroll > 0:
-            hint = self.small_font.render(
-                f"▲ molette ({self.log_scroll}/{max_scroll})", True, (110, 115, 125))
+            hint = self.small_font.render(f"▲ {self.log_scroll}/{max_scroll}",
+                                          True, (110, 115, 125))
             self.screen.blit(hint, (rect.right - 10 - hint.get_width(), rect.y + 6))
 
     def _draw_history(self):
@@ -2251,8 +2265,12 @@ class FlammeRougeGame:
         y = rect.y + 40
         line_h = 17
         max_lines = (rect.bottom - 10 - y) // line_h
-        for txt, color in self._history_lines()[-max_lines:]:
-            surf = self.small_font.render(txt, True, color)
+        for txt, color, bold in self._history_lines()[-max_lines:]:
+            if not txt:
+                y += line_h // 2
+                continue
+            font = self.bold_font if bold else self.small_font
+            surf = font.render(txt, True, color if color else (200, 205, 215))
             self.screen.blit(surf, (rect.x + 12, y))
             y += line_h
 

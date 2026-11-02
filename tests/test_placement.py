@@ -808,9 +808,14 @@ class TestCircuitZoom(unittest.TestCase):
         self.assertEqual(ui.log_scroll, 0)
         # les events MOUSEWHEEL n'ont pas de pos : le handler lit pygame.mouse.get_pos()
         from unittest import mock
-        # ordre chronologique : la dernière ligne = le tour le plus récent
+        # ordre chronologique + ligne vide entre les tours + phases en gras + couleurs d'équipe
         lines = ui._history_lines()
-        self.assertIn(f"Tour {ui.game.turn_count}", lines[-1][0])
+        self.assertTrue(any(l[0] == f"Tour {ui.game.turn_count}" and l[2] for l in lines))
+        self.assertTrue(any(l[0] == "" for l in lines))                    # ligne vide entre tours
+        self.assertTrue(any(l[0] in ("Énergie", "Mouvement", "Aspiration") and l[2]
+                            for l in lines))                                # phases en gras
+        red = main.PLAYER_COLORS["red"]
+        self.assertTrue(any(l[1] == red for l in lines))                   # couleur d'équipe
         with mock.patch.object(pygame.mouse, 'get_pos', return_value=log.center):
             ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=1))   # vers le haut = remonter
             self.assertGreater(ui.log_scroll, 0)          # a scrollé
