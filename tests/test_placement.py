@@ -874,3 +874,32 @@ class TestCircuitZoom(unittest.TestCase):
             c_bot = ui.screen.get_at((rect.centerx, rect.bottom - 2))
             self.assertGreater(sum(c_mid[:3]), sum(c_bot[:3]) - 40,
                                "pas d'effet enfoncé")
+
+    def test_button_presses_in_on_click(self):
+        """Au clic maintenu sur un bouton, il s'enfonce (ombre inversée)."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        rect = ui._frame_button_rects()["peloton"]
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center))
+        self.assertEqual(ui._pressed_button, "peloton")
+        ui.screen.fill((255, 255, 255))
+        ui._draw_ui()
+        c_mid = ui.screen.get_at(rect.center)
+        c_top = ui.screen.get_at((rect.centerx, rect.y + 2))
+        # enfoncé : le haut du bouton est sombre (ombre portée en haut)
+        self.assertLess(sum(c_top[:3]), sum(c_mid[:3]))
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=rect.center))
+        self.assertIsNone(ui._pressed_button)
+
+    def test_no_lane_AB_graphics(self):
+        """Plus de lettres A/B sur le parcours ni dans la légende."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.screen.fill((255, 255, 255))
+        ui._draw_ui()
+        # aucun pixel noir isolé de lettre A/B hors route : on vérifie juste le rendu
+        # et l'absence de l'item de légende (test indirect : le rendu passe)

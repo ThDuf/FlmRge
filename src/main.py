@@ -117,6 +117,7 @@ class FlammeRougeGame:
         self.show_history = False  # Panneau historique des coups (touche J, overlay)
         self.current_player_idx = 0  # joueur dont les cartes sont affichées (barre du bas)
         self.log_scroll = 0  # scroll de l'écran des logs (molette au-dessus)
+        self._pressed_button = None  # bouton actuellement enfoncé (clic maintenu)
         self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
         self.pan_x = 0.0    # panoramique horizontal (flèches ou clic droit)
         self.pan_y = 0.0
@@ -356,21 +357,31 @@ class FlammeRougeGame:
         """Bouton « Podium » dans le bandeau de titre (écran de fin, avec TAB)."""
         return pygame.Rect(self.width - 140, 12, 128, 36)
 
-    def _draw_ui_button(self, rect, label, base_color, mouse, enabled=True, icon=None):
-        """Bouton avec effet d'enfoncement léger (ombre portée en bas) et
-        libellé tronqué pour tenir dans le bouton. `icon` : 'loupe' ou 'dezoom'."""
+    def _draw_ui_button(self, rect, label, base_color, mouse, enabled=True, icon=None,
+                        pressed=False):
+        """Bouton avec effet d'enfoncement léger (ombre en bas) ; au clic,
+        le bouton s'enfonce vraiment (ombre inversée). Libellé tronqué pour
+        tenir dans le bouton. `icon` : 'loupe', 'groupe' ou 'rect'."""
         hovered = enabled and rect.collidepoint(mouse)
         fill = tuple(min(255, c + 30) for c in base_color) if hovered else base_color
         if not enabled:
             fill = (52, 56, 62)
+        if pressed and enabled:
+            fill = tuple(max(0, c - 35) for c in fill)  # enfoncé au clic
         pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-        # effet enfoncé : bord sombre en bas + ligne claire en haut
         dark = tuple(max(0, c - 45) for c in fill)
         light = tuple(min(255, c + 25) for c in fill)
-        pygame.draw.line(self.screen, dark, (rect.x + 6, rect.bottom - 3),
-                         (rect.right - 6, rect.bottom - 3), 3)
-        pygame.draw.line(self.screen, light, (rect.x + 6, rect.y + 2),
-                         (rect.right - 6, rect.y + 2), 1)
+        if pressed and enabled:
+            # enfoncé : ombre en HAUT, liseré en bas (effet inverse)
+            pygame.draw.line(self.screen, dark, (rect.x + 6, rect.y + 2),
+                             (rect.right - 6, rect.y + 2), 3)
+            pygame.draw.line(self.screen, light, (rect.x + 6, rect.bottom - 3),
+                             (rect.right - 6, rect.bottom - 3), 1)
+        else:
+            pygame.draw.line(self.screen, dark, (rect.x + 6, rect.bottom - 3),
+                             (rect.right - 6, rect.bottom - 3), 3)
+            pygame.draw.line(self.screen, light, (rect.x + 6, rect.y + 2),
+                             (rect.right - 6, rect.y + 2), 1)
         pygame.draw.rect(self.screen, dark, rect, width=1, border_radius=8)
         text_color = (120, 124, 130) if not enabled else WHITE
         # icône à gauche
@@ -381,10 +392,12 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, text_color, (cx + 4, cy + 4),
                              (cx + 9, cy + 9), 2)
             tx = rect.x + 32
-        elif icon == "dezoom":
+        elif icon == "rect":  # logo vue d'ensemble : un rectangle (fit écran)
             cx, cy = rect.x + 18, rect.centery
-            pygame.draw.circle(self.screen, text_color, (cx, cy), 7, 2)
-            pygame.draw.line(self.screen, text_color, (cx - 4, cy), (cx + 4, cy), 2)
+            pygame.draw.rect(self.screen, text_color,
+                             (cx - 8, cy - 6, 16, 12), 2, border_radius=2)
+            pygame.draw.rect(self.screen, text_color,
+                             (cx - 3, cy - 2, 6, 4), 1, border_radius=1)
             tx = rect.x + 32
         elif icon == "groupe":
             cy = rect.centery
@@ -661,9 +674,23 @@ class FlammeRougeGame:
             self.pan_x += dx
             self.pan_y += dy
             self._cam_drag = event.pos
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self._pressed_button = None  # relâche le bouton enfoncé
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 fbtns = self._frame_button_rects()
+                hit = None
+                for key, rect in fbtns.items():
+                    if rect.collidepoint(event.pos):
+                        hit = key
+                        break
+                if hit is None and self._random_button_rect().collidepoint(event.pos):
+                    hit = "random"
+                if hit is None and self._button_rect().collidepoint(event.pos):
+                    hit = "action"
+                if hit is None and self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
+                    hit = "podium"
+                self._pressed_button = hit
                 if self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
                     self.show_podium = not self.show_podium  # podium <-> circuit final
                 elif not self.game.game_over and fbtns["ensemble"].collidepoint(event.pos):
@@ -1595,6 +1622,7 @@ class FlammeRougeGame:
         self.last_action = None
         self.current_player_idx = 0
         self.log_scroll = 0
+        self._pressed_button = None
         self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
         self.zoom = 1.0
         self.pan_x = 0.0
@@ -1865,16 +1893,6 @@ class FlammeRougeGame:
             self.screen.blit(num, num.get_rect(
                 center=(px - nx * (half + 11), py - ny * (half + 11))))
 
-        # Lettres des files au départ : A à droite du sens de marche, B à gauche
-        px, py, tx, ty = self._path_at(geo, 1.5 * cell)
-        nx, ny = -ty, tx
-        lane_a = self.small_font.render("A", True, BLACK)
-        self.screen.blit(lane_a, lane_a.get_rect(
-            center=(px + nx * (half + 10), py + ny * (half + 10))))
-        lane_b = self.small_font.render("B", True, BLACK)
-        self.screen.blit(lane_b, lane_b.get_rect(
-            center=(px - nx * (half + 10), py - ny * (half + 10))))
-
     def _draw_runners(self):
         """Dessine les coureurs placés sur la piste (source de vérité : la
         piste). Les coureurs non placés (phase PLACEMENT) ne sont PAS sur la
@@ -2062,24 +2080,27 @@ class FlammeRougeGame:
         if button_info is not None:
             label, button_color = button_info
             self._draw_ui_button(self._button_rect(), label, button_color,
-                                 pygame.mouse.get_pos())
+                                 pygame.mouse.get_pos(),
+                                 pressed=(self._pressed_button == "action"))
 
     def _draw_frame_buttons(self, mouse):
         """Boutons caméra à côté de la légende (bas droite du cadre) :
         Tête de course (loupe), Peloton (groupe), Vue d'ensemble (dezoom)."""
         labels = {"tete": ("Tête de course", (70, 80, 95), not self.game.game_over, "loupe"),
                   "peloton": ("Peloton", (70, 80, 95), not self.game.game_over, "groupe"),
-                  "ensemble": ("Vue d'ensemble", (70, 80, 95), True, "dezoom")}
+                  "ensemble": ("Vue d'ensemble", (70, 80, 95), True, "rect")}
         for key, rect in self._frame_button_rects().items():
             label, color, enabled, icon = labels[key]
-            self._draw_ui_button(rect, label, color, mouse, enabled, icon)
+            self._draw_ui_button(rect, label, color, mouse, enabled, icon,
+                                 pressed=(self._pressed_button == key))
 
     def _draw_purple_buttons(self, mouse):
         """Bouton violet en bas à droite de la barre, à côté des logs :
         Tour aléatoire."""
         rect = self._purple_button_rects()["random"]
         self._draw_ui_button(rect, "Tour aléatoire", (126, 87, 194), mouse,
-                             enabled=not self.game.game_over)
+                             enabled=not self.game.game_over,
+                             pressed=(self._pressed_button == "random"))
 
         # Panneau latéral : historique des coups joués (touche J)
         if self.show_history:
@@ -2090,7 +2111,7 @@ class FlammeRougeGame:
         legend_y = self._bar_rect().y - 24  # légende en bas du cadre du parcours
         legend_x = self._left_w() + 20
         items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
-                 (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente"), (WHITE, "Files A|B")]
+                 (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente")]
         # fond blanc derrière la légende
         total_w = 0
         for _sw, label in items:
