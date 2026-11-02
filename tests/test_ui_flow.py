@@ -360,7 +360,7 @@ class TestTrackLayout(unittest.TestCase):
             self.assertTrue(bar.contains(panel))
             self.assertFalse(frame.colliderect(panel))
         self.assertFalse(frame.colliderect(ui._button_rect()))   # action dans la barre
-        self.assertTrue(frame.contains(ui._random_button_rect()))  # tour aléatoire DANS le cadre
+        self.assertFalse(frame.colliderect(ui._random_button_rect()))  # violet aussi en bas
         self.assertFalse(frame.colliderect(ui._log_panel_rect()))
 
     def test_geometry_total_arc_matches_cells(self):

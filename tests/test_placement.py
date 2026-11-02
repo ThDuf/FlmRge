@@ -234,10 +234,13 @@ class TestButtonsLayout(unittest.TestCase):
             r = ui._random_button_rect()
             self.assertLessEqual(b.bottom, h, f"bouton action hors écran {w}x{h}")
             self.assertLessEqual(r.bottom, h, f"bouton aléatoire hors écran {w}x{h}")
-            # boutons dans le cadre du parcours (haut droite) ou la barre du bas
+            # violets + action dans la barre du bas ; caméra dans le cadre (haut droite)
             frame = ui._frame_rect()
-            self.assertTrue(frame.contains(r), f"bouton aléatoire hors cadre {w}x{h}")
+            self.assertTrue(bar.contains(r), f"bouton aléatoire hors barre {w}x{h}")
+            self.assertTrue(bar.contains(ui._placement_button_rect()))
             self.assertTrue(bar.contains(b))
+            for key, rect in ui._frame_button_rects().items():
+                self.assertTrue(frame.contains(rect), f"bouton {key} hors cadre {w}x{h}")
             self.assertTrue(bar.contains(ui._log_panel_rect()))
             self.assertTrue(bar.contains(ui._card_panel_rect()))
 

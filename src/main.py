@@ -157,12 +157,12 @@ class FlammeRougeGame:
         return pygame.Rect(bar.x + 6, bar.y + 22, w, bar.h - 28)
 
     def _log_panel_rect(self) -> pygame.Rect:
-        """Écran des logs à droite du panneau de cartes : tout l'espace restant
-        dans la barre du bas (scrollable à la molette)."""
+        """Écran des logs entre le panneau de cartes et les boutons de droite
+        (scrollable à la molette)."""
         bar = self._bar_rect()
         card = self._card_panel_rect()
-        btn = self._button_rect()
-        return pygame.Rect(card.right + 8, bar.y + 6, btn.x - 8 - (card.right + 8),
+        btns = self._purple_button_rects()["random"]
+        return pygame.Rect(card.right + 8, bar.y + 6, btns.x - 8 - (card.right + 8),
                            bar.h - 12)
 
     def _player_tab_rects(self):
@@ -335,13 +335,17 @@ class FlammeRougeGame:
         return len(self.movement_movements) == 0
 
     def _button_rect(self) -> pygame.Rect:
-        """Bouton d'action à l'extrême droite de la barre du bas."""
+        """Bouton d'action à l'extrême droite de la barre du bas (sous les violets)."""
         bar = self._bar_rect()
-        return pygame.Rect(bar.right - 158, bar.y + 8, 150, 44)
+        return pygame.Rect(bar.right - 158, bar.y + 8 + 88, 150, 44)
 
     def _random_button_rect(self) -> pygame.Rect:
-        """Bouton « Tour aléatoire » (violet) dans la pile du cadre du parcours."""
-        return self._frame_button_rects()["random"]
+        """Bouton « Tour aléatoire » (violet) en bas à côté des logs."""
+        return self._purple_button_rects()["random"]
+
+    def _placement_button_rect(self) -> pygame.Rect:
+        """Bouton « Placement aléatoire » (violet) en bas à côté des logs."""
+        return self._purple_button_rects()["placement"]
 
     def _frame_rect(self) -> pygame.Rect:
         """Cadre du parcours (tout l'écran sauf la barre du bas)."""
@@ -353,15 +357,22 @@ class FlammeRougeGame:
         return pygame.Rect(self.width - 140, 12, 128, 36)
 
     def _frame_button_rects(self):
-        """Pile de boutons en haut à droite DANS le cadre du parcours :
-        Vue d'ensemble, Zoom peloton, Placement aléatoire, Tour aléatoire."""
+        """Boutons en haut à droite DANS le cadre du parcours :
+        Vue d'ensemble, puis Zoom peloton en dessous."""
         frame = self._frame_rect()
         w, h, gap = 142, 32, 6
         x = frame.right - w - 8
         return {"ensemble": pygame.Rect(x, frame.y + 8, w, h),
-                "peloton": pygame.Rect(x, frame.y + 8 + (h + gap), w, h),
-                "placement": pygame.Rect(x, frame.y + 8 + 2 * (h + gap), w, h),
-                "random": pygame.Rect(x, frame.y + 8 + 3 * (h + gap), w, h)}
+                "peloton": pygame.Rect(x, frame.y + 8 + (h + gap), w, h)}
+
+    def _purple_button_rects(self):
+        """Boutons violets en bas à droite de la barre, à côté des logs :
+        Placement aléatoire, Tour aléatoire (au-dessus du bouton d'action)."""
+        bar = self._bar_rect()
+        w = 150
+        x = bar.right - w - 8
+        return {"random": pygame.Rect(x, bar.y + 8, w, 38),
+                "placement": pygame.Rect(x, bar.y + 8 + 44, w, 38)}
 
     def _camera_button_rects(self):
         """(compat) boutons caméra = ceux du cadre du parcours."""
@@ -601,11 +612,11 @@ class FlammeRougeGame:
                 elif not self.game.game_over and fbtns["peloton"].collidepoint(event.pos):
                     self._zoom_on_peloton()
                     return
-                elif fbtns["placement"].collidepoint(event.pos):
+                elif self._placement_button_rect().collidepoint(event.pos):
                     if self.game.current_phase == Phase.PLACEMENT:
                         self.game.auto_place_riders()
                     return
-                elif not self.game.game_over and fbtns["random"].collidepoint(event.pos):
+                elif not self.game.game_over and self._random_button_rect().collidepoint(event.pos):
                     self._play_random_turn()
                     return
                 elif not self._try_button_click(event.pos):
@@ -2005,6 +2016,7 @@ class FlammeRougeGame:
         # - pile en haut à droite DANS le cadre du parcours (caméra + violets)
         # - bouton d'action à droite de la barre du bas
         self._draw_frame_buttons(pygame.mouse.get_pos())
+        self._draw_purple_buttons(pygame.mouse.get_pos())
         button_info = self._button_info()
         if button_info is not None:
             label, button_color = button_info
@@ -2017,13 +2029,10 @@ class FlammeRougeGame:
             self.screen.blit(button_text, button_text.get_rect(center=rect.center))
 
     def _draw_frame_buttons(self, mouse):
-        """Pile de boutons en haut à droite du cadre du parcours :
-        Vue d'ensemble, Zoom peloton, Placement aléatoire, Tour aléatoire."""
+        """Boutons en haut à droite du cadre du parcours :
+        Vue d'ensemble, puis Zoom peloton en dessous."""
         labels = {"ensemble": ("Vue d'ensemble", (70, 80, 95), True),
-                  "peloton": ("Zoom peloton", (70, 80, 95), not self.game.game_over),
-                  "placement": ("Placement aléatoire", (126, 87, 194),
-                                self.game.current_phase == Phase.PLACEMENT),
-                  "random": ("Tour aléatoire", (126, 87, 194), not self.game.game_over)}
+                  "peloton": ("Zoom peloton", (70, 80, 95), not self.game.game_over)}
         for key, rect in self._frame_button_rects().items():
             label, color, enabled = labels[key]
             hovered = enabled and rect.collidepoint(mouse)
@@ -2032,6 +2041,24 @@ class FlammeRougeGame:
                 fill = (52, 56, 62)
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, (200, 210, 225) if enabled else (90, 95, 105),
+                             rect, width=1, border_radius=8)
+            txt = self.small_font.render(label, True, (120, 124, 130) if not enabled else WHITE)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+    def _draw_purple_buttons(self, mouse):
+        """Boutons violets en bas à droite de la barre, à côté des logs :
+        Tour aléatoire, Placement aléatoire."""
+        labels = {"random": ("Tour aléatoire", not self.game.game_over),
+                  "placement": ("Placement aléatoire",
+                                self.game.current_phase == Phase.PLACEMENT)}
+        for key, rect in self._purple_button_rects().items():
+            label, enabled = labels[key]
+            hovered = enabled and rect.collidepoint(mouse)
+            fill = (150, 110, 210) if hovered else (126, 87, 194)
+            if not enabled:
+                fill = (52, 56, 62)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            pygame.draw.rect(self.screen, (200, 180, 240) if enabled else (90, 95, 105),
                              rect, width=1, border_radius=8)
             txt = self.small_font.render(label, True, (120, 124, 130) if not enabled else WHITE)
             self.screen.blit(txt, txt.get_rect(center=rect.center))
