@@ -742,3 +742,35 @@ class TestCircuitZoom(unittest.TestCase):
         self.assertFalse(frame.colliderect(b))              # boutons dans la barre, sous le cadre
         self.assertFalse(frame.colliderect(ui._log_panel_rect()))
         ui._draw_ui()
+
+    def test_player_block_compact_but_cards_kept(self):
+        """Le bloc joueur est compact mais les cartes gardent leur taille fixe."""
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = __import__('pygame').display.set_mode((1200, 800))
+        panel = ui._card_panel_rect()
+        self.assertLessEqual(panel.w, 380)          # bloc rapetissé en largeur
+        self.assertLessEqual(ui._bar_rect().h, 150)  # et en hauteur
+        for player, p, rows in ui._hand_layout():
+            for runner, label, items, rects in rows:
+                for rect in rects:
+                    self.assertEqual(rect.w, main.CARD_W)       # largeur carte fixe
+                    self.assertEqual(rect.h, main.CARD_H_MAIN)  # hauteur carte fixe
+                    self.assertTrue(panel.contains(rect))
+
+    def test_unplaced_runners_clipped_in_frame(self):
+        """En phase de placement, la réserve est dessinée DANS le clip du cadre."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui._select_stage("test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        bar = ui._bar_rect()
+        frame = pygame.Rect(4, main.TOP_H + 2, ui.width - 10, bar.y - main.TOP_H - 8)
+        ui.screen.fill((255, 255, 255))
+        ui.screen.set_clip(frame)
+        ui._draw_unplaced_runners()   # ne doit rien dessiner hors du cadre
+        ui.screen.set_clip(None)
+        # sous le cadre (dans la barre du bas), le pixel est resté blanc
+        self.assertEqual(tuple(ui.screen.get_at((ui.width // 2, ui.height - 10)))[:3],
+                         (255, 255, 255))

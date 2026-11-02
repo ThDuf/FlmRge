@@ -29,7 +29,8 @@ PANEL_PAD = 10     # padding des panneaux de joueur
 PANEL_HEADER = 30  # hauteur de l'en-tête des panneaux (nom + progression)
 PANEL_H = 170      # hauteur d'un panneau de joueur (colonne de gauche)
 BUTTONS_H = 100    # hauteur réservée en bas de colonne pour les 2 boutons
-BAR_H = 160        # hauteur de la barre du bas (cartes + log + boutons)
+BAR_H = 150        # hauteur de la barre du bas (cartes + log + boutons)
+CARD_H_MAIN = 36   # hauteur fixe des cartes à sélectionner (le bloc s'adapte, pas l'inverse)
 GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
 
@@ -148,9 +149,11 @@ class FlammeRougeGame:
         return pygame.Rect(4, self.height - BAR_H - 30, self.width - 10, BAR_H)
 
     def _card_panel_rect(self) -> pygame.Rect:
-        """Panneau des cartes du joueur en cours (en bas à gauche)."""
+        """Panneau des cartes du joueur en cours (en bas à gauche), compact :
+        largeur ajustée au contenu, cartes de taille fixe."""
         bar = self._bar_rect()
-        return pygame.Rect(bar.x + 6, bar.y + 26, 440, bar.h - 32)
+        w = PANEL_PAD + 88 + 5 * (CARD_W + CARD_GAP) - CARD_GAP + PANEL_PAD + 6
+        return pygame.Rect(bar.x + 6, bar.y + 22, w, bar.h - 28)
 
     def _log_panel_rect(self) -> pygame.Rect:
         """Petit écran à droite du panneau de cartes : ce qui se passe + historique."""
@@ -269,10 +272,9 @@ class FlammeRougeGame:
         panel = self._card_panel_rect()
         panel_h = panel.h
         panel_w = panel.w
-        card_h = max(36, (panel_h - PANEL_HEADER - 26) // 2)
+        card_h = CARD_H_MAIN  # taille de carte fixe, indépendante du bloc
         label_w = 88  # zone réservée au libellé ("Sprinteur" / "Rouleur")
-        avail = panel_w - label_w - 2 * PANEL_PAD
-        card_w = max(28, min(CARD_W, (avail - 3 * CARD_GAP) // 4))
+        card_w = CARD_W
 
         layout = []
         rows = []
@@ -545,6 +547,7 @@ class FlammeRougeGame:
                 self.screen.set_clip(frame)
                 self._draw_track()
                 self._draw_runners()
+                self._draw_unplaced_runners()  # réserve aussi clippée dans le cadre
                 self.screen.set_clip(None)
                 self._draw_ui()
             pygame.display.flip()
@@ -1971,9 +1974,8 @@ class FlammeRougeGame:
             self._draw_hands()
             self._draw_log_panel()
 
-        # Phase de placement : coureurs non placés affichés en réserve à côté
-        # du départ (pas sur la piste, espacés pour ne pas se superposer)
-        self._draw_unplaced_runners()
+        # (la réserve des coureurs non placés est dessinée dans le clip du cadre,
+        #  directement dans la boucle principale — jamais hors du cadre)
 
         # Affichage des cartes restantes
         if self.show_decks:
