@@ -499,3 +499,29 @@ class TestMenuCategories(unittest.TestCase):
                                           pos=ui._editor_action_rects()["sauver"][1].center))
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, unicode=''))
         self.assertFalse(ui.editor_naming)
+
+    def test_play_button_below_global_preview(self):
+        """Le bouton JOUER est sous l'aperçu global à droite (grande fenêtre)."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.menu_step = "editor"
+        ui.editor_code = "abcu"
+        prev = ui._editor_preview_panel_rect()
+        play = ui._editor_play_rect()
+        self.assertIsNotNone(prev)
+        self.assertGreaterEqual(play.y, prev.bottom)      # sous l'aperçu
+        self.assertLessEqual(play.bottom, ui.height)
+        self.assertNotIn("jouer", [k for k, _ in ui._editor_action_rects().items()])
+        ui._draw_menu()  # bouton JOUER dessiné à droite
+        # clic sur JOUER -> partie lancée
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=play.center))
+        self.assertIsNotNone(ui.game)
+        self.assertEqual(ui.game.custom_code, "abcu")
+        # fenêtre étroite : JOUER reste dans la barre de gauche
+        ui2 = main.FlammeRougeGame()
+        ui2.width, ui2.height = 900, 600
+        self.assertIsNone(ui2._editor_play_rect())
+        self.assertIn("jouer", [k for k, _ in ui2._editor_action_rects().items()])

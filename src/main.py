@@ -809,7 +809,9 @@ class FlammeRougeGame:
         """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
         labels = [("Retirer", "retirer"), ("Effacer", "effacer"),
                   ("Sauver", "sauver"), ("Charger", "charger"),
-                  ("JOUER", "jouer"), ("Retour", "retour")]
+                  ("Retour", "retour")]
+        if self.width < 1100:  # pas de panneau d'aperçu à droite -> JOUER à gauche
+            labels.insert(4, ("JOUER", "jouer"))
         x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
         rects = {}
         x = x0
@@ -819,6 +821,20 @@ class FlammeRougeGame:
             rects[key] = (label, pygame.Rect(x, y, w, 42))
             x += w + 10
         return rects
+
+    def _editor_preview_panel_rect(self):
+        """Panneau de l'aperçu global du parcours (à droite dans l'éditeur)."""
+        if self.width < 1100:
+            return None
+        return pygame.Rect(self.width - 350, TOP_H + 246, 330,
+                           max(120, min(560, self.height - TOP_H - 56) - 206))
+
+    def _editor_play_rect(self):
+        """Bouton JOUER placé SOUS l'aperçu global du parcours (à droite)."""
+        prev = self._editor_preview_panel_rect()
+        if prev is None:
+            return None
+        return pygame.Rect(prev.x, min(prev.bottom + 8, self.height - 52), prev.w, 44)
 
     def _editor_save(self):
         """Sauvegarde le parcours édité en JSON dans saves/, avec le nom saisi
@@ -870,6 +886,10 @@ class FlammeRougeGame:
                     self.editor_hover_letter = ch
                     self._editor_append(ch)
                     return
+            play_rect = self._editor_play_rect()
+            if play_rect is not None and play_rect.collidepoint(event.pos):
+                self._editor_play()
+                return
             for key, (_label, rect) in self._editor_action_rects().items():
                 if rect.collidepoint(event.pos):
                     if key == "retirer":
@@ -960,9 +980,16 @@ class FlammeRougeGame:
         if self.width >= 1100:
             self._draw_tile_preview(self.editor_hover_letter, self._tile_preview_rect())
             # aperçu du tracé + profil dans le panneau juste en dessous
-            prev = pygame.Rect(self.width - 350, TOP_H + 246, 330,
-                               max(120, min(560, self.height - TOP_H - 56) - 206))
+            prev = self._editor_preview_panel_rect()
             self._draw_editor_preview(prev)
+            # bouton JOUER sous l'aperçu global du parcours
+            play = self._editor_play_rect()
+            hovered = play.collidepoint(mouse)
+            fill = tuple(min(255, c + 35) for c in (46, 125, 50)) if hovered else (46, 125, 50)
+            pygame.draw.rect(self.screen, fill, play, border_radius=8)
+            pygame.draw.rect(self.screen, BLACK, play, width=2, border_radius=8)
+            txt = self.font.render("JOUER", True, WHITE)
+            self.screen.blit(txt, txt.get_rect(center=play.center))
         else:
             self._draw_tile_preview(self.editor_hover_letter,
                                     pygame.Rect(self.width - 240, TOP_H + 40, 220, 160))
