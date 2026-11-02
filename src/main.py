@@ -99,6 +99,7 @@ class FlammeRougeGame:
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
+        self.show_history = False  # Panneau historique des coups (touche J)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -492,6 +493,8 @@ class FlammeRougeGame:
                 self.show_hands = not self.show_hands
             elif event.key == pygame.K_d:
                 self.show_decks = not self.show_decks
+            elif event.key == pygame.K_j:
+                self.show_history = not self.show_history
             elif event.key == pygame.K_TAB and self.game.game_over:
                 self.show_podium = not self.show_podium  # podium <-> circuit final
             elif event.key == pygame.K_RETURN:
@@ -1554,7 +1557,7 @@ class FlammeRougeGame:
 
         # Contrôles
         controls_y = instructions_y + len(instructions) * 25 + 10
-        controls = ["H: masquer mains", "D: afficher decks", "R: recommencer"]
+        controls = ["H: masquer mains", "D: afficher decks", "J: historique", "R: recommencer"]
         for i, text in enumerate(controls):
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (instructions_x, controls_y + i * 25))
@@ -1593,6 +1596,10 @@ class FlammeRougeGame:
             pygame.draw.rect(self.screen, BLACK, rrect, width=2, border_radius=10)
             rtext = self.label_font.render("Tour aléatoire", True, WHITE)
             self.screen.blit(rtext, rtext.get_rect(center=rrect.center))
+
+        # Panneau latéral : historique des coups joués (touche J)
+        if self.show_history:
+            self._draw_history()
 
         # Légende des couleurs du circuit (bas de la zone circuit)
         legend_y = self.height - 26
@@ -1656,6 +1663,39 @@ class FlammeRougeGame:
         hint = self.label_font.render("TAB : voir le circuit final   ·   R : recommencer   ·   Échap : menu",
                                       True, (150, 155, 165))
         self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
+
+    def _draw_history(self):
+        """Panneau latéral droit : historique des coups joués (cartes,
+        mouvements, aspirations), du plus récent tour au plus ancien affiché."""
+        rect = pygame.Rect(self.width - 370, TOP_H + 8, 358,
+                           self.height - TOP_H - 60)
+        pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=10)
+        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=10)
+        title = self.phase_font.render("Historique des coups", True, WHITE)
+        self.screen.blit(title, (rect.x + 12, rect.y + 10))
+        y = rect.y + 40
+        line_h = 17
+        max_lines = (rect.bottom - 10 - y) // line_h
+        lines = []
+        for entry in reversed(self.game.history):
+            lines.append((f"Tour {entry['turn']}", (240, 210, 60)))
+            for color, kind, val in entry["cards"]:
+                lines.append((f"  {color} {kind} joue {val}", (200, 205, 215)))
+            for rid, color, fx, tx, val, eff, reason in entry["moves"]:
+                txt = f"  {rid} : {fx}->{tx} (carte {val}"
+                if eff != val:
+                    txt += f" -> {eff}"
+                if reason:
+                    txt += f", {reason}"
+                txt += ")"
+                lines.append((txt, (180, 220, 180)))
+            for slip in entry["slips"]:
+                desc = ", ".join(f"{rid}:{fx}->{tx}" for rid, fx, tx in slip)
+                lines.append((f"  aspiration: {desc}", (255, 200, 120)))
+        for txt, color in lines[-max_lines:]:
+            surf = self.small_font.render(txt, True, color)
+            self.screen.blit(surf, (rect.x + 12, y))
+            y += line_h
 
     def _draw_unplaced_runners(self):
         """Phase de placement : les coureurs pas encore placés sont dessinés

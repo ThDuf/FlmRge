@@ -180,6 +180,7 @@ class Game:
         # (tests/sims), tout est placé d'un coup au plus proche de la ligne.
         self.placement_queue: List[tuple] = []
         self.placement_index = 0
+        self.history: List[dict] = []  # historique des coups : un dict par tour
         if auto_place:
             self._auto_place_all()
             self.start_turn()
@@ -314,12 +315,20 @@ class Game:
                     return
         raise RuntimeError(f"Placement impossible : {runner.id} (zone de départ pleine)")
 
+    def _hist_turn(self) -> dict:
+        """Entrée d'historique du tour en cours (créée au besoin)."""
+        if not self.history or self.history[-1]["turn"] != self.turn_count:
+            self.history.append({"turn": self.turn_count, "cards": [], "moves": [],
+                                 "slips": []})
+        return self.history[-1]
+
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
         self.turn_count += 1
         self.current_phase = Phase.ENERGY
         self.cards_played_this_turn = 0
         self.total_cards_to_play = 0
+        self._hist_turn()
 
         for player in self.players:
             player.draw_cards_for_all(4)
@@ -347,6 +356,8 @@ class Game:
         runner.play_card(card)
         self.cards_played_per_runner[runner.id] = 1
         self.cards_played_this_turn += 1
+        kind = "S" if runner.type == RunnerType.SPRINTER else "R"
+        self._hist_turn()["cards"].append((player.color, kind, card.value))
         return True
 
     def all_players_ready(self) -> bool:
@@ -391,8 +402,12 @@ class Game:
         """Applique UN mouvement de coureur (pour le pas-à-pas UI)."""
         runner, value = move
         print(f"  {runner.id} (pos {runner.x}) joue carte {value}")
+        from_x = runner.x
+        eff, reason = self.track.effective_steps(from_x, value)
         self.track.move_runner(runner, value)
         print(f"    -> Déplacé à {runner.x}, file {runner.y}")
+        self._hist_turn()["moves"].append(
+            (runner.id, runner.color, from_x, runner.x, value, eff, reason))
 
     def apply_movement_steps(self, moves: List) -> None:
         """Applique tous les mouvements (usage headless)."""
@@ -441,6 +456,8 @@ class Game:
         """Applique toutes les étapes d'aspiration (usage headless)."""
         for step in steps:
             self.track.apply_slipstream_step(step)
+            self._hist_turn()["slips"].append(
+                [(r.id, fx, tx) for r, fx, _fl, tx, _tl in step])
 
     def _assign_fatigue_cards(self) -> list:
         """

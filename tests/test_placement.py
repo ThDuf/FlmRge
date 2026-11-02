@@ -352,3 +352,36 @@ class TestTrackEditor(unittest.TestCase):
         ui2.screen = pygame.display.set_mode((1200, 800))
         ui2.menu_index = 0
         ui2._draw_menu()
+
+
+class TestHistoryPanel(unittest.TestCase):
+    def test_history_records_cards_moves_slips(self):
+        from game.game import Game
+        game = Game(stage="test", player_count=2)
+        for player in game.players:
+            for runner in player.get_runners():
+                game.play_card(player, runner, runner.hand[0])
+        moves = game.resolve_movement_phase()
+        game.apply_movement_steps(moves)
+        game.apply_aspiration_steps(game.resolve_aspiration_phase())
+        self.assertEqual(len(game.history), 1)
+        entry = game.history[0]
+        self.assertEqual(entry["turn"], 1)
+        self.assertEqual(len(entry["cards"]), 4)      # 2 joueurs x 2 coureurs
+        self.assertEqual(len(entry["moves"]), 4)
+        for _color, kind, val in entry["cards"]:
+            self.assertIn(kind, ("S", "R"))
+            self.assertGreater(val, 0)
+        for rid, color, fx, tx, val, eff, reason in entry["moves"]:
+            self.assertGreaterEqual(tx, fx)
+
+    def test_history_toggle_key_J_and_panel(self):
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.screen = pygame.display.set_mode((1200, 800))
+        self.assertFalse(ui.show_history)
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_j))
+        self.assertTrue(ui.show_history)
+        ui._draw_ui()  # panneau historique sans erreur
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_j))
+        self.assertFalse(ui.show_history)
