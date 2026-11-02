@@ -815,6 +815,8 @@ class FlammeRougeGame:
         perso = list_saved_tracks(self.saves_dir)
         q = self.menu_search.strip().lower()
         if q:
+            # la recherche s'applique à TOUS les choix (base + perso)
+            base = [b for b in base if q in b[0].lower() or q in b[2].lower()]
             perso = [s for s in perso
                      if q in s["name"].lower() or q in s["code"].lower()]
         row, header_h = self.MENU_ROW, self.MENU_HEADER_H
@@ -832,9 +834,10 @@ class FlammeRougeGame:
             entries.append((name, desc, code, rect, kind))
             y += h + 6
 
-        add("— Circuits du jeu de base —", "", "", "header", header_h)
-        for name, desc, code in base:
-            add(name, desc, code, "base", row)
+        if base:
+            add("— Circuits du jeu de base —", "", "", "header", header_h)
+            for name, desc, code in base:
+                add(name, desc, code, "base", row)
         if perso:
             add("— Circuits perso —", "", "", "header", header_h)
             for s in perso:

@@ -1015,12 +1015,18 @@ class TestCircuitZoom(unittest.TestCase):
         entries2 = ui._menu_entries()
         self.assertLess(entries2[0][3].y, y0)  # remonté dans la liste
         self.assertGreater(ui.menu_scroll, 0)
-        # recherche : filtre les parcours perso
+        # recherche : s'applique à TOUS les choix (base + perso)
         ui.menu_search = "ballon"
         entries3 = ui._menu_entries()
-        perso3 = [e for e in entries3 if e[4] == "perso"]
-        self.assertEqual(len(perso3), 1)
-        self.assertEqual(perso3[0][0], "col_du_ballon_perso")
+        names3 = [e[0] for e in entries3 if e[4] in ("base", "perso")]
+        self.assertIn("Col du Ballon", names3)            # étape de base trouvée
+        self.assertIn("col_du_ballon_perso", names3)      # parcours perso trouvé
+        self.assertEqual(len([e for e in entries3 if e[4] == "perso"]), 1)
+        # une recherche qui ne matche que les perso
+        ui.menu_search = "parcours_"
+        entries3b = ui._menu_entries()
+        self.assertEqual(len([e for e in entries3b if e[4] == "base"]), 0)
+        self.assertEqual(len([e for e in entries3b if e[4] == "perso"]), 8)
         # saisie au clavier dans la barre de recherche
         ui.menu_search = ""
         ui.menu_search_active = True
@@ -1031,7 +1037,7 @@ class TestCircuitZoom(unittest.TestCase):
                                               unicode=ch))
         self.assertEqual(ui.menu_search, "ballon")
         entries4 = ui._menu_entries()
-        self.assertEqual(len([e for e in entries4 if e[4] == "perso"]), 1)
+        self.assertIn("Col du Ballon", [e[0] for e in entries4 if e[4] == "base"])
         ui._draw_menu()
 
     def test_profile_works_for_user_tracks(self):
