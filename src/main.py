@@ -116,6 +116,7 @@ class FlammeRougeGame:
         self.show_decks = False  # Panneau des cartes restantes (touche D)
         self.show_history = False  # Panneau historique des coups (touche J, overlay)
         self.current_player_idx = 0  # joueur dont les cartes sont affichées (barre du bas)
+        self.log_scroll = 0  # scroll de l'écran des logs (molette au-dessus)
         self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
         self.pan_x = 0.0    # panoramique horizontal (flèches ou clic droit)
         self.pan_y = 0.0
@@ -156,10 +157,13 @@ class FlammeRougeGame:
         return pygame.Rect(bar.x + 6, bar.y + 22, w, bar.h - 28)
 
     def _log_panel_rect(self) -> pygame.Rect:
-        """Petit écran à droite du panneau de cartes : ce qui se passe + historique."""
+        """Écran des logs à droite du panneau de cartes : tout l'espace restant
+        dans la barre du bas (scrollable à la molette)."""
         bar = self._bar_rect()
         card = self._card_panel_rect()
-        return pygame.Rect(card.right + 8, bar.y + 6, 380, bar.h - 12)
+        btn = self._button_rect()
+        return pygame.Rect(card.right + 8, bar.y + 6, btn.x - 8 - (card.right + 8),
+                           bar.h - 12)
 
     def _player_tab_rects(self):
         """Onglets des joueurs au-dessus du panneau de cartes (changer de joueur)."""
@@ -333,23 +337,36 @@ class FlammeRougeGame:
     def _button_rect(self) -> pygame.Rect:
         """Bouton d'action à l'extrême droite de la barre du bas."""
         bar = self._bar_rect()
-        log = self._log_panel_rect()
-        x = log.right + 8
-        return pygame.Rect(x, bar.y + 8, bar.right - x - 8, 44)
+        return pygame.Rect(bar.right - 158, bar.y + 8, 150, 44)
 
     def _random_button_rect(self) -> pygame.Rect:
-        """Bouton « Tour aléatoire » sous le bouton d'action (barre du bas)."""
-        r = self._button_rect()
-        return pygame.Rect(r.x, r.bottom + 6, r.w, 40)
+        """Bouton « Tour aléatoire » (violet) dans la pile du cadre du parcours."""
+        return self._frame_button_rects()["random"]
+
+    def _frame_rect(self) -> pygame.Rect:
+        """Cadre du parcours (tout l'écran sauf la barre du bas)."""
+        bar = self._bar_rect()
+        return pygame.Rect(4, TOP_H + 2, self.width - 10, bar.y - TOP_H - 8)
 
     def _podium_button_rect(self) -> pygame.Rect:
         """Bouton « Podium » dans le bandeau de titre (écran de fin, avec TAB)."""
         return pygame.Rect(self.width - 140, 12, 128, 36)
 
+    def _frame_button_rects(self):
+        """Pile de boutons en haut à droite DANS le cadre du parcours :
+        Vue d'ensemble, Zoom peloton, Placement aléatoire, Tour aléatoire."""
+        frame = self._frame_rect()
+        w, h, gap = 142, 32, 6
+        x = frame.right - w - 8
+        return {"ensemble": pygame.Rect(x, frame.y + 8, w, h),
+                "peloton": pygame.Rect(x, frame.y + 8 + (h + gap), w, h),
+                "placement": pygame.Rect(x, frame.y + 8 + 2 * (h + gap), w, h),
+                "random": pygame.Rect(x, frame.y + 8 + 3 * (h + gap), w, h)}
+
     def _camera_button_rects(self):
-        """Boutons caméra dans le bandeau de titre : zoom peloton / vue d'ensemble."""
-        return {"peloton": pygame.Rect(self.width - 292, 12, 140, 36),
-                "ensemble": pygame.Rect(self.width - 146, 12, 134, 36)}
+        """(compat) boutons caméra = ceux du cadre du parcours."""
+        r = self._frame_button_rects()
+        return {"peloton": r["peloton"], "ensemble": r["ensemble"]}
 
     def _camera_button_at(self, pos):
         for key, rect in self._camera_button_rects().items():
@@ -537,9 +554,7 @@ class FlammeRougeGame:
             else:
                 self.screen.fill(WHITE)
                 # cadre autour de la zone du parcours (tout le reste que la barre du bas)
-                bar = self._bar_rect()
-                frame = pygame.Rect(4, TOP_H + 2, self.width - 10,
-                                    bar.y - TOP_H - 8)
+                frame = self._frame_rect()
                 pygame.draw.rect(self.screen, (238, 240, 244), frame, border_radius=10)
                 pygame.draw.rect(self.screen, (160, 166, 176), frame, width=2,
                                  border_radius=10)
@@ -559,7 +574,12 @@ class FlammeRougeGame:
     def _game_event(self, event):
         """Événements quand une partie est en cours."""
         if event.type == pygame.MOUSEWHEEL:
-            self.zoom = min(3.0, max(0.5, self.zoom * (1.25 if event.y > 0 else 0.8)))
+            # molette au-dessus des logs -> scroll de l'historique, sinon zoom
+            if self._log_panel_rect().collidepoint(getattr(event, 'pos', (0, 0))):
+                lines = len(self._history_lines())
+                self.log_scroll = max(0, min(lines - 1, self.log_scroll - event.y))
+            else:
+                self.zoom = min(3.0, max(0.5, self.zoom * (1.25 if event.y > 0 else 0.8)))
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self._cam_drag = event.pos  # début du drag caméra (clic droit)
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 3:
@@ -572,13 +592,21 @@ class FlammeRougeGame:
             self._cam_drag = event.pos
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
+                fbtns = self._frame_button_rects()
                 if self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
                     self.show_podium = not self.show_podium  # podium <-> circuit final
-                elif not self.game.game_over and self._camera_button_at(event.pos) == "peloton":
+                elif not self.game.game_over and fbtns["ensemble"].collidepoint(event.pos):
+                    self.zoom, self.pan_x, self.pan_y = 1.0, 0.0, 0.0
+                    return
+                elif not self.game.game_over and fbtns["peloton"].collidepoint(event.pos):
                     self._zoom_on_peloton()
                     return
-                elif not self.game.game_over and self._camera_button_at(event.pos) == "ensemble":
-                    self.zoom, self.pan_x, self.pan_y = 1.0, 0.0, 0.0
+                elif fbtns["placement"].collidepoint(event.pos):
+                    if self.game.current_phase == Phase.PLACEMENT:
+                        self.game.auto_place_riders()
+                    return
+                elif not self.game.game_over and fbtns["random"].collidepoint(event.pos):
+                    self._play_random_turn()
                     return
                 elif not self._try_button_click(event.pos):
                     if self.game.current_phase == Phase.PLACEMENT:
@@ -1511,6 +1539,7 @@ class FlammeRougeGame:
         self.played_display_index = {}
         self.last_action = None
         self.current_player_idx = 0
+        self.log_scroll = 0
         self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
         self.zoom = 1.0
         self.pan_x = 0.0
@@ -1898,7 +1927,8 @@ class FlammeRougeGame:
                     controls = controls[:-1]
                 csurf = self.small_font.render(controls + "…", True, (140, 146, 156))
             self.screen.blit(csurf, (cx, (HEADER_H - csurf.get_height()) // 2))
-            # boutons caméra bien visibles à droite (partie en cours) / podium (fin)
+            # bouton podium à droite en fin de partie (les boutons caméra sont
+            # dans le cadre du parcours, en haut à droite)
             if self.game.game_over:
                 rect = self._podium_button_rect()
                 hovered = rect.collidepoint(pygame.mouse.get_pos())
@@ -1908,16 +1938,6 @@ class FlammeRougeGame:
                 plabel = "Voir le circuit" if self.show_podium else "Voir le podium"
                 pt = self.small_font.render(plabel, True, BLACK)
                 self.screen.blit(pt, pt.get_rect(center=rect.center))
-            else:
-                for key, rect in self._camera_button_rects().items():
-                    hovered = rect.collidepoint(pygame.mouse.get_pos())
-                    fill = (90, 105, 135) if not hovered else (120, 140, 175)
-                    pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                    pygame.draw.rect(self.screen, (200, 210, 225), rect, width=2,
-                                     border_radius=8)
-                    label = "Voir le peloton" if key == "peloton" else "Vue d'ensemble"
-                    txt = self.small_font.render(label, True, WHITE)
-                    self.screen.blit(txt, txt.get_rect(center=rect.center))
 
     def _draw_phase_band(self):
         """Bandeau de phase : nom + description de la phase, coloré."""
@@ -1981,8 +2001,10 @@ class FlammeRougeGame:
         if self.show_decks:
             self._draw_decks()
 
-        # Boutons dessinés APRÈS les panneaux pour ne jamais être couverts :
-        # bouton d'action (équivalent cliquable de ENTRÉE) + « Tour aléatoire »
+        # Boutons dessinés APRÈS le reste pour ne jamais être couverts :
+        # - pile en haut à droite DANS le cadre du parcours (caméra + violets)
+        # - bouton d'action à droite de la barre du bas
+        self._draw_frame_buttons(pygame.mouse.get_pos())
         button_info = self._button_info()
         if button_info is not None:
             label, button_color = button_info
@@ -1994,14 +2016,25 @@ class FlammeRougeGame:
             button_text = self.font.render(label, True, WHITE)
             self.screen.blit(button_text, button_text.get_rect(center=rect.center))
 
-        if not self.game.game_over:
-            rrect = self._random_button_rect()
-            rhovered = rrect.collidepoint(pygame.mouse.get_pos())
-            rfill = (150, 110, 210) if rhovered else (126, 87, 194)
-            pygame.draw.rect(self.screen, rfill, rrect, border_radius=10)
-            pygame.draw.rect(self.screen, BLACK, rrect, width=2, border_radius=10)
-            rtext = self.label_font.render("Tour aléatoire", True, WHITE)
-            self.screen.blit(rtext, rtext.get_rect(center=rrect.center))
+    def _draw_frame_buttons(self, mouse):
+        """Pile de boutons en haut à droite du cadre du parcours :
+        Vue d'ensemble, Zoom peloton, Placement aléatoire, Tour aléatoire."""
+        labels = {"ensemble": ("Vue d'ensemble", (70, 80, 95), True),
+                  "peloton": ("Zoom peloton", (70, 80, 95), not self.game.game_over),
+                  "placement": ("Placement aléatoire", (126, 87, 194),
+                                self.game.current_phase == Phase.PLACEMENT),
+                  "random": ("Tour aléatoire", (126, 87, 194), not self.game.game_over)}
+        for key, rect in self._frame_button_rects().items():
+            label, color, enabled = labels[key]
+            hovered = enabled and rect.collidepoint(mouse)
+            fill = tuple(min(255, c + 35) for c in color) if hovered else color
+            if not enabled:
+                fill = (52, 56, 62)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            pygame.draw.rect(self.screen, (200, 210, 225) if enabled else (90, 95, 105),
+                             rect, width=1, border_radius=8)
+            txt = self.small_font.render(label, True, (120, 124, 130) if not enabled else WHITE)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
 
         # Panneau latéral : historique des coups joués (touche J)
         if self.show_history:
@@ -2092,11 +2125,18 @@ class FlammeRougeGame:
         lines = self._history_lines()
         line_h = 15
         max_lines = (rect.bottom - rect.y - 28) // line_h
+        max_scroll = max(0, len(lines) - max_lines)
+        self.log_scroll = max(0, min(max_scroll, self.log_scroll))
         y = rect.y + 24
-        for txt, color in lines[:max_lines]:
+        for txt, color in lines[self.log_scroll:self.log_scroll + max_lines]:
             surf = self.small_font.render(txt, True, color)
             self.screen.blit(surf, (rect.x + 10, y))
             y += line_h
+        # indicateur de scroll
+        if max_scroll > 0:
+            hint = self.small_font.render(
+                f"▲▼ molette ({self.log_scroll}/{max_scroll})", True, (110, 115, 125))
+            self.screen.blit(hint, (rect.right - 10 - hint.get_width(), rect.bottom - 16))
 
     def _draw_history(self):
         """Overlay historique complet (touche J) : toutes les lignes."""

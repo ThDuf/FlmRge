@@ -234,10 +234,12 @@ class TestButtonsLayout(unittest.TestCase):
             r = ui._random_button_rect()
             self.assertLessEqual(b.bottom, h, f"bouton action hors écran {w}x{h}")
             self.assertLessEqual(r.bottom, h, f"bouton aléatoire hors écran {w}x{h}")
-            self.assertGreater(r.y, b.y)  # le bouton aléatoire est sous l'autre
-            # tous dans la barre du bas, sans chevauchement avec le parcours
-            for rect in (b, r, ui._log_panel_rect(), ui._card_panel_rect()):
-                self.assertTrue(bar.contains(rect), f"hors barre {w}x{h}")
+            # boutons dans le cadre du parcours (haut droite) ou la barre du bas
+            frame = ui._frame_rect()
+            self.assertTrue(frame.contains(r), f"bouton aléatoire hors cadre {w}x{h}")
+            self.assertTrue(bar.contains(b))
+            self.assertTrue(bar.contains(ui._log_panel_rect()))
+            self.assertTrue(bar.contains(ui._card_panel_rect()))
 
 
 class TestTrackEditor(unittest.TestCase):
@@ -677,7 +679,7 @@ class TestCircuitZoom(unittest.TestCase):
         g1 = ui._track_geometry()
         self.assertAlmostEqual(g1["cell"], cell0 * 1.25, places=3)
         self.assertAlmostEqual(ui.zoom, 1.25)
-        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1))
+        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1, pos=(600, 300)))
         self.assertAlmostEqual(ui.zoom, 1.0, places=3)
         # bornes de zoom
         for _ in range(10):
@@ -732,14 +734,16 @@ class TestCircuitZoom(unittest.TestCase):
         ui = main.FlammeRougeGame(stage="test")
         ui.width, ui.height = 1200, 800
         ui.screen = pygame.display.set_mode((1200, 800))
+        # boutons caméra dans la pile du cadre du parcours (haut droite)
+        frame = ui._frame_rect()
         for key, rect in ui._camera_button_rects().items():
-            self.assertLess(rect.bottom, main.HEADER_H, f"bouton {key} hors bandeau")
+            self.assertTrue(frame.contains(rect), f"bouton {key} hors cadre")
+        for key, rect in ui._frame_button_rects().items():
+            self.assertTrue(frame.contains(rect), f"bouton {key} hors cadre")
         self.assertLess(ui._podium_button_rect().bottom, main.HEADER_H)
-        # le cadre du parcours prend toute la largeur, au-dessus de la barre du bas
         bar = ui._bar_rect()
-        frame = pygame.Rect(4, main.TOP_H + 2, ui.width - 10, bar.y - main.TOP_H - 8)
         b = ui._button_rect()
-        self.assertFalse(frame.colliderect(b))              # boutons dans la barre, sous le cadre
+        self.assertFalse(frame.colliderect(b))              # bouton action dans la barre
         self.assertFalse(frame.colliderect(ui._log_panel_rect()))
         ui._draw_ui()
 
@@ -774,3 +778,22 @@ class TestCircuitZoom(unittest.TestCase):
         # sous le cadre (dans la barre du bas), le pixel est resté blanc
         self.assertEqual(tuple(ui.screen.get_at((ui.width // 2, ui.height - 10)))[:3],
                          (255, 255, 255))
+
+    def test_log_panel_scrollable(self):
+        """La molette au-dessus du panneau de logs scrolle l'historique (pas le zoom)."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        # génère de l'historique : 3 tours aléatoires
+        for _ in range(3):
+            ui._play_random_turn()
+        self.assertGreater(len(ui.game.history), 1)
+        log = ui._log_panel_rect()
+        self.assertEqual(ui.log_scroll, 0)
+        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1, pos=log.center))
+        self.assertGreater(ui.log_scroll, 0)          # a scrollé
+        self.assertAlmostEqual(ui.zoom, 1.0, places=3)  # sans zoomer
+        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=1, pos=log.center))
+        self.assertEqual(ui.log_scroll, 0)             # remonté
+        ui._draw_ui()  # panneau scrollable rendu sans erreur

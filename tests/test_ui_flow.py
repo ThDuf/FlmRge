@@ -359,8 +359,8 @@ class TestTrackLayout(unittest.TestCase):
         for player, panel, rows in ui._hand_layout():
             self.assertTrue(bar.contains(panel))
             self.assertFalse(frame.colliderect(panel))
-        self.assertFalse(frame.colliderect(ui._button_rect()))
-        self.assertFalse(frame.colliderect(ui._random_button_rect()))
+        self.assertFalse(frame.colliderect(ui._button_rect()))   # action dans la barre
+        self.assertTrue(frame.contains(ui._random_button_rect()))  # tour aléatoire DANS le cadre
         self.assertFalse(frame.colliderect(ui._log_panel_rect()))
 
     def test_geometry_total_arc_matches_cells(self):
