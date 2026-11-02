@@ -972,42 +972,36 @@ class FlammeRougeGame:
         return pygame.Rect(self.width - 340, TOP_H + 40, 320, 190)
 
     def _draw_tile_preview(self, ch, rect):
-        """Grande preview de la tuile ch : forme (droite/virage), cases colorées
-        (géographie + lignes), lettre et infos."""
+        """Panneau en haut à droite de l'éditeur : DESCRIPTION texte de la tuile
+        survolée (lettre, forme, nb de cases, largeur, face) — pas de dessin."""
         from game.game import build_tile
-        from game.track import compute_track_path, Track, CellGeographyType, CellRunType
         tile = build_tile(ch)
         pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
         pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
-        # infos : lettre + forme + nb cases + largeur
+        big = self.big_font.render(ch, True, WHITE)
+        self.screen.blit(big, (rect.x + 12, rect.y + 10))
         if tile.turn is not None:
             deg = round(math.degrees(tile.turn[0]))
             sens = "droite" if tile.turn[1] < 0 else "gauche"
             shape = f"virage {deg}° {sens}"
         else:
             shape = "ligne droite"
-        info = self.small_font.render(
-            f"{shape} · {tile.length} cases · {tile.width} files"
-            + (" · face montagne" if ch.isupper() else ""), True, (170, 175, 185))
-        self.screen.blit(info, (rect.x + 10, rect.y + 8))
-        big = self.big_font.render(ch, True, WHITE)
-        self.screen.blit(big, (rect.x + 10, rect.y + 26))
-        # tracé de la tuile seule, mis à l'échelle dans le reste du panneau
-        t = Track()
-        t.add_tile(build_tile(ch))
-        pts = compute_track_path(t, 1.0)
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
-        bb_w = max(max(xs) - min(xs), 1e-9)
-        bb_h = max(max(ys) - min(ys), 1e-9)
-        area = pygame.Rect(rect.x + 60, rect.y + 26, rect.w - 70, rect.h - 36)
-        scale = min(area.w / bb_w, area.h / bb_h)
-        ox = area.x + (area.w - bb_w * scale) / 2 - min(xs) * scale
-        oy = area.y + (area.h - bb_h * scale) / 2 - min(ys) * scale
-        # forme simple de la tuile dans le panneau de preview (pas de barres)
-        def tr(p):
-            return (ox + p[0] * scale, oy + p[1] * scale)
-        self._draw_tile_shape(pts, tile, tr, 7)
+        lines = [
+            shape,
+            f"{tile.length} cases · {tile.width} files",
+            "face montagne" if ch.isupper() else "face plate",
+        ]
+        from game.track import CellGeographyType
+        geos = {c.geography for c in tile.cells}
+        if CellGeographyType.UPHILL in geos:
+            lines.append("montée (rouge)")
+        if CellGeographyType.DOWNHILL in geos:
+            lines.append("descente (bleu)")
+        y = rect.y + 52
+        for line in lines:
+            surf = self.label_font.render(line, True, (200, 205, 215))
+            self.screen.blit(surf, (rect.x + 12, y))
+            y += 24
 
     def _draw_editor_preview(self, rect):
         """Aperçu du tracé du code édité + profil, dans le panneau de droite."""
@@ -1043,13 +1037,13 @@ class FlammeRougeGame:
                     px, py, _tx, _ty = path_point_at(pts, cell.x + k / 3)
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, c, False, seg, 5)
-        # mini-preview de chaque tuile au milieu d'elle (avec son nb de cases)
+        # lettres des tuiles au milieu de chacune (aperçu global = lettres)
         s = 0.0
         for ch, tile in zip(self.editor_code, track.tiles):
             px, py, tx, ty = path_point_at(pts, s + tile.length / 2)
             nx, ny = -ty, tx
-            self._draw_mini_tile(ch, ox + px * scale + nx * 34, oy + py * scale + ny * 34,
-                                 tx, ty, size=38)
+            lbl = self.small_font.render(ch, True, (170, 175, 185))
+            self.screen.blit(lbl, (ox + px * scale + nx * 10 - 3, oy + py * scale + ny * 10 - 5))
             s += tile.length
         # profil sous le tracé
         alt = [0]
