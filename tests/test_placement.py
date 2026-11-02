@@ -626,3 +626,14 @@ class TestMenuCategories(unittest.TestCase):
         tile = build_tile('U')
         geos = [c.geography for c in tile.cells]
         self.assertEqual(geos, [CellGeographyType.UPHILL] * 2 + [CellGeographyType.FLAT] * 4)
+
+    def test_tile_cell_summary_counts(self):
+        """Résumé des cases par type : B -> 4 descente + 2 plat, a -> 5 départ + 1 plat..."""
+        from game.game import build_tile
+        ui = main.FlammeRougeGame()
+        self.assertEqual(ui._tile_cell_summary(build_tile('b')), "cases : 6 plat")
+        self.assertEqual(ui._tile_cell_summary(build_tile('B')), "cases : 4 descente, 2 plat")
+        self.assertEqual(ui._tile_cell_summary(build_tile('D')), "cases : 5 montée, 1 descente")
+        self.assertEqual(ui._tile_cell_summary(build_tile('a')), "cases : 1 plat, 5 départ")
+        self.assertEqual(ui._tile_cell_summary(build_tile('U')), "cases : 2 montée, 4 arrivée")
+        self.assertEqual(ui._tile_cell_summary(build_tile('e')), "cases : 2 plat")

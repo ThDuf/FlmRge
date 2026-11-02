@@ -1095,9 +1095,29 @@ class FlammeRougeGame:
         """Panneau de preview de la tuile (au-dessus de l'aperçu du tracé)."""
         return pygame.Rect(self.width - 340, TOP_H + 40, 320, 190)
 
+    def _tile_cell_summary(self, tile):
+        """Résumé des cases par type : ex. « 4 descente, 2 plat » ou
+        « 6 plat », plus les lignes départ/arrivée."""
+        from collections import Counter
+        from game.track import CellGeographyType, CellRunType
+        # les cases avec une ligne (départ/arrivée) ne comptent pas dans le relief
+        geos = Counter(c.geography for c in tile.cells if c.run == CellRunType.NONE)
+        runs = Counter(c.run for c in tile.cells)
+        parts = []
+        for g, name in ((CellGeographyType.UPHILL, "montée"),
+                        (CellGeographyType.DOWNHILL, "descente"),
+                        (CellGeographyType.FLAT, "plat")):
+            if geos.get(g):
+                parts.append(f"{geos[g]} {name}")
+        if runs.get(CellRunType.START):
+            parts.append(f"{runs[CellRunType.START]} départ")
+        if runs.get(CellRunType.END):
+            parts.append(f"{runs[CellRunType.END]} arrivée")
+        return "cases : " + (", ".join(parts) if parts else "aucune")
+
     def _draw_tile_preview(self, ch, rect):
         """Panneau en haut à droite de l'éditeur : DESCRIPTION texte de la tuile
-        survolée (lettre, forme, nb de cases, largeur, face) — pas de dessin."""
+        survolée (lettre, forme, nb de cases par type, largeur, face)."""
         from game.game import build_tile
         tile = build_tile(ch)
         pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
@@ -1112,6 +1132,7 @@ class FlammeRougeGame:
             shape = "ligne droite"
         lines = [
             shape,
+            self._tile_cell_summary(tile),
             f"{tile.length} cases · {tile.width} files",
             "face montagne" if ch.isupper() else "face plate",
         ]
