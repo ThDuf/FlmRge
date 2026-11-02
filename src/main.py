@@ -796,10 +796,10 @@ class FlammeRougeGame:
         return x0, y0, bw, bh, gap, cols
 
     EDITOR_CATEGORIES = [
-        "au",            # départ / arrivée
         "bcdf lmn".replace(" ", ""),  # lignes droites
         "egijop",        # virages serrés 90°
         "hkqrst",        # virages légers 45°
+        "au",            # départ / arrivée (dernière catégorie)
     ]
 
     def _editor_palette_rects(self):

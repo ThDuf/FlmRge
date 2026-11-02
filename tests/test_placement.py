@@ -536,6 +536,7 @@ class TestMenuCategories(unittest.TestCase):
             for base in cat:
                 expected += [base, base.upper()]
         self.assertEqual(letters, expected)
-        # ordre des catégories : a,u puis droites, puis 90°, puis 45°
-        self.assertEqual(letters[:4], ['a', 'A', 'u', 'U'])
+        # ordre des catégories : droites, 90°, 45°, puis départ/arrivée en dernier
+        self.assertEqual(letters[-4:], ['a', 'A', 'u', 'U'])
         self.assertEqual(letters.index('e'), letters.index('b') + 2 * 7)  # e après les 7 droites
+        self.assertLess(letters.index('h'), len(letters) - 4)  # 45° avant départ/arrivée
