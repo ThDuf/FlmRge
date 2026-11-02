@@ -726,3 +726,20 @@ class TestCircuitZoom(unittest.TestCase):
                                           pos=ui._camera_button_rects()["ensemble"].center))
         self.assertEqual((ui.zoom, ui.pan_x, ui.pan_y), (1.0, 0.0, 0.0))
         ui._draw_ui()
+
+    def test_no_overlapping_blocks_in_game(self):
+        """Boutons caméra/podium dans le bandeau haut ; cadre du parcours à droite
+        de la colonne de gauche, sans chevauchement."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        for key, rect in ui._camera_button_rects().items():
+            self.assertLess(rect.bottom, main.HEADER_H, f"bouton {key} hors bandeau")
+        self.assertLess(ui._podium_button_rect().bottom, main.HEADER_H)
+        frame = pygame.Rect(ui._left_w() + 4, main.TOP_H + 2,
+                            ui.width - ui._left_w() - 10, ui.height - main.TOP_H - 38)
+        self.assertGreaterEqual(frame.left, ui._left_w())  # à droite de la colonne
+        b = ui._button_rect()
+        self.assertFalse(frame.colliderect(b))              # boutons à gauche du cadre
+        ui._draw_ui()

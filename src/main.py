@@ -317,13 +317,13 @@ class FlammeRougeGame:
         return pygame.Rect(r.x, min(r.bottom + 6, self.height - 46), r.w, 40)
 
     def _podium_button_rect(self) -> pygame.Rect:
-        """Bouton « Podium » en haut à droite de l'écran de fin (avec TAB)."""
-        return pygame.Rect(self.width - 140, TOP_H + 8, 128, 40)
+        """Bouton « Podium » dans le bandeau de titre (écran de fin, avec TAB)."""
+        return pygame.Rect(self.width - 140, 12, 128, 36)
 
     def _camera_button_rects(self):
-        """Boutons caméra en haut à droite : zoom sur le peloton / vue d'ensemble."""
-        return {"peloton": pygame.Rect(self.width - 292, TOP_H + 8, 140, 36),
-                "ensemble": pygame.Rect(self.width - 146, TOP_H + 8, 134, 36)}
+        """Boutons caméra dans le bandeau de titre : zoom peloton / vue d'ensemble."""
+        return {"peloton": pygame.Rect(self.width - 292, 12, 140, 36),
+                "ensemble": pygame.Rect(self.width - 146, 12, 134, 36)}
 
     def _camera_button_at(self, pos):
         for key, rect in self._camera_button_rects().items():
@@ -517,8 +517,11 @@ class FlammeRougeGame:
                 pygame.draw.rect(self.screen, (238, 240, 244), frame, border_radius=10)
                 pygame.draw.rect(self.screen, (160, 166, 176), frame, width=2,
                                  border_radius=10)
+                # le tracé ne s'affiche QUE dans le cadre du parcours
+                self.screen.set_clip(frame)
                 self._draw_track()
                 self._draw_runners()
+                self.screen.set_clip(None)
                 self._draw_ui()
             pygame.display.flip()
             self.clock.tick(60)
@@ -1832,16 +1835,40 @@ class FlammeRougeGame:
         self.screen.blit(flamme, (58, ty))
         self.screen.blit(rouge, (58 + flamme.get_width(), ty))
 
-        # Étape et tour, alignés à droite (uniquement quand une partie est en cours)
+        # Étape et tour, juste après le titre (uniquement en partie)
         if self.game is not None:
             stage_name = STAGE_NAMES.get(self.game.stage, self.game.stage)
-            stage_surf = self.label_font.render(stage_name, True, (175, 180, 190))
-            turn_surf = self.title_font.render(f"Tour {self.game.turn_count}", True, WHITE)
-            turn_x = self.width - 16 - turn_surf.get_width()
-            self.screen.blit(turn_surf, (turn_x, (HEADER_H - turn_surf.get_height()) // 2))
-            self.screen.blit(stage_surf,
-                             (turn_x - 14 - stage_surf.get_width(),
-                              (HEADER_H - stage_surf.get_height()) // 2))
+            info = self.label_font.render(
+                f"{stage_name} · Tour {self.game.turn_count}", True, (175, 180, 190))
+            self.screen.blit(info, (58 + flamme.get_width() + rouge.get_width() + 18,
+                                    (HEADER_H - info.get_height()) // 2))
+            # contrôles en une ligne au milieu du bandeau
+            controls = (f"H mains · D decks · J histo · R restart · "
+                        f"+/- molette zoom x{self.zoom:.2f} · flèches pan · "
+                        f"clic droit pan · TAB podium")
+            csurf = self.small_font.render(controls, True, (140, 146, 156))
+            self.screen.blit(csurf, (58 + flamme.get_width() + rouge.get_width() + 18
+                                     + info.get_width() + 24,
+                                     (HEADER_H - csurf.get_height()) // 2))
+            # boutons caméra à droite (partie en cours) / podium (fin de partie)
+            if self.game.game_over:
+                rect = self._podium_button_rect()
+                hovered = rect.collidepoint(pygame.mouse.get_pos())
+                fill = (240, 220, 120) if hovered else (240, 210, 60)
+                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                pygame.draw.rect(self.screen, BLACK, rect, width=1, border_radius=8)
+                plabel = "Voir le circuit" if self.show_podium else "Voir le podium"
+                pt = self.small_font.render(plabel, True, BLACK)
+                self.screen.blit(pt, pt.get_rect(center=rect.center))
+            else:
+                for key, rect in self._camera_button_rects().items():
+                    hovered = rect.collidepoint(pygame.mouse.get_pos())
+                    fill = (70, 80, 95) if not hovered else (95, 105, 120)
+                    pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                    pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+                    label = "Voir le peloton" if key == "peloton" else "Vue d'ensemble"
+                    txt = self.small_font.render(label, True, WHITE)
+                    self.screen.blit(txt, txt.get_rect(center=rect.center))
 
     def _draw_phase_band(self):
         """Bandeau de phase : nom + description de la phase, coloré."""
@@ -1855,84 +1882,40 @@ class FlammeRougeGame:
                          (16 + name_surf.get_width() + 18,
                           rect.y + (PHASE_H - desc_surf.get_height()) // 2))
 
+        # À droite du bandeau de phase : compteur + action faite / prochaine étape
+        right_lines = []
+        if self.showing_movement:
+            right_lines.append(f"Mouvement {self.movement_step}/{self.movement_total}")
+        elif self.showing_aspiration:
+            right_lines.append(f"Aspiration {self.aspiration_step}/{self.aspiration_total}")
+        elif self.game.current_phase == Phase.ENERGY:
+            right_lines.append(f"Cartes {self.game.cards_played_this_turn}/"
+                               f"{self.game.total_cards_to_play}")
+        if self.last_action:
+            right_lines.append(self.last_action[0])
+        if self.showing_movement and self.movement_movements:
+            runner, value = self.movement_movements[0]
+            eff, reason = self.game.track.effective_steps(runner.x, value)
+            txt = f"Suivant : {self._short_id(runner)} joue {value}"
+            if eff != value:
+                txt += f" → {eff}"
+            if reason:
+                txt += f" ({reason})"
+            right_lines.append(txt)
+        elif self.showing_aspiration and self.aspiration_movements:
+            step = self.aspiration_movements[0]
+            right_lines.append("Pack : " + ", ".join(
+                f"{self._short_id(r)}:{fx}→{tx}" for r, fx, _fl, tx, _tl in step))
+        for i, line in enumerate(right_lines[-2:]):
+            surf = self.small_font.render(line, True, (250, 250, 250))
+            self.screen.blit(surf, (rect.right - 10 - surf.get_width(),
+                                    rect.y + 6 + i * 16))
+
     def _draw_ui(self):
         self._draw_header()
         self._draw_phase_band()
 
-        info_x = self._left_w() + 16
-
-        # Compteurs du pas-à-pas / de la phase d'énergie
-        if self.showing_movement:
-            counter_text = self.big_font.render(
-                f"Mouvement: {self.movement_step}/{self.movement_total} coureurs", True, BLACK)
-            self.screen.blit(counter_text, (info_x, TOP_H + 2))
-        elif self.showing_aspiration:
-            counter_text = self.big_font.render(
-                f"Aspiration: {self.aspiration_step}/{self.aspiration_total} packs", True, ORANGE)
-            self.screen.blit(counter_text, (info_x, TOP_H + 2))
-        elif self.game.current_phase == Phase.ENERGY:
-            cards_text = self.big_font.render(
-                f"Cartes: {self.game.cards_played_this_turn}/{self.game.total_cards_to_play}", True, BLACK)
-            self.screen.blit(cards_text, (info_x, TOP_H + 2))
-
-        # Bandeau : ce qui vient d'être fait (mouvement, aspiration, fatigue)
-        if self.last_action:
-            action_text, action_color = self.last_action
-            action_surf = self.label_font.render(action_text, True, action_color)
-            pad = 5
-            bg = pygame.Rect(info_x - pad, TOP_H + 42 - pad,
-                             action_surf.get_width() + 2 * pad,
-                             action_surf.get_height() + 2 * pad)
-            pygame.draw.rect(self.screen, (245, 245, 240), bg, border_radius=6)
-            pygame.draw.rect(self.screen, action_color, bg, width=2, border_radius=6)
-            self.screen.blit(action_surf, (info_x, TOP_H + 42))
-
-        # Prochaine étape (prévisualisation)
-        if self.showing_movement and self.movement_movements:
-            runner, value = self.movement_movements[0]
-            eff, reason = self.game.track.effective_steps(runner.x, value)
-            if reason:
-                text = f"Suivant: {self._short_id(runner)} joue {value} \u2192 {eff} ({reason})"
-            else:
-                text = f"Suivant: {self._short_id(runner)} joue {value}"
-            self.screen.blit(self.font.render(text, True, BLACK), (info_x, TOP_H + 78))
-        elif self.showing_aspiration and self.aspiration_movements:
-            step = self.aspiration_movements[0]
-            desc = ", ".join(f"{self._short_id(r)}:{fx}\u2192{tx}"
-                             for r, fx, _fl, tx, _tl in step)
-            self.screen.blit(self.font.render(f"Pack: {desc}", True, ORANGE), (info_x, TOP_H + 78))
-
-        # Instructions (haut à droite, sous le bandeau de phase)
-        instructions_y = TOP_H + 2
-        instructions_x = self.width - 350
-        if self.game.current_phase == Phase.ENERGY:
-            if self.game.all_players_ready():
-                instructions = ["ENTR\u00c9E ou bouton", "    pour lancer", "    la phase de mouvement"]
-            else:
-                instructions = [f"Jouez 1 carte par", f"    coureur ({self.game.total_cards_to_play} total)"]
-        elif self.showing_movement:
-            instructions = ["Un coureur \u00e0 la fois :", "    ENTR\u00c9E ou bouton", "    pour le suivant"]
-        elif self.game.current_phase == Phase.MOVEMENT:
-            instructions = ["ENTR\u00c9E ou bouton", "    pour lancer", "    l'aspiration"]
-        elif self.showing_aspiration:
-            instructions = ["Un pack \u00e0 la fois :", "    ENTR\u00c9E ou bouton", "    pour continuer"]
-        elif self.game.current_phase == Phase.TERMINAL:
-            instructions = ["ENTR\u00c9E ou bouton", "    pour un nouveau", "    tour"]
-        else:
-            instructions = [f"Phase: {self.game.get_current_phase_name()}"]
-
-        for i, text in enumerate(instructions):
-            text_surface = self.font.render(text, True, BLACK)
-            self.screen.blit(text_surface, (instructions_x, instructions_y + i * 25))
-
-        # Contrôles
-        controls_y = instructions_y + len(instructions) * 25 + 10
-        controls = ["H: mains", "D: decks", "J: historique", "R: recommencer",
-                    f"+/- ou molette : zoom x{self.zoom:.2f}", "flèches : panoramique"]
-        for i, text in enumerate(controls):
-            text_surface = self.font.render(text, True, GRAY)
-            self.screen.blit(text_surface, (instructions_x, controls_y + i * 25))
-
+        info_x = self._left_w() + 16  # (les compteurs/infos sont dans le bandeau de phase)
         # Mains des coureurs : visibles dans toutes les phases (cartes jouées
         # en vert, progression x/2) ; cliquables uniquement en phase d'énergie
         if self.show_hands and self.game.current_phase == Phase.ENERGY:
@@ -1985,30 +1968,10 @@ class FlammeRougeGame:
             self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
             legend_x += 18 + text_surf.get_width() + 14
 
-        # Boutons caméra (zoom peloton / vue d'ensemble), en haut à droite
-        if not self.game.game_over:
-            for key, rect in self._camera_button_rects().items():
-                hovered = rect.collidepoint(pygame.mouse.get_pos())
-                fill = (70, 80, 95) if not hovered else (95, 105, 120)
-                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
-                label = "Voir le peloton" if key == "peloton" else "Vue d'ensemble"
-                txt = self.small_font.render(label, True, WHITE)
-                self.screen.blit(txt, txt.get_rect(center=rect.center))
-
-        # Écran de victoire : bouton Podium en haut à droite + overlay podium
+        # Écran de victoire : overlay podium (le bouton est dans le bandeau de titre)
         # (TAB ou le bouton basculent avec l'état final du circuit)
-        if self.game.game_over:
-            prect = self._podium_button_rect()
-            phovered = prect.collidepoint(pygame.mouse.get_pos())
-            pfill = (240, 220, 120) if phovered else (240, 210, 60)
-            pygame.draw.rect(self.screen, pfill, prect, border_radius=10)
-            pygame.draw.rect(self.screen, BLACK, prect, width=2, border_radius=10)
-            plabel = "Voir le circuit" if self.show_podium else "Voir le podium"
-            ptext = self.label_font.render(plabel, True, BLACK)
-            self.screen.blit(ptext, ptext.get_rect(center=prect.center))
-            if self.show_podium:
-                self._draw_podium()
+        if self.game.game_over and self.show_podium:
+            self._draw_podium()
 
     def _draw_podium(self):
         """Écran de fin de course : podium des 3 premiers coureurs."""
