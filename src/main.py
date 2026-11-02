@@ -57,6 +57,12 @@ PLAYER_COLORS = {
     "yellow": YELLOW,
 }
 
+
+def _dense_points(pts, length, per_cell=6):
+    """Échantillonne une polyligne de tuile en points denses (pour un tracé lisse)."""
+    from game.track import path_point_at
+    return [path_point_at(pts, k / per_cell)[:2] for k in range(length * per_cell + 1)]
+
 # Noms d'affichage des étapes
 STAGE_NAMES = {
     "test": "Piste d'essai",
@@ -998,23 +1004,10 @@ class FlammeRougeGame:
         scale = min(area.w / bb_w, area.h / bb_h)
         ox = area.x + (area.w - bb_w * scale) / 2 - min(xs) * scale
         oy = area.y + (area.h - bb_h * scale) / 2 - min(ys) * scale
-        from game.track import path_point_at
-        for cell in tile.cells:
-            if cell.run == CellRunType.START:
-                c = (255, 236, 130)
-            elif cell.run == CellRunType.END:
-                c = (240, 210, 60)
-            elif cell.geography == CellGeographyType.UPHILL:
-                c = (220, 50, 50)
-            elif cell.geography == CellGeographyType.DOWNHILL:
-                c = (50, 90, 220)
-            else:
-                c = (200, 205, 215)
-            seg = []
-            for k in range(4):
-                px, py, _tx, _ty = path_point_at(pts, cell.x + k / 3)
-                seg.append((ox + px * scale, oy + py * scale))
-            pygame.draw.lines(self.screen, c, False, seg, 7)
+        # forme simple de la tuile dans le panneau de preview (pas de barres)
+        def tr(p):
+            return (ox + p[0] * scale, oy + p[1] * scale)
+        self._draw_tile_shape(pts, tile, tr, 7)
 
     def _draw_editor_preview(self, rect):
         """Aperçu du tracé du code édité + profil, dans le panneau de droite."""
@@ -1067,6 +1060,33 @@ class FlammeRougeGame:
                                        else -1 if g == CellGeographyType.DOWNHILL else 0))
         self._draw_profile_array(alt, self._preview_profile_rect(rect))
 
+    def _tile_shape_color(self, tile):
+        """Couleur de la forme d'une tuile : jaune clair (départ), jaune vif
+        (arrivée), rouge si montée, bleu si descente, gris sinon."""
+        from game.track import CellGeographyType, CellRunType
+        runs = {c.run for c in tile.cells}
+        if CellRunType.START in runs:
+            return (255, 236, 130)
+        if CellRunType.END in runs:
+            return (240, 210, 60)
+        geos = {c.geography for c in tile.cells}
+        if CellGeographyType.UPHILL in geos:
+            return (220, 50, 50)
+        if CellGeographyType.DOWNHILL in geos:
+            return (50, 90, 220)
+        return (200, 205, 215)
+
+    def _draw_tile_shape(self, pts, tile, tr, width):
+        """Dessine la FORME simple de la tuile (une ligne suivant le tracé),
+        colorée selon son relief, avec de fins séparateurs entre les cases."""
+        from game.track import path_point_at
+        color = self._tile_shape_color(tile)
+        pygame.draw.lines(self.screen, color, False, [tr(p[:2]) for p in
+                             _dense_points(pts, tile.length)], max(3, int(width)))
+        for k in range(1, tile.length):
+            p = tr(path_point_at(pts, k)[:2])
+            pygame.draw.circle(self.screen, WHITE, (int(p[0]), int(p[1])), 1)
+
     def _draw_mini_tile(self, ch, sx, sy, tx, ty, size=36):
         """Dessine la tuile `ch` en miniature, centrée en (sx, sy) et orientée
         selon la tangente (tx, ty) du tracé. Chaque case est un segment coloré
@@ -1092,26 +1112,8 @@ class FlammeRougeGame:
             x, y = (p[0] - cx0) * scale, (p[1] - cy0) * scale
             return (sx + x * cos - y * sin, sy + x * sin + y * cos)
 
-        for cell in tile.cells:
-            if cell.run == CellRunType.START:
-                c = (255, 236, 130)
-            elif cell.run == CellRunType.END:
-                c = (240, 210, 60)
-            elif cell.geography == CellGeographyType.UPHILL:
-                c = (220, 50, 50)
-            elif cell.geography == CellGeographyType.DOWNHILL:
-                c = (50, 90, 220)
-            else:
-                c = (200, 205, 215)
-            seg = [tr(path_point_at(pts, cell.x + k / 3)[:2]) for k in range(4)]
-            pygame.draw.lines(self.screen, c, False, seg, max(4, int(size * 0.3)))
-        # séparateurs blancs entre les cases (le nombre de cases se voit aux cases)
-        for k in range(1, tile.length):
-            p = tr(path_point_at(pts, k)[:2])
-            nx, ny = -sin, cos
-            pygame.draw.line(self.screen, WHITE,
-                             (p[0] + nx * size * 0.18, p[1] + ny * size * 0.18),
-                             (p[0] - nx * size * 0.18, p[1] - ny * size * 0.18), 1)
+        # forme simple de la tuile (pas de barres), couleur = relief
+        self._draw_tile_shape(pts, tile, tr, size * 0.22)
 
     def _draw_profile_array(self, alt, rect):
         """Variante de _draw_profile prenant directement le tableau d'altitudes."""
