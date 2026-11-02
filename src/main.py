@@ -1935,10 +1935,10 @@ class FlammeRougeGame:
             color = PLAYER_COLORS.get(player.color, BLACK)
             pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)
 
-            # Type du coureur au-dessus du centre, carte jouée en dessous
+            # Initiale du type de coureur, bien centrée DANS le cercle
             type_text = "S" if runner.type.name == "SPRINTER" else "R"
-            type_surf = self.small_font.render(f"{type_text}{runner.id[-1]}", True, WHITE)
-            self.screen.blit(type_surf, type_surf.get_rect(center=(cx, cy - 7)))
+            type_surf = self.bold_font.render(type_text, True, BLACK)
+            self.screen.blit(type_surf, type_surf.get_rect(center=(int(cx), int(cy))))
 
             if self.game.current_phase in [Phase.MOVEMENT, Phase.TERMINAL, Phase.ASPIRATION] and runner.played_card:
                 val_surf = self.small_font.render(str(runner.played_card.value), True, WHITE)

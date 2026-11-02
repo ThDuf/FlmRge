@@ -929,3 +929,21 @@ class TestCircuitZoom(unittest.TestCase):
         ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pos))
         ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=pos))  # pas bougé
         self.assertEqual(len(ui.game.track.get_all_runners()), 1)  # placé !
+
+    def test_runner_bubble_initial_only_centered(self):
+        """La bulle d'un coureur ne contient que l'initiale (S/R), centrée."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.screen.fill((255, 255, 255))
+        geo = ui._track_geometry()
+        ui._draw_runners()
+        r = ui.game.players[0].sprinter
+        px, py, tx, ty = ui._cell_anchor(r.x)
+        nx, ny = -ty, tx
+        cx = px + nx * geo["lane_w"] / 2
+        cy = py + ny * geo["lane_w"] / 2
+        # au centre de la bulle : un pixel sombre (la lettre S en noir)
+        c = ui.screen.get_at((int(cx), int(cy)))
+        self.assertLess(sum(c[:3]), 300, f"pas d'initiale centrée: {c}")
