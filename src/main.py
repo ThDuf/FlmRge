@@ -660,8 +660,11 @@ class FlammeRougeGame:
             # molette au-dessus des logs -> scroll de l'historique, sinon zoom
             # (les events MOUSEWHEEL n'ont pas de pos fiable : on prend la souris)
             if self._log_panel_rect().collidepoint(pygame.mouse.get_pos()):
-                lines = len(self._history_lines())
-                self.log_scroll = max(0, min(lines - 1, self.log_scroll - event.y))
+                # scroll vers le haut (y>0) = remonter dans l'historique
+                rect = self._log_panel_rect()
+                max_lines = max(1, (rect.bottom - rect.y - 28) // 15)
+                max_scroll = max(0, len(self._history_lines()) - max_lines)
+                self.log_scroll = max(0, min(max_scroll, self.log_scroll + event.y))
             else:
                 self.zoom = min(3.0, max(0.5, self.zoom * (1.25 if event.y > 0 else 0.8)))
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
@@ -2172,9 +2175,10 @@ class FlammeRougeGame:
         self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
 
     def _history_lines(self):
-        """Lignes d'historique (texte, couleur), du plus récent au plus ancien."""
+        """Lignes d'historique (texte, couleur), ORDRE CHRONOLOGIQUE
+        (la plus ancienne en premier, la plus récente en dernier)."""
         lines = []
-        for entry in reversed(self.game.history):
+        for entry in self.game.history:
             lines.append((f"Tour {entry['turn']}", (240, 210, 60)))
             for color, kind, val in entry["cards"]:
                 lines.append((f"  {color} {kind} joue {val}", (200, 205, 215)))
@@ -2204,16 +2208,20 @@ class FlammeRougeGame:
         max_lines = (rect.bottom - rect.y - 28) // line_h
         max_scroll = max(0, len(lines) - max_lines)
         self.log_scroll = max(0, min(max_scroll, self.log_scroll))
-        y = rect.y + 24
-        for txt, color in lines[self.log_scroll:self.log_scroll + max_lines]:
+        # ancré en bas : les plus récentes en dernier (en bas), les nouvelles
+        # poussent les autres vers le haut ; log_scroll = lignes cachées en haut
+        start = max(0, len(lines) - max_lines - self.log_scroll)
+        visible = lines[start:start + max_lines]
+        y = rect.bottom - 18 - line_h * len(visible)
+        for txt, color in visible:
             surf = self.small_font.render(txt, True, color)
             self.screen.blit(surf, (rect.x + 10, y))
             y += line_h
         # indicateur de scroll
         if max_scroll > 0:
             hint = self.small_font.render(
-                f"▲▼ molette ({self.log_scroll}/{max_scroll})", True, (110, 115, 125))
-            self.screen.blit(hint, (rect.right - 10 - hint.get_width(), rect.bottom - 16))
+                f"▲ molette ({self.log_scroll}/{max_scroll})", True, (110, 115, 125))
+            self.screen.blit(hint, (rect.right - 10 - hint.get_width(), rect.y + 6))
 
     def _draw_history(self):
         """Overlay historique complet (touche J) : toutes les lignes."""
