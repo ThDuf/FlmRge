@@ -92,6 +92,43 @@ def build_tile(ch: str) -> 'Tile':
     return make_tile(chars, turn=turn, width=width, letter=ch)
 
 
+def save_track_json(code: str, directory: str = "saves", name: str = None) -> str:
+    """Sauvegarde un code de parcours en JSON. Retourne le chemin du fichier."""
+    import json
+    import os
+    import datetime
+    os.makedirs(directory, exist_ok=True)
+    name = name or f"parcours_{datetime.datetime.now():%Y%m%d_%H%M%S}"
+    data = {"name": name, "code": code,
+            "saved_at": datetime.datetime.now().isoformat(timespec="seconds")}
+    path = os.path.join(directory, name + ".json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return path
+
+
+def load_track_json(path: str) -> str:
+    """Charge un code de parcours depuis un fichier JSON."""
+    import json
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)["code"]
+
+
+def list_saved_tracks(directory: str = "saves") -> list:
+    """Liste les parcours sauvegardés : [{"file", "name", "code"}, ...]."""
+    import json
+    import os
+    if not os.path.isdir(directory):
+        return []
+    out = []
+    for fn in sorted(os.listdir(directory)):
+        if fn.endswith(".json"):
+            with open(os.path.join(directory, fn), encoding="utf-8") as f:
+                d = json.load(f)
+            out.append({"file": fn, "name": d.get("name", fn), "code": d.get("code", "")})
+    return out
+
+
 def build_track_from_code(code: str) -> Track:
     """Construit une piste en mettant les tuiles bout à bout, dans l'ordre
     du code de stage (lettres a-u / A-U, espaces ignorés)."""

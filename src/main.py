@@ -94,6 +94,10 @@ class FlammeRougeGame:
         self.show_podium = True
         self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
         self.editor_hover_letter = 'a'  # tuile prévisualisée dans l'éditeur
+        self.editor_message = ""  # message (sauvegarde/chargement) dans l'éditeur
+        import os as _os
+        self.saves_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                       '..', 'saves')
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self._profile_cache = {}  # nom d'étape -> profil d'altitude
         self.show_hands = True
@@ -778,16 +782,35 @@ class FlammeRougeGame:
     def _editor_action_rects(self):
         """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
         labels = [("Retirer", "retirer"), ("Effacer", "effacer"),
+                  ("Sauver", "sauver"), ("Charger", "charger"),
                   ("JOUER", "jouer"), ("Retour", "retour")]
         x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
         rects = {}
         x = x0
         y = y0 + 7 * (bh + gap) + 10  # sous les 7 lignes de la palette (42/6)
         for label, key in labels:
-            w = 150 if key == "jouer" else 110
+            w = 150 if key == "jouer" else 100
             rects[key] = (label, pygame.Rect(x, y, w, 42))
             x += w + 10
         return rects
+
+    def _editor_save(self):
+        """Sauvegarde le parcours édité en JSON dans saves/."""
+        from game.game import save_track_json
+        path = save_track_json(self.editor_code, self.saves_dir)
+        self.editor_message = f"Sauvegardé : {path}"
+
+    def _editor_load_latest(self):
+        """Charge le parcours sauvegardé le plus récent (saves/*.json)."""
+        from game.game import list_saved_tracks
+        saved = list_saved_tracks(self.saves_dir)
+        if not saved:
+            self.editor_message = "Aucun parcours sauvegardé"
+            return
+        self.editor_code = saved[-1]["code"]
+        self.editor_message = f"Chargé : {saved[-1]['name']} ({saved[-1]['code']})"
+        self._preview_cache.pop("__editor__", None)
+        self._profile_cache.pop("__editor__", None)
 
     def _editor_event(self, event):
         """Événements de l'éditeur : clic palette/boutons ou clavier."""
@@ -809,6 +832,10 @@ class FlammeRougeGame:
                         self._editor_pop()
                     elif key == "effacer":
                         self._editor_clear()
+                    elif key == "sauver":
+                        self._editor_save()
+                    elif key == "charger":
+                        self._editor_load_latest()
                     elif key == "jouer":
                         self._editor_play()
                     elif key == "retour":
@@ -840,9 +867,12 @@ class FlammeRougeGame:
             True, (150, 155, 165))
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
 
-        # code en cours
+        # code en cours + message (sauvegarde/chargement)
         code_surf = self.font.render(f"Code : {self.editor_code}", True, (240, 210, 60))
         self.screen.blit(code_surf, (20, TOP_H + 66))
+        if self.editor_message:
+            msg = self.label_font.render(self.editor_message, True, (120, 220, 140))
+            self.screen.blit(msg, (20 + code_surf.get_width() + 20, TOP_H + 68))
 
         # palette des 42 tuiles : des BOUTS DE PISTE cliquables (forme réelle),
         # avec la lettre en petit dans le coin pour identifier la tuile

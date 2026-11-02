@@ -411,3 +411,33 @@ class TestHistoryPanel(unittest.TestCase):
             for key, (_l, rect) in ui._editor_action_rects().items():
                 self.assertLessEqual(rect.bottom, h, f"bouton {key} hors écran {w}x{h}")
             ui._draw_menu()
+
+
+class TestTrackSaveJson(unittest.TestCase):
+    def test_save_load_json_roundtrip(self):
+        import tempfile, os
+        from game.game import save_track_json, load_track_json, list_saved_tracks
+        with tempfile.TemporaryDirectory() as d:
+            p = save_track_json("abKcfu", d, name="mon_parcours")
+            self.assertTrue(p.endswith("mon_parcours.json"))
+            self.assertEqual(load_track_json(p), "abKcfu")
+            saved = list_saved_tracks(d)
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(saved[0]["code"], "abKcfu")
+            self.assertEqual(saved[0]["name"], "mon_parcours")
+
+    def test_editor_save_load_buttons(self):
+        import tempfile, pygame
+        ui = main.FlammeRougeGame()
+        ui.saves_dir = tempfile.mkdtemp()
+        ui.editor_code = "abKcdf"
+        ui._editor_save()
+        self.assertIn("Sauvegardé", ui.editor_message)
+        ui.editor_code = "a"
+        ui._editor_load_latest()
+        self.assertEqual(ui.editor_code, "abKcdf")
+        self.assertIn("Chargé", ui.editor_message)
+        # boutons présents dans la barre d'actions
+        keys = [k for k, _ in ui._editor_action_rects().items()]
+        self.assertIn("sauver", keys)
+        self.assertIn("charger", keys)
