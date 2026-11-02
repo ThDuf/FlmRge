@@ -183,9 +183,9 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 ## 🎯 Roadmap
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
-- [x] **Phase de placement au départ** : chaque joueur place ses 2 coureurs un par un derrière la ligne DÉPART (clic sur une case, cases surlignées), avec bouton **« Placement aléatoire »** (`tests/test_placement.py`)
+- [x] **Phase de placement au départ** : chaque joueur place ses 2 coureurs un par un derrière la ligne DÉPART (clic sur une case, cases surlignées) ; placement aléatoire via le bouton d'action en phase de placement (`tests/test_placement.py`)
 - [x] **Bouton « Tour aléatoire »** : en un clic, placement auto si besoin + une carte au hasard par coureur + mouvement/aspiration/fatigue d'un coup (pratique pour tester)
-- [x] **Écran latéral « Historique des coups »** (touche **J**) : par tour, les cartes jouées (joueur/coureur/valeur), les mouvements (départ→arrivée, carte, plafond montagne) et les aspirations
+- [x] **Écran des logs « Ce qui se passe »** dans la barre du bas : historique des coups par tour (TOUR X, cartes face cachée, mouvements, aspirations), couleurs d'équipe, phases en gras, scrollable à la molette, texte sélectionnable (Ctrl+C), overlay complet avec **J**
 - [x] **Fin de course** : fin du tour où un coureur franchit la ligne d'arrivée (la course ne continue pas après), vainqueur = le plus loin au-delà de la ligne, égalité → file A de droite (`Game._check_win_condition`)
 - [x] **Écran de victoire avec podium** des 3 premiers coureurs (classement `Game.ranking()` : position puis file A)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
@@ -198,8 +198,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)
 - [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
-- [ ] **Ajout des étapes officielles** (Avenue Corso Paseo, etc.)
-- [x] **Choix de l'étape** : menu au lancement parmi les 6 étapes officielles de la boîte de base (`tests/test_stages.py`)
+- [x] **Étapes officielles** : les 6 étapes de la boîte de base codées en lettres de tuiles (Avenue Corso Paseo, Firenze-Milano, Ronde van Wevelgem, La Haut Montagne, La Classicissima, Col du Ballon) + **choix au menu** avec preview, profil et image de carte (`tests/test_stages.py`)
 - [x] **Éditeur de piste** : entrée « Éditeur de piste » au menu — palette des 42 tuiles (21 faces plates a-u + 21 faces montagne A-U, clic ou clavier, MAJ = montagne), code affiché, aperçu du tracé + profil en direct, boutons Retirer/Effacer/JOUER (départ `a` et arrivée `u` auto-ajoutés), partie jouable sur le code perso via `Game(custom_code=...)` (`tests/test_placement.py::TestTrackEditor`). **Sauvegarde JSON** des parcours : boutons Sauver/Charger, fichiers dans `saves/*.json` (`save_track_json`/`load_track_json`/`list_saved_tracks`)
 - [ ] **Extensions** : possibilité d'ajouter des extensions (ex. Peloton : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement)
 - [ ] **Système de sauvegarde/reprise**
