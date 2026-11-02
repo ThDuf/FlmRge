@@ -752,10 +752,34 @@ class FlammeRougeGame:
     EDITOR_LETTERS = "abcdefghijklmnopqrstu"
 
     def _editor_append(self, ch):
-        if ch.lower() in self.EDITOR_LETTERS:
-            self.editor_code += ch
-            self._preview_cache.pop("__editor__", None)
-            self._profile_cache.pop("__editor__", None)
+        """Ajoute une tuile au parcours édité.
+
+        Règles : la tuile de départ (a/A) reste en 1re position — cliquer
+        sur a ou A bascule sa face ; la tuile d'arrivée (u/U) est toujours la
+        DERNIÈRE — cliquer sur u/U bascule sa face si déjà présente, et toute
+        autre tuile ajoutée après l'arrivée s'insère juste avant elle.
+        """
+        if ch.lower() not in self.EDITOR_LETTERS:
+            return
+        code = self.editor_code
+        if ch.lower() == 'a':
+            if code and code[0].lower() == 'a':
+                code = ch + code[1:]          # bascule a <-> A en 1re position
+            else:
+                code = ch + code              # départ toujours en premier
+        elif ch.lower() == 'u':
+            if code and code[-1].lower() == 'u':
+                code = code[:-1] + ch         # bascule u <-> U en dernière position
+            else:
+                code = code + ch              # arrivée toujours en dernier
+        else:
+            if code and code[-1].lower() == 'u':
+                code = code[:-1] + ch + code[-1]  # on insère avant l'arrivée
+            else:
+                code = code + ch
+        self.editor_code = code
+        self._preview_cache.pop("__editor__", None)
+        self._profile_cache.pop("__editor__", None)
 
     def _editor_pop(self):
         if len(self.editor_code) > 1:  # on garde au moins la tuile départ

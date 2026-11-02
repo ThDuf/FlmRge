@@ -540,3 +540,26 @@ class TestMenuCategories(unittest.TestCase):
         self.assertEqual(letters[-4:], ['a', 'A', 'u', 'U'])
         self.assertEqual(letters.index('e'), letters.index('b') + 2 * 7)  # e après les 7 droites
         self.assertLess(letters.index('h'), len(letters) - 4)  # 45° avant départ/arrivée
+
+    def test_editor_start_toggle_and_finish_always_last(self):
+        """a/A bascule la face du départ ; u/U est toujours la dernière tuile,
+        les suivantes s'insèrent avant elle."""
+        ui = main.FlammeRougeGame()
+        ui.editor_code = "a"
+        ui._editor_append('A')           # bascule la face du départ
+        self.assertEqual(ui.editor_code, "A")
+        ui._editor_append('b')
+        ui._editor_append('c')
+        self.assertEqual(ui.editor_code, "Abc")
+        ui._editor_append('u')           # arrivée ajoutée -> dernière
+        self.assertEqual(ui.editor_code, "Abcu")
+        ui._editor_append('d')           # s'insère AVANT l'arrivée
+        self.assertEqual(ui.editor_code, "Abcdu")
+        ui._editor_append('K')           # idem : juste avant l'arrivée
+        self.assertEqual(ui.editor_code, "AbcdKu")
+        ui._editor_append('U')           # bascule la face de l'arrivée
+        self.assertEqual(ui.editor_code, "AbcdKU")
+        self.assertEqual(ui.editor_code[-1].lower(), 'u')
+        # pop peut retirer l'arrivée (elle sera remise au JOUER)
+        ui._editor_pop()
+        self.assertEqual(ui.editor_code, "AbcdK")
