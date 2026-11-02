@@ -1721,8 +1721,9 @@ class FlammeRougeGame:
         pygame.draw.polygon(self.screen, LIGHT_GRAY, road)
         pygame.draw.polygon(self.screen, GRAY, road, width=2)
 
-        # Teinte des cases spéciales : départ (vert), arrivée (rouge),
-        # montées/descentes par case (les virages se voient à leur forme)
+        # Teinte des cases spéciales en POLYGONE borné par les bords de la
+        # route (ne déborde pas dans les virages) : départ/arrivée jaunes,
+        # montée rouge, descente bleue
         for x_cell in range(track.length):
             run = track.run_at(x_cell)
             cell_geo = track.geography_at(x_cell)
@@ -1735,29 +1736,30 @@ class FlammeRougeGame:
             elif cell_geo == CellGeographyType.DOWNHILL:
                 color = DOWNHILL_FILL
             else:
-                continue
-            sample = []
-            for k in range(9):
-                px, py, _tx, _ty = self._path_at(geo, x_cell * cell + cell * k / 8)
-                sample.append((px, py))
-            pygame.draw.lines(self.screen, color, False, sample, width=2 * half)
+                color = None
+            if color is not None:
+                s0, s1 = x_cell * cell, (x_cell + 1) * cell
+                seg = [self._path_at(geo, s0 + (s1 - s0) * k / 8) for k in range(9)]
+                right = [(x - ty * half, y + tx * half) for x, y, tx, ty in seg]
+                left = [(x + ty * half, y - tx * half) for x, y, tx, ty in seg]
+                pygame.draw.polygon(self.screen, color, right + left[::-1])
 
             # Marqueurs montée/descente : triangles à l'extérieur droit de la route
-            cell_geo = track.geography_at(x_cell)
             if cell_geo in (CellGeographyType.UPHILL, CellGeographyType.DOWNHILL):
                 px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
                 nx, ny = -ty, tx
                 mx = px + nx * (half + 12)
                 my = py + ny * (half + 12)
                 forward = 1 if cell_geo == CellGeographyType.UPHILL else -1
-                pts = [(mx + tx * 7 * forward, my + ty * 7 * forward),
+                tri = [(mx + tx * 7 * forward, my + ty * 7 * forward),
                        (mx + nx * 5, my + ny * 5),
                        (mx - nx * 5, my - ny * 5)]
                 arrow_color = UPHILL_ARROW if cell_geo == CellGeographyType.UPHILL else DOWNHILL_ARROW
-                pygame.draw.polygon(self.screen, arrow_color, pts)
+                pygame.draw.polygon(self.screen, arrow_color, tri)
 
-        # Ligne médiane (séparation des files) + quadrillage des cases
-        pygame.draw.lines(self.screen, WHITE, False, pts, 3)
+        # Ligne médiane entre les deux files (sur tout le tracé) + quadrillage des cases
+        pygame.draw.lines(self.screen, WHITE, False,
+                          [(x, y) for x, y, _tx, _ty in samples], 2)
         for k in range(track.length + 1):
             px, py, tx, ty = self._path_at(geo, k * cell)
             nx, ny = -ty, tx

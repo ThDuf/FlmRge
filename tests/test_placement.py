@@ -806,3 +806,38 @@ class TestCircuitZoom(unittest.TestCase):
             ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=1))  # hors log -> zoom
             self.assertGreater(ui.zoom, 1.0)
         ui._draw_ui()  # panneau scrollable rendu sans erreur
+
+    def test_track_visuals_middle_line_and_tint_inside_road(self):
+        """Ligne médiane blanche sur tout le tracé ; teintes des cases spéciales
+        à l'intérieur de la route (pas de débordement en virage)."""
+        import pygame
+        from game.track import CellGeographyType
+        ui = main.FlammeRougeGame(stage="Col du Ballon")  # virages + montagnes
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.screen.fill((255, 255, 255))
+        geo = ui._track_geometry()
+        ui._draw_track()
+        # ligne médiane : au milieu de la route, le pixel est blanc
+        cell = geo["cell"]
+        mid_s = (ui.game.track.length // 2) * cell
+        px, py, _tx, _ty = ui._path_at(geo, mid_s + cell / 2)
+        c = tuple(ui.screen.get_at((int(px), int(py))))[:3]
+        self.assertGreater(min(c), 200, f"pas de ligne médiane blanche au centre: {c}")
+        # teinte montée présente quelque part à l'intérieur de la route
+        found_uphill = False
+        for x in range(ui.game.track.length):
+            if ui.game.track.geography_at(x) == CellGeographyType.UPHILL:
+                qx, qy, _tx, _ty = ui._path_at(geo, (x + 0.5) * cell)
+                nx, ny = -_ty, _tx
+                qx, qy = qx + nx * geo["half"] * 0.5, qy + ny * geo["half"] * 0.5  # dans la file
+                c = tuple(ui.screen.get_at((int(qx), int(qy))))[:3]
+                if c == tuple(main.UPHILL_FILL):
+                    found_uphill = True
+                    # juste à côté, hors de la route : pas de teinte (bord gris/blanc)
+                    nx, ny = -_ty, _tx
+                    ox, oy = qx + nx * (geo["half"] + 6), qy + ny * (geo["half"] + 6)
+                    oc = tuple(ui.screen.get_at((int(ox), int(oy))))[:3]
+                    self.assertNotEqual(oc, tuple(main.UPHILL_FILL),
+                                        "la teinte déborde hors de la route en virage")
+        self.assertTrue(found_uphill)
