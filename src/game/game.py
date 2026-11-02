@@ -393,8 +393,7 @@ class Game:
         runner.play_card(card)
         self.cards_played_per_runner[runner.id] = 1
         self.cards_played_this_turn += 1
-        kind = "S" if runner.type == RunnerType.SPRINTER else "R"
-        self._hist_turn()["cards"].append((player.color, kind, card.value))
+        self._hist_turn()["cards"].append((player.color, runner.id, card.value))
         return True
 
     def all_players_ready(self) -> bool:

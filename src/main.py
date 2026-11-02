@@ -2220,32 +2220,42 @@ class FlammeRougeGame:
         - une ligne vide avant chaque nouveau tour
         - nom du tour et des phases en GRAS
         - chaque phrase liée à une équipe est dans la couleur de l'équipe."""
+        # id de coureur -> (nom affiché, couleur équipe)
+        names = {}
+        for p in self.game.players:
+            for r in p.get_runners():
+                kind = "Sprinteur" if r.type.name == "SPRINTER" else "Rouleur"
+                names[r.id] = (f"{kind} {r.id.split('_')[-1]}",
+                               PLAYER_COLORS.get(p.color, (200, 205, 215)))
         lines = []
         for entry in self.game.history:
             if lines:
                 lines.append(("", None, False))  # ligne vide entre les tours
-            lines.append((f"Tour {entry['turn']}", (240, 210, 60), True))
+            lines.append((f"TOUR {entry['turn']}", (240, 210, 60), True))
             if entry["cards"]:
                 lines.append(("Énergie", (200, 205, 215), True))
-                for color, kind, val in entry["cards"]:
-                    team = PLAYER_COLORS.get(color, (200, 205, 215))
-                    lines.append((f"  {kind} joue {val}", team, False))
+                for color, rid, val in entry["cards"]:
+                    name, team = names.get(rid, (rid, PLAYER_COLORS.get(
+                        color, (200, 205, 215))))
+                    # la carte est face cachée : on n'affiche pas sa valeur
+                    lines.append((f"  {name} pose une carte face cachée", team, False))
             if entry["moves"]:
                 lines.append(("Mouvement", (200, 205, 215), True))
                 for rid, color, fx, tx, val, eff, reason in entry["moves"]:
-                    team = PLAYER_COLORS.get(color, (180, 220, 180))
-                    txt = f"  {fx}->{tx} (carte {val}"
-                    if eff != val:
-                        txt += f" -> {eff}"
+                    name, team = names.get(rid, (rid, PLAYER_COLORS.get(
+                        color, (180, 220, 180))))
+                    txt = f"  {name} avance de {tx - fx} case(s) : de {fx} à {tx}"
                     if reason:
-                        txt += f", {reason}"
-                    txt += ")"
+                        txt += f" ({reason})"
                     lines.append((txt, team, False))
             if entry["slips"]:
                 lines.append(("Aspiration", (200, 205, 215), True))
                 for slip in entry["slips"]:
-                    desc = ", ".join(f"{rid}:{fx}->{tx}" for rid, fx, tx in slip)
-                    lines.append((f"  {desc}", (255, 200, 120), False))
+                    who = ", ".join(names.get(rid, (rid, WHITE))[0]
+                                    for rid, fx, tx in slip)
+                    desc = ", ".join(f"{fx}->{tx}" for rid, fx, tx in slip)
+                    lines.append((f"  {who} glisse d'1 case ({desc})",
+                                  (255, 200, 120), False))
         return lines
 
     def _draw_log_panel(self):

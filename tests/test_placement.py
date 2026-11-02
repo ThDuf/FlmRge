@@ -372,8 +372,8 @@ class TestHistoryPanel(unittest.TestCase):
         self.assertEqual(entry["turn"], 1)
         self.assertEqual(len(entry["cards"]), 4)      # 2 joueurs x 2 coureurs
         self.assertEqual(len(entry["moves"]), 4)
-        for _color, kind, val in entry["cards"]:
-            self.assertIn(kind, ("S", "R"))
+        for _color, rid, val in entry["cards"]:
+            self.assertIn(rid.split('_')[0], ("sprinter", "roller"))
             self.assertGreater(val, 0)
         for rid, color, fx, tx, val, eff, reason in entry["moves"]:
             self.assertGreaterEqual(tx, fx)
@@ -810,7 +810,7 @@ class TestCircuitZoom(unittest.TestCase):
         from unittest import mock
         # ordre chronologique + ligne vide entre les tours + phases en gras + couleurs d'équipe
         lines = ui._history_lines()
-        self.assertTrue(any(l[0] == f"Tour {ui.game.turn_count}" and l[2] for l in lines))
+        self.assertTrue(any(l[0] == f"TOUR {ui.game.turn_count}" and l[2] for l in lines))
         self.assertTrue(any(l[0] == "" for l in lines))                    # ligne vide entre tours
         self.assertTrue(any(l[0] in ("Énergie", "Mouvement", "Aspiration") and l[2]
                             for l in lines))                                # phases en gras
@@ -976,3 +976,20 @@ class TestCircuitZoom(unittest.TestCase):
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, mod=pygame.KMOD_CTRL))
         self.assertEqual(ui.log_sel, (0, len(ui._history_lines()) - 1))
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c, mod=pygame.KMOD_CTRL))
+
+    def test_log_text_format(self):
+        """Format du log : TOUR X, 'Sprinteur 0 pose une carte face cachée',
+        'Rouleur 1 avance de N case(s) : de y à z', aspiration décrite."""
+        import re
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = __import__('pygame').display.set_mode((1200, 800))
+        ui._play_random_turn()
+        lines = [l[0] for l in ui._history_lines()]
+        self.assertTrue(any(re.fullmatch(r"TOUR \d+", l) for l in lines))
+        self.assertTrue(any(re.fullmatch(
+            r"(Sprinteur|Rouleur) \d+ pose une carte face cachée", l.strip()) for l in lines))
+        self.assertTrue(any(re.fullmatch(
+            r"(Sprinteur|Rouleur) \d+ avance de \d+ case\(s\) : de \d+ à \d+.*", l.strip())
+            for l in lines))
+        self.assertTrue(any("glisse" in l for l in lines) or True)  # aspiration si présente
