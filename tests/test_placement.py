@@ -592,3 +592,37 @@ class TestMenuCategories(unittest.TestCase):
         ui.width, ui.height = 1200, 800
         ui.screen = pygame.display.set_mode((1200, 800))
         ui._draw_menu()
+
+    def test_tile_turn_direction_convention(self):
+        """Convention écran (y vers le bas) : sens -1 = droite (cap +angle,
+        la tuile courbe vers le bas), sens +1 = gauche (cap -angle, vers le haut)."""
+        import math
+        from game.game import build_tile
+        from game.track import Track, compute_track_path
+        for ch in "egijophkqrst":
+            for c in (ch, ch.upper()):
+                tile = build_tile(c)
+                if tile.turn is None:
+                    continue
+                angle, direction = tile.turn
+                t = Track(); t.add_tile(build_tile(c))
+                pts = compute_track_path(t, 1.0)
+                # corde de fin de virage : direction = -angle*direction / 2
+                chord_h = math.atan2(pts[-1][1] - pts[0][1], pts[-1][0] - pts[0][0])
+                self.assertAlmostEqual(chord_h, -angle * direction / 2, places=1, msg=c)
+                if direction == -1:   # droite -> courbe vers le bas (y+)
+                    self.assertGreater(pts[-1][1], pts[0][1], c)
+                else:                 # gauche -> vers le haut (y-)
+                    self.assertLess(pts[-1][1], pts[0][1], c)
+
+    def test_mixed_tile_cells_colored_per_cell(self):
+        """Une tuile mixte (B = ddddff) a ses cases coloriées individuellement
+        dans la forme dessinée : on vérifie la répartition des géographies."""
+        from game.game import build_tile
+        from game.track import CellGeographyType
+        tile = build_tile('B')
+        geos = [c.geography for c in tile.cells]
+        self.assertEqual(geos, [CellGeographyType.DOWNHILL] * 4 + [CellGeographyType.FLAT] * 2)
+        tile = build_tile('U')
+        geos = [c.geography for c in tile.cells]
+        self.assertEqual(geos, [CellGeographyType.UPHILL] * 2 + [CellGeographyType.FLAT] * 4)

@@ -1195,12 +1195,26 @@ class FlammeRougeGame:
         return (200, 205, 215)
 
     def _draw_tile_shape(self, pts, tile, tr, width):
-        """Dessine la FORME simple de la tuile (une ligne suivant le tracé),
-        colorée selon son relief, avec de fins séparateurs entre les cases."""
-        from game.track import path_point_at
-        color = self._tile_shape_color(tile)
-        pygame.draw.lines(self.screen, color, False, [tr(p[:2]) for p in
-                             _dense_points(pts, tile.length)], max(3, int(width)))
+        """Dessine la FORME de la tuile (ligne suivant le tracé), colorée CASE
+        PAR CASE (montée rouge, descente bleue, départ/arrivée jaunes, plat
+        gris) — les tuiles mixtes sont donc fidèles — avec de fins séparateurs
+        blancs entre les cases."""
+        from game.track import path_point_at, CellGeographyType, CellRunType
+        dense = _dense_points(pts, tile.length)
+        per_cell = len(dense) // tile.length
+        for ci, cell in enumerate(tile.cells):
+            if cell.run == CellRunType.START:
+                c = (255, 236, 130)
+            elif cell.run == CellRunType.END:
+                c = (240, 210, 60)
+            elif cell.geography == CellGeographyType.UPHILL:
+                c = (220, 50, 50)
+            elif cell.geography == CellGeographyType.DOWNHILL:
+                c = (50, 90, 220)
+            else:
+                c = (200, 205, 215)
+            seg = [tr(p) for p in dense[ci * per_cell:(ci + 1) * per_cell + 1]]
+            pygame.draw.lines(self.screen, c, False, seg, max(3, int(width)))
         for k in range(1, tile.length):
             p = tr(path_point_at(pts, k)[:2])
             pygame.draw.circle(self.screen, WHITE, (int(p[0]), int(p[1])), 1)
