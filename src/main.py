@@ -795,11 +795,21 @@ class FlammeRougeGame:
         bh = min(64, max(34, (self.height - y0 - 60 - 6 * gap) // 7))
         return x0, y0, bw, bh, gap, cols
 
+    EDITOR_CATEGORIES = [
+        "au",            # départ / arrivée
+        "bcdf lmn".replace(" ", ""),  # lignes droites
+        "egijop",        # virages serrés 90°
+        "hkqrst",        # virages légers 45°
+    ]
+
     def _editor_palette_rects(self):
-        """Grille des 42 tuiles : 21 faces plates (a-u) puis 21 montagne (A-U)."""
+        """Grille des 42 tuiles, rangées par catégories : départ/arrivée,
+        droites, virages 90°, virages 45° — chaque tuile avec ses 2 faces
+        (minuscule puis majuscule) côte à côte."""
         x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
         rects = []
-        items = list(self.EDITOR_LETTERS) + [c.upper() for c in self.EDITOR_LETTERS]
+        items = [c for cat in self.EDITOR_CATEGORIES for c in cat]  # a u b c d f l m n e g i j o p h k q r s t
+        items = [c for base in items for c in (base, base.upper())]  # 42 tuiles
         for i, ch in enumerate(items):
             r, c = divmod(i, cols)
             rects.append((ch, pygame.Rect(x0 + c * (bw + gap), y0 + r * (bh + gap), bw, bh)))

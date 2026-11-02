@@ -289,9 +289,8 @@ class TestTrackEditor(unittest.TestCase):
         self.assertEqual(ui.editor_code, "abK")
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_BACKSPACE))
         self.assertEqual(ui.editor_code, "ab")
-        # clic sur une tuile de la palette
-        ch, rect = ui._editor_palette_rects()[4]  # 'e'
-        self.assertEqual(ch, 'e')
+        # clic sur une tuile de la palette (on cherche 'e' peu importe sa position)
+        ch, rect = next((c, r) for c, r in ui._editor_palette_rects() if c == 'e')
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=rect.center))
         self.assertEqual(ui.editor_code, "abe")
@@ -318,7 +317,7 @@ class TestTrackEditor(unittest.TestCase):
         ui.width, ui.height = 1200, 800
         ui.screen = pygame.display.set_mode((1200, 800))
         ui.menu_step = "editor"
-        ch, rect = ui._editor_palette_rects()[10]  # 'k'
+        ch, rect = next((c, r) for c, r in ui._editor_palette_rects() if c == 'k')
         ui._menu_event(pygame.event.Event(pygame.MOUSEMOTION, pos=rect.center))
         self.assertEqual(ui.editor_hover_letter, 'k')
         ui._draw_menu()  # dessine l'éditeur + la preview de 'k' sans erreur
@@ -525,3 +524,18 @@ class TestMenuCategories(unittest.TestCase):
         ui2.width, ui2.height = 900, 600
         self.assertIsNone(ui2._editor_play_rect())
         self.assertIn("jouer", [k for k, _ in ui2._editor_action_rects().items()])
+
+    def test_editor_palette_sorted_by_category(self):
+        """Palette rangée : départ/arrivée, droites, virages 90°, virages 45°,
+        chaque tuile suivie de sa face montagne."""
+        ui = main.FlammeRougeGame()
+        letters = [ch for ch, _r in ui._editor_palette_rects()]
+        self.assertEqual(len(letters), 42)
+        expected = []
+        for cat in ui.EDITOR_CATEGORIES:
+            for base in cat:
+                expected += [base, base.upper()]
+        self.assertEqual(letters, expected)
+        # ordre des catégories : a,u puis droites, puis 90°, puis 45°
+        self.assertEqual(letters[:4], ['a', 'A', 'u', 'U'])
+        self.assertEqual(letters.index('e'), letters.index('b') + 2 * 7)  # e après les 7 droites
