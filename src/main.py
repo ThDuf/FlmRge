@@ -835,7 +835,8 @@ class FlammeRougeGame:
         code_surf = self.font.render(f"Code : {self.editor_code}", True, (240, 210, 60))
         self.screen.blit(code_surf, (20, TOP_H + 66))
 
-        # palette des 42 tuiles
+        # palette des 42 tuiles : des BOUTS DE PISTE cliquables (forme réelle),
+        # avec la lettre en petit dans le coin pour identifier la tuile
         for ch, rect in self._editor_palette_rects():
             hovered = rect.collidepoint(mouse)
             upper = ch.isupper()
@@ -844,8 +845,9 @@ class FlammeRougeGame:
                 fill = tuple(min(255, c + 35) for c in fill)
             pygame.draw.rect(self.screen, fill, rect, border_radius=6)
             pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=6)
-            txt = self.font.render(ch, True, WHITE)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            self._draw_mini_tile(ch, rect.centerx - 8, rect.centery, 1.0, 0.0, size=26)
+            txt = self.small_font.render(ch, True, (200, 205, 215))
+            self.screen.blit(txt, (rect.right - 16, rect.y + 4))
 
         # boutons d'action
         for key, (label, rect) in self._editor_action_rects().items():
