@@ -665,3 +665,34 @@ class TestMenuCategories(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode='\r'))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.custom_code, "abcu")
+
+
+class TestCircuitZoom(unittest.TestCase):
+    def test_zoom_and_pan(self):
+        """Zoom +/- (clavier/molette) et panoramique (flèches) sur le circuit."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.screen = pygame.display.set_mode((1200, 800))
+        g0 = ui._track_geometry()
+        cell0 = g0["cell"]
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_PLUS))
+        g1 = ui._track_geometry()
+        self.assertAlmostEqual(g1["cell"], cell0 * 1.25, places=3)
+        self.assertAlmostEqual(ui.zoom, 1.25)
+        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1))
+        self.assertAlmostEqual(ui.zoom, 1.0, places=3)
+        # bornes de zoom
+        for _ in range(10):
+            ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_PLUS))
+        self.assertEqual(ui.zoom, 3.0)
+        for _ in range(20):
+            ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_MINUS))
+        self.assertEqual(ui.zoom, 0.5)
+        # panoramique
+        ui.zoom = 2.0
+        g2 = ui._track_geometry()
+        ox0 = g2["points"][0][0]
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
+        g3 = ui._track_geometry()
+        self.assertAlmostEqual(g3["points"][0][0], ox0 - 60, places=1)
+        ui._draw_ui()  # rendu zoomé sans erreur

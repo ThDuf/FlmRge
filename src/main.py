@@ -113,6 +113,9 @@ class FlammeRougeGame:
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
         self.show_history = False  # Panneau historique des coups (touche J)
+        self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
+        self.pan_x = 0.0    # panoramique horizontal (flèches)
+        self.pan_y = 0.0
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -145,7 +148,8 @@ class FlammeRougeGame:
         dans la zone de droite. Chaque case occupe exactement `cell` pixels
         d'arc : les cases restent contiguës, aucun saut.
         """
-        key = (self.width, self.height, self.game.stage)
+        key = (self.width, self.height, self.game.stage, round(self.zoom, 4),
+               round(self.pan_x, 1), round(self.pan_y, 1))
         if getattr(self, "_geo_key", None) == key:
             return self._geo
 
@@ -165,9 +169,9 @@ class FlammeRougeGame:
         bb_h = max(ys) - min(ys)
         # marge de 30px de chaque côté pour la demi-largeur de la route
         scale = min((avail_w - 60) / max(bb_w, 1e-9), (avail_h - 60) / max(bb_h, 1e-9))
-        cell = max(CELL_MIN, min(CELL_MAX, scale))
-        ox = left + (avail_w - bb_w * cell) / 2 - min(xs) * cell
-        oy = top + (avail_h - bb_h * cell) / 2 - min(ys) * cell
+        cell = max(CELL_MIN, min(CELL_MAX, scale)) * self.zoom  # zoom débride le max
+        ox = left + (avail_w - bb_w * cell) / 2 - min(xs) * cell + self.pan_x
+        oy = top + (avail_h - bb_h * cell) / 2 - min(ys) * cell + self.pan_y
 
         points = [(ox + px * cell, oy + py * cell) for px, py in pts_units]
 
@@ -488,7 +492,9 @@ class FlammeRougeGame:
 
     def _game_event(self, event):
         """Événements quand une partie est en cours."""
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.type == pygame.MOUSEWHEEL:
+            self.zoom = min(3.0, max(0.5, self.zoom * (1.25 if event.y > 0 else 0.8)))
+        elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 if self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
                     self.show_podium = not self.show_podium  # podium <-> circuit final
@@ -508,6 +514,18 @@ class FlammeRougeGame:
                 self.show_decks = not self.show_decks
             elif event.key == pygame.K_j:
                 self.show_history = not self.show_history
+            elif event.key in (pygame.K_EQUALS, pygame.K_PLUS, pygame.K_KP_PLUS):
+                self.zoom = min(3.0, self.zoom * 1.25)   # zoom +
+            elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS):
+                self.zoom = max(0.5, self.zoom / 1.25)   # zoom -
+            elif event.key == pygame.K_LEFT:
+                self.pan_x += 60
+            elif event.key == pygame.K_RIGHT:
+                self.pan_x -= 60
+            elif event.key == pygame.K_UP:
+                self.pan_y += 60
+            elif event.key == pygame.K_DOWN:
+                self.pan_y -= 60
             elif event.key == pygame.K_TAB and self.game.game_over:
                 self.show_podium = not self.show_podium  # podium <-> circuit final
             elif event.key == pygame.K_RETURN:
@@ -1411,6 +1429,9 @@ class FlammeRougeGame:
         self.played_display_index = {}
         self.last_action = None
         self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
+        self.zoom = 1.0
+        self.pan_x = 0.0
+        self.pan_y = 0.0
 
     def _menu_event(self, event):
         """Événements du menu (étape 1 : choix de l'étape, étape 2 : nb joueurs)."""
@@ -1854,7 +1875,8 @@ class FlammeRougeGame:
 
         # Contrôles
         controls_y = instructions_y + len(instructions) * 25 + 10
-        controls = ["H: masquer mains", "D: afficher decks", "J: historique", "R: recommencer"]
+        controls = ["H: mains", "D: decks", "J: historique", "R: recommencer",
+                    f"+/- ou molette : zoom x{self.zoom:.2f}", "flèches : panoramique"]
         for i, text in enumerate(controls):
             text_surface = self.font.render(text, True, GRAY)
             self.screen.blit(text_surface, (instructions_x, controls_y + i * 25))
