@@ -788,6 +788,7 @@ class FlammeRougeGame:
 
     MENU_ROW = 36      # hauteur fixe d'une entrée du menu (compacte, sans détails)
     MENU_HEADER_H = 22 # hauteur d'un titre de catégorie
+    EDITOR_ROW = 56    # hauteur du gros bouton « Créer un circuit » épinglé en bas
 
     def _menu_search_rect(self):
         """Barre de recherche (filtre les parcours perso par nom/code)."""
@@ -834,8 +835,8 @@ class FlammeRougeGame:
                      if q in s["name"].lower() or q in s["code"].lower()]
         row, header_h = self.MENU_ROW, self.MENU_HEADER_H
         area = self._menu_list_area()
-        # zone scrollable = liste moins la ligne épinglée « Créer un circuit » en bas
-        scroll_area = pygame.Rect(area.x, area.y, area.w, area.h - row)
+        # zone scrollable = liste moins le gros bouton « Créer un circuit » en bas
+        scroll_area = pygame.Rect(area.x, area.y, area.w, area.h - self.EDITOR_ROW)
         self._menu_scroll_area = scroll_area
         content_h = (2 + len(base) + (1 if perso else 0) + len(perso)) * (row + 6) \
             + 2 * (header_h + 6)
@@ -862,9 +863,9 @@ class FlammeRougeGame:
                 add(s["name"], f"{len(s['code'])} tuiles · code {s['code']}",
                     s["code"], "perso", row)
         # « Créer un circuit » : TOUJOURS visible, épinglé en bas de la zone liste
-        # (hors scroll, hors filtre de recherche)
-        entries.append(("Créer un circuit", "éditeur de piste (roue crantée)", "",
-                        pygame.Rect(x, scroll_area.bottom, w, row), "editor"))
+        # (hors scroll, hors filtre de recherche) — gros bouton
+        entries.append(("Créer un circuit", "éditeur de piste", "",
+                        pygame.Rect(x, scroll_area.bottom, w, self.EDITOR_ROW), "editor"))
         return entries
 
     def _preview_rect(self):
@@ -1657,15 +1658,17 @@ class FlammeRougeGame:
             if kind == "editor":
                 selected = (entries.index((name, desc, code, rect, kind)) == self.menu_index)
                 hovered = rect.collidepoint(pygame.mouse.get_pos())
-                fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
-                border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
-                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
-                                 border_radius=8)
-                self._draw_gear((rect.x + 34, rect.centery), 15,
-                                (240, 210, 60) if (selected or hovered) else (200, 205, 215))
-                name_surf = self.label_font.render(name, True, WHITE)
-                self.screen.blit(name_surf, (rect.x + 60, rect.centery - 9))
+                fill = (86, 96, 116) if (selected or hovered) else (60, 66, 78)
+                border = (240, 210, 60) if (selected or hovered) else (110, 116, 128)
+                pygame.draw.rect(self.screen, fill, rect, border_radius=10)
+                pygame.draw.rect(self.screen, border, rect, width=2, border_radius=10)
+                # roue crantée + texte centré et un peu plus gros
+                self._draw_gear((rect.x + 44, rect.centery), 18,
+                                (240, 210, 60) if (selected or hovered) else (220, 225, 235))
+                name_surf = self.phase_font.render(name, True, WHITE)
+                self.screen.blit(name_surf, name_surf.get_rect(
+                    center=(rect.x + 44 + 26 + (rect.right - rect.x - 70) // 2,
+                            rect.centery)))
         # barre de scroll verticale à gauche de la liste (si contenu > zone)
         track, thumb = self._menu_scrollbar_rects()
         if thumb is not None:

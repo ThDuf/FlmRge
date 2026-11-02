@@ -1061,7 +1061,9 @@ class TestCircuitZoom(unittest.TestCase):
         ui.width, ui.height = 1200, 800
         ui.screen = __import__('pygame').display.set_mode((1200, 800))
         for name, desc, code, rect, kind in ui._menu_entries():
-            if kind != "header":
+            if kind == "editor":
+                self.assertGreaterEqual(rect.h, 50)  # gros bouton créer
+            elif kind != "header":
                 self.assertLessEqual(rect.h, main.FlammeRougeGame.MENU_ROW)
         ui._draw_menu()  # sans les descriptions, rendu OK
 
@@ -1127,3 +1129,24 @@ class TestCircuitZoom(unittest.TestCase):
         e3 = [e for e in ui._menu_entries() if e[4] == "editor"][0]
         self.assertEqual(e3[3].bottom, area.bottom)
         ui._draw_menu()
+
+    def test_create_button_big_and_centered(self):
+        """Le bouton 'Créer un circuit' est plus gros, texte centré et plus gros."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui._draw_menu()
+        e = [e for e in ui._menu_entries() if e[4] == "editor"][0]
+        rect = e[3]
+        self.assertGreaterEqual(rect.h, 50)  # plus gros qu'une entrée normale (36)
+        ui.screen.fill((28, 32, 38))
+        ui._draw_header()
+        ui._draw_menu()
+        # le texte est centré verticalement : pixel de texte autour du centre
+        found_text = False
+        for dy in range(-8, 9):
+            c = ui.screen.get_at((rect.centerx, rect.centery + dy))
+            if sum(c[:3]) > 400:  # blanc cassé du texte
+                found_text = True
+        self.assertTrue(found_text, "texte non centré dans le gros bouton")
