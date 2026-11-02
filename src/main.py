@@ -1842,30 +1842,35 @@ class FlammeRougeGame:
                 f"{stage_name} · Tour {self.game.turn_count}", True, (175, 180, 190))
             self.screen.blit(info, (58 + flamme.get_width() + rouge.get_width() + 18,
                                     (HEADER_H - info.get_height()) // 2))
-            # contrôles en une ligne au milieu du bandeau
+            # contrôles en une ligne au milieu du bandeau (tronquée avant les boutons)
             controls = (f"H mains · D decks · J histo · R restart · "
-                        f"+/- molette zoom x{self.zoom:.2f} · flèches pan · "
-                        f"clic droit pan · TAB podium")
+                        f"+/- zoom x{self.zoom:.2f} · flèches/clic droit pan")
+            cx = 58 + flamme.get_width() + rouge.get_width() + 18 + info.get_width() + 24
+            max_w = self._camera_button_rects()["peloton"].x - 16 - cx
             csurf = self.small_font.render(controls, True, (140, 146, 156))
-            self.screen.blit(csurf, (58 + flamme.get_width() + rouge.get_width() + 18
-                                     + info.get_width() + 24,
-                                     (HEADER_H - csurf.get_height()) // 2))
-            # boutons caméra à droite (partie en cours) / podium (fin de partie)
+            if csurf.get_width() > max_w > 0:
+                # tronque le texte pour ne jamais toucher les boutons
+                while controls and self.small_font.render(controls + "…", True, (0, 0, 0)).get_width() > max_w:
+                    controls = controls[:-1]
+                csurf = self.small_font.render(controls + "…", True, (140, 146, 156))
+            self.screen.blit(csurf, (cx, (HEADER_H - csurf.get_height()) // 2))
+            # boutons caméra bien visibles à droite (partie en cours) / podium (fin)
             if self.game.game_over:
                 rect = self._podium_button_rect()
                 hovered = rect.collidepoint(pygame.mouse.get_pos())
-                fill = (240, 220, 120) if hovered else (240, 210, 60)
+                fill = (250, 230, 130) if hovered else (240, 210, 60)
                 pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                pygame.draw.rect(self.screen, BLACK, rect, width=1, border_radius=8)
+                pygame.draw.rect(self.screen, (60, 50, 10), rect, width=2, border_radius=8)
                 plabel = "Voir le circuit" if self.show_podium else "Voir le podium"
                 pt = self.small_font.render(plabel, True, BLACK)
                 self.screen.blit(pt, pt.get_rect(center=rect.center))
             else:
                 for key, rect in self._camera_button_rects().items():
                     hovered = rect.collidepoint(pygame.mouse.get_pos())
-                    fill = (70, 80, 95) if not hovered else (95, 105, 120)
+                    fill = (90, 105, 135) if not hovered else (120, 140, 175)
                     pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                    pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+                    pygame.draw.rect(self.screen, (200, 210, 225), rect, width=2,
+                                     border_radius=8)
                     label = "Voir le peloton" if key == "peloton" else "Vue d'ensemble"
                     txt = self.small_font.render(label, True, WHITE)
                     self.screen.blit(txt, txt.get_rect(center=rect.center))
