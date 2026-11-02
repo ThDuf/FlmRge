@@ -118,6 +118,8 @@ class FlammeRougeGame:
         self.show_history = False  # Panneau historique des coups (touche J, overlay)
         self.current_player_idx = 0  # joueur dont les cartes sont affichées (barre du bas)
         self.log_scroll = 0  # scroll de l'écran des logs (molette au-dessus)
+        self.log_sel = None  # sélection de texte dans le log : (ligne_début, ligne_fin) ou None
+        self.log_sel_drag = False
         self._pressed_button = None  # bouton actuellement enfoncé (clic maintenu)
         self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
         self.pan_x = 0.0    # panoramique horizontal (flèches ou clic droit)
@@ -681,14 +683,20 @@ class FlammeRougeGame:
             if math.hypot(dx, dy) > 2:
                 self._cam_drag_moved = True
             self._cam_drag = event.pos
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self._cam_drag is not None:
-            # clic gauche sur le parcours sans déplacer = clic simple (placement)
-            if not self._cam_drag_moved and self.game.current_phase == Phase.PLACEMENT:
-                self._placement_click(event.pos)
-            self._cam_drag = None
-            self._cam_drag_moved = False
+        elif event.type == pygame.MOUSEMOTION and self.log_sel_drag:
+            # drag dans le log = étend la sélection de texte
+            line = self._log_line_at(event.pos)
+            if line is not None and self.log_sel:
+                self.log_sel = (self.log_sel[0], line)
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.log_sel_drag = False
             self._pressed_button = None  # relâche le bouton enfoncé
+            # clic gauche sur le parcours sans déplacer = clic simple (placement)
+            if self._cam_drag is not None:
+                if not self._cam_drag_moved and self.game.current_phase == Phase.PLACEMENT:
+                    self._placement_click(event.pos)
+                self._cam_drag = None
+                self._cam_drag_moved = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 fbtns = self._frame_button_rects()
@@ -719,6 +727,13 @@ class FlammeRougeGame:
                     elif hit == "action":
                         self._try_button_click(event.pos)
                     return
+                if self._log_panel_rect().collidepoint(event.pos):
+                    # clic dans le log = début de sélection de texte
+                    line = self._log_line_at(event.pos)
+                    if line is not None:
+                        self.log_sel = (line, line)
+                        self.log_sel_drag = True
+                    return
                 if self._frame_rect().collidepoint(event.pos):
                     # clic GAUCHE sur le parcours = début du drag caméra
                     self._cam_drag = event.pos
@@ -730,7 +745,13 @@ class FlammeRougeGame:
                     elif self.game.current_phase == Phase.ENERGY and self.show_hands:
                         self._handle_click(event.pos)
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_r:
+            if event.key == pygame.K_c and (getattr(event, 'mod', 0) & pygame.KMOD_CTRL):
+                self._log_copy_selection()  # copie la sélection du log
+            elif event.key == pygame.K_a and (getattr(event, 'mod', 0) & pygame.KMOD_CTRL):
+                lines = self._history_lines()
+                if lines:
+                    self.log_sel = (0, len(lines) - 1)  # tout sélectionner
+            elif event.key == pygame.K_r:
                 self._select_stage(self.stage)
             elif event.key == pygame.K_ESCAPE:
                 self.game = None  # retour au menu de sélection d'étape
@@ -1644,6 +1665,8 @@ class FlammeRougeGame:
         self._pressed_button = None
         self._cam_drag = None
         self._cam_drag_moved = False
+        self.log_sel = None
+        self.log_sel_drag = False
         self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
         self.zoom = 1.0
         self.pan_x = 0.0
@@ -2240,9 +2263,16 @@ class FlammeRougeGame:
         # poussent les autres vers le haut ; log_scroll = lignes cachées en haut
         start = max(0, len(lines) - max_lines - self.log_scroll)
         visible = lines[start:start + max_lines]
+        self._log_line_rects = []  # (index_absolu, y, h) pour la sélection
         y = rect.bottom - 6 - line_h * len(visible)
-        for txt, color, bold in visible:
+        for i, (txt, color, bold) in enumerate(visible):
+            self._log_line_rects.append((start + i, y, line_h))
+            # surbrillance de la sélection (texte sélectionnable)
+            if self.log_sel and self.log_sel[0] <= start + i <= self.log_sel[1]:
+                pygame.draw.rect(self.screen, (70, 110, 170),
+                                 (rect.x + 6, y - 1, rect.w - 12, line_h))
             if not txt:
+                y += line_h
                 continue  # ligne vide entre les tours
             font = self.bold_font if bold else self.small_font
             surf = font.render(txt, True, color if color else (200, 205, 215))
@@ -2253,6 +2283,30 @@ class FlammeRougeGame:
             hint = self.small_font.render(f"▲ {self.log_scroll}/{max_scroll}",
                                           True, (110, 115, 125))
             self.screen.blit(hint, (rect.right - 10 - hint.get_width(), rect.y + 6))
+
+    def _log_line_at(self, pos):
+        """Index absolu de la ligne de log sous la position pos (ou None)."""
+        rect = self._log_panel_rect()
+        if not rect.collidepoint(pos):
+            return None
+        for idx, y, h in getattr(self, "_log_line_rects", []):
+            if y - 2 <= pos[1] <= y + h:
+                return idx
+        return None
+
+    def _log_copy_selection(self):
+        """Copie la sélection du log dans le presse-papiers (Ctrl+C)."""
+        if not self.log_sel:
+            return
+        a, b = sorted(self.log_sel)
+        lines = self._history_lines()
+        text = "\n".join(l[0] for l in lines[a:b + 1] if l[0])
+        try:
+            pygame.scrap.init()
+            pygame.scrap.put(pygame.SCRAP_TEXT, text.encode("utf-8"))
+            self.last_action = ("Texte copié dans le presse-papiers", (46, 125, 50))
+        except Exception:
+            pass
 
     def _draw_history(self):
         """Overlay historique complet (touche J) : toutes les lignes."""

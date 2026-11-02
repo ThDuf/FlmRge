@@ -947,3 +947,32 @@ class TestCircuitZoom(unittest.TestCase):
         # au centre de la bulle : un pixel sombre (la lettre S en noir)
         c = ui.screen.get_at((int(cx), int(cy)))
         self.assertLess(sum(c[:3]), 300, f"pas d'initiale centrée: {c}")
+
+    def test_log_text_selection_and_copy(self):
+        """Le log est une vraie zone de texte : sélection au clic/drag, Ctrl+A, Ctrl+C."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        for _ in range(2):
+            ui._play_random_turn()
+        ui._draw_ui()  # calcule _log_line_rects
+        log = ui._log_panel_rect()
+        rects = ui._log_line_rects
+        self.assertGreater(len(rects), 2)
+        i0, y0, h0 = rects[0]
+        i1, y1, h1 = rects[2]
+        # clic sur la 1re ligne puis drag jusqu'à la 3e
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=(log.x + 20, y0 + 2)))
+        self.assertEqual(ui.log_sel, (i0, i0))
+        ui._game_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(log.x + 20, y1 + 2)))
+        self.assertEqual(ui.log_sel, (i0, i1))  # sélection étendue
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1,
+                                          pos=(log.x + 20, y1 + 2)))
+        self.assertFalse(ui.log_sel_drag)
+        ui._draw_ui()  # surbrillance dessinée sans erreur
+        # Ctrl+A = tout sélectionner, Ctrl+C = copie (ne plante pas en headless)
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, mod=pygame.KMOD_CTRL))
+        self.assertEqual(ui.log_sel, (0, len(ui._history_lines()) - 1))
+        ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c, mod=pygame.KMOD_CTRL))
