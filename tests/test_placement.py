@@ -532,14 +532,18 @@ class TestMenuCategories(unittest.TestCase):
         letters = [ch for ch, _r in ui._editor_palette_rects()]
         self.assertEqual(len(letters), 42)
         expected = []
-        for cat in ui.EDITOR_CATEGORIES:
+        for _label, cat in ui.EDITOR_CATEGORIES:
             for base in cat:
                 expected += [base, base.upper()]
         self.assertEqual(letters, expected)
-        # ordre des catégories : droites, 90°, 45°, puis départ/arrivée en dernier
-        self.assertEqual(letters[-4:], ['a', 'A', 'u', 'U'])
+        # départ en haut, arrivée en bas ; droites puis 90° puis 45° entre les deux
+        self.assertEqual(letters[:2], ['a', 'A'])
+        self.assertEqual(letters[-2:], ['u', 'U'])
         self.assertEqual(letters.index('e'), letters.index('b') + 2 * 7)  # e après les 7 droites
-        self.assertLess(letters.index('h'), len(letters) - 4)  # 45° avant départ/arrivée
+        self.assertLess(letters.index('h'), letters.index('u'))  # 45° avant l'arrivée
+        # noms de catégories affichés
+        cat_labels = [t for t, _x, _y in ui._editor_palette_labels()]
+        self.assertEqual(cat_labels, ["Départ", "Droites", "Virages 90°", "Virages 45°", "Arrivée"])
 
     def test_editor_start_toggle_and_finish_always_last(self):
         """a/A bascule la face du départ ; u/U est toujours la dernière tuile,

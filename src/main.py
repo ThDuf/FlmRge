@@ -813,31 +813,78 @@ class FlammeRougeGame:
         """Géométrie de la palette : grosses tuiles qui occupent la gauche,
         hauteur adaptée pour tenir dans la fenêtre (boutons réservés en bas)."""
         cols = 6
-        gap = 6
+        gap = 4
+        label_h = 16
         x0, y0 = 20, TOP_H + 96
         bw = 118
-        bh = min(64, max(34, (self.height - y0 - 60 - 6 * gap) // 7))
-        return x0, y0, bw, bh, gap, cols
+        # une ligne de tuiles par catégorie + wrap : 1+3+2+2+1 = 9 lignes
+        tile_rows = sum(-(-len(letters) * 2 // cols) for _l, letters in self.EDITOR_CATEGORIES)
+        avail = self.height - y0 - 60  # boutons réservés en bas
+        bh = min(56, max(24, (avail - tile_rows * gap
+                              - len(self.EDITOR_CATEGORIES) * label_h) // tile_rows))
+        return x0, y0, bw, bh, gap, cols, label_h
 
+    # catégories de la palette : (nom affiché, lettres) — départ en haut, arrivée en bas
     EDITOR_CATEGORIES = [
-        "bcdf lmn".replace(" ", ""),  # lignes droites
-        "egijop",        # virages serrés 90°
-        "hkqrst",        # virages légers 45°
-        "au",            # départ / arrivée (dernière catégorie)
+        ("Départ", "a"),
+        ("Droites", "bcdf lmn".replace(" ", "")),
+        ("Virages 90°", "egijop"),
+        ("Virages 45°", "hkqrst"),
+        ("Arrivée", "u"),
     ]
 
+    def _editor_palette_items(self):
+        """Items de la palette : en-têtes de catégories + 42 tuiles (chaque
+        tuile suivie de sa face montagne)."""
+        items = []
+        for label, letters in self.EDITOR_CATEGORIES:
+            items.append(("label", label))
+            for base in letters:
+                items += [("tile", base), ("tile", base.upper())]
+        return items
+
     def _editor_palette_rects(self):
-        """Grille des 42 tuiles, rangées par catégories : départ/arrivée,
-        droites, virages 90°, virages 45° — chaque tuile avec ses 2 faces
-        (minuscule puis majuscule) côte à côte."""
-        x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
+        """Rects des 42 tuiles de la palette, rangées par catégories avec
+        en-têtes (exclus ici) — chaque tuile suivie de sa face montagne."""
+        x0, y0, bw, bh, gap, cols, label_h = self._editor_palette_geom()
         rects = []
-        items = [c for cat in self.EDITOR_CATEGORIES for c in cat]  # a u b c d f l m n e g i j o p h k q r s t
-        items = [c for base in items for c in (base, base.upper())]  # 42 tuiles
-        for i, ch in enumerate(items):
-            r, c = divmod(i, cols)
-            rects.append((ch, pygame.Rect(x0 + c * (bw + gap), y0 + r * (bh + gap), bw, bh)))
+        x, y, col = x0, y0, 0
+        for kind, val in self._editor_palette_items():
+            if kind == "label":
+                if col > 0:  # termine la ligne de tuiles en cours avant le label
+                    y += bh + gap
+                y += label_h
+                x, col = x0, 0
+                continue
+            rects.append((val, pygame.Rect(x, y, bw, bh)))
+            x += bw + gap
+            col += 1
+            if col >= cols:
+                col = 0
+                x = x0
+                y += bh + gap
         return rects
+
+    def _editor_palette_labels(self):
+        """[(texte, x, y)] des noms de catégories à afficher dans la palette."""
+        x0, y0, bw, bh, gap, cols, label_h = self._editor_palette_geom()
+        labels = []
+        x, y, col = x0, y0, 0
+        for kind, val in self._editor_palette_items():
+            if kind == "label":
+                if col > 0:
+                    y += bh + gap
+                labels.append((val, x, y - 2))
+                y += label_h
+                x, col = x0, 0
+                continue
+            x += bw + gap
+            col += 1
+            if col >= cols:
+                col = 0
+                x = x0
+                y += bh + gap
+        return labels
 
     def _editor_action_rects(self):
         """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
@@ -846,10 +893,12 @@ class FlammeRougeGame:
                   ("Retour", "retour")]
         if self.width < 1100:  # pas de panneau d'aperçu à droite -> JOUER à gauche
             labels.insert(4, ("JOUER", "jouer"))
-        x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
+        x0, y0, bw, bh, gap, cols, label_h = self._editor_palette_geom()
         rects = {}
         x = x0
-        y = y0 + 7 * (bh + gap) + 10  # sous les 7 lignes de la palette (42/6)
+        # sous la palette (dernier bouton de tuile + marge)
+        palette = self._editor_palette_rects()
+        y = (max(r.bottom for _c, r in palette) + 10) if palette else y0 + 100
         for label, key in labels:
             w = 150 if key == "jouer" else 100
             rects[key] = (label, pygame.Rect(x, y, w, 42))
@@ -983,6 +1032,11 @@ class FlammeRougeGame:
         elif self.editor_message:
             msg = self.label_font.render(self.editor_message, True, (120, 220, 140))
             self.screen.blit(msg, (20 + code_surf.get_width() + 20, TOP_H + 68))
+
+        # noms des catégories au-dessus de chaque groupe
+        for text, x, y in self._editor_palette_labels():
+            surf = self.label_font.render(text, True, (150, 155, 165))
+            self.screen.blit(surf, (x, y))
 
         # palette des 42 tuiles : des BOUTS DE PISTE cliquables (forme réelle),
         # avec la lettre en petit dans le coin pour identifier la tuile
