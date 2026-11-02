@@ -923,6 +923,10 @@ class FlammeRougeGame:
             return None
         return pygame.Rect(prev.x, min(prev.bottom + 8, self.height - 52), prev.w, 44)
 
+    def _editor_has_finish(self):
+        """True si la tuile d'arrivée (u/U) est placée (toujours en dernier)."""
+        return bool(self.editor_code) and self.editor_code[-1].lower() == 'u'
+
     def _editor_save(self):
         """Sauvegarde le parcours édité en JSON dans saves/, avec le nom saisi
         (ou un nom par défaut horodaté)."""
@@ -975,10 +979,13 @@ class FlammeRougeGame:
                     return
             play_rect = self._editor_play_rect()
             if play_rect is not None and play_rect.collidepoint(event.pos):
-                self._editor_play()
+                if self._editor_has_finish():
+                    self._editor_play()
                 return
             for key, (_label, rect) in self._editor_action_rects().items():
                 if rect.collidepoint(event.pos):
+                    if key in ("jouer", "sauver") and not self._editor_has_finish():
+                        return  # grisé : pas de tuile d'arrivée
                     if key == "retirer":
                         self._editor_pop()
                     elif key == "effacer":
@@ -1001,7 +1008,8 @@ class FlammeRougeGame:
             elif event.key == pygame.K_BACKSPACE:
                 self._editor_pop()
             elif event.key == pygame.K_RETURN:
-                self._editor_play()
+                if self._editor_has_finish():
+                    self._editor_play()
             else:
                 name = pygame.key.name(event.key)
                 if len(name) == 1 and name.lower() in self.EDITOR_LETTERS:
@@ -1062,15 +1070,19 @@ class FlammeRougeGame:
                 overlay.fill((18, 20, 24, 210))
                 self.screen.blit(overlay, rect.topleft)
 
-        # boutons d'action
+        # boutons d'action (JOUER/Sauver grisés sans tuile d'arrivée)
+        has_finish = self._editor_has_finish()
         for key, (label, rect) in self._editor_action_rects().items():
-            hovered = rect.collidepoint(mouse)
+            disabled = key in ("jouer", "sauver") and not has_finish
+            hovered = rect.collidepoint(mouse) and not disabled
             color = (46, 125, 50) if key == "jouer" else (70, 80, 95)
-            if hovered:
+            if disabled:
+                color = (52, 56, 62)
+            elif hovered:
                 color = tuple(min(255, c + 35) for c in color)
             pygame.draw.rect(self.screen, color, rect, border_radius=8)
             pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=8)
-            txt = self.font.render(label, True, WHITE)
+            txt = self.font.render(label, True, (120, 124, 130) if disabled else WHITE)
             self.screen.blit(txt, txt.get_rect(center=rect.center))
 
         # preview de la tuile survolée (panneau dédié, en haut à droite)
@@ -1079,13 +1091,16 @@ class FlammeRougeGame:
             # aperçu du tracé + profil dans le panneau juste en dessous
             prev = self._editor_preview_panel_rect()
             self._draw_editor_preview(prev)
-            # bouton JOUER sous l'aperçu global du parcours
+            # bouton JOUER sous l'aperçu global du parcours (grisé sans arrivée)
             play = self._editor_play_rect()
-            hovered = play.collidepoint(mouse)
-            fill = tuple(min(255, c + 35) for c in (46, 125, 50)) if hovered else (46, 125, 50)
+            disabled = not self._editor_has_finish()
+            hovered = play.collidepoint(mouse) and not disabled
+            fill = (52, 56, 62) if disabled else (46, 125, 50)
+            if hovered:
+                fill = tuple(min(255, c + 35) for c in fill)
             pygame.draw.rect(self.screen, fill, play, border_radius=8)
             pygame.draw.rect(self.screen, BLACK, play, width=2, border_radius=8)
-            txt = self.font.render("JOUER", True, WHITE)
+            txt = self.font.render("JOUER", True, (120, 124, 130) if disabled else WHITE)
             self.screen.blit(txt, txt.get_rect(center=play.center))
         else:
             self._draw_tile_preview(self.editor_hover_letter,

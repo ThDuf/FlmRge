@@ -637,3 +637,31 @@ class TestMenuCategories(unittest.TestCase):
         self.assertEqual(ui._tile_cell_summary(build_tile('a')), "cases : 1 plat, 5 départ")
         self.assertEqual(ui._tile_cell_summary(build_tile('U')), "cases : 2 montée, 4 arrivée")
         self.assertEqual(ui._tile_cell_summary(build_tile('e')), "cases : 2 plat")
+
+    def test_play_and_save_disabled_without_finish(self):
+        """Sans tuile d'arrivée, JOUER et Sauver sont grisés/inactifs."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.menu_step = "editor"
+        ui.editor_code = "abc"          # pas d'arrivée
+        self.assertFalse(ui._editor_has_finish())
+        play = ui._editor_play_rect()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=play.center))
+        self.assertIsNone(ui.game)      # JOUER inactif
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode='\r'))
+        self.assertIsNone(ui.game)
+        for key, (_l, rect) in ui._editor_action_rects().items():
+            if key == "sauver":
+                ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                                  pos=rect.center))
+        self.assertFalse(ui.editor_naming)  # Sauver inactif
+        ui._draw_menu()                 # rendu avec boutons grisés
+        # avec l'arrivée placée, tout redevient actif
+        ui.editor_code = "abcu"
+        self.assertTrue(ui._editor_has_finish())
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode='\r'))
+        self.assertIsNotNone(ui.game)
+        self.assertEqual(ui.game.custom_code, "abcu")
