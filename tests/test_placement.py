@@ -237,7 +237,7 @@ class TestButtonsLayout(unittest.TestCase):
             # violets + action dans la barre du bas ; caméra dans le cadre (haut droite)
             frame = ui._frame_rect()
             self.assertTrue(bar.contains(r), f"bouton aléatoire hors barre {w}x{h}")
-            self.assertTrue(bar.contains(ui._placement_button_rect()))
+            self.assertIsNone(ui._placement_button_rect())  # bouton placement supprimé
             self.assertTrue(bar.contains(b))
             for key, rect in ui._frame_button_rects().items():
                 self.assertTrue(frame.contains(rect), f"bouton {key} hors cadre {w}x{h}")
@@ -841,3 +841,26 @@ class TestCircuitZoom(unittest.TestCase):
                     self.assertNotEqual(oc, tuple(main.UPHILL_FILL),
                                         "la teinte déborde hors de la route en virage")
         self.assertTrue(found_uphill)
+
+    def test_buttons_recessed_and_labels_fit(self):
+        """Chaque bouton a un effet enfoncé (ombre en bas) et son libellé tient."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.screen.fill((255, 255, 255))
+        ui._draw_ui()
+        # boutons caméra à côté de la légende (bas du cadre)
+        frame = ui._frame_rect()
+        legend_y = ui._bar_rect().y - 24
+        for key, rect in ui._frame_button_rects().items():
+            self.assertTrue(frame.contains(rect))
+            self.assertGreaterEqual(rect.y, legend_y - 40)  # en bas, près de la légende
+        # effet enfoncé : le pixel 3px au-dessus du bas du bouton est plus sombre que le centre
+        rects = [r for r in ui._frame_button_rects().values()] + \
+                [r for r in ui._purple_button_rects().values()] + [ui._button_rect()]
+        for rect in rects:
+            c_mid = ui.screen.get_at(rect.center)
+            c_bot = ui.screen.get_at((rect.centerx, rect.bottom - 2))
+            self.assertGreater(sum(c_mid[:3]), sum(c_bot[:3]) - 40,
+                               "pas d'effet enfoncé")

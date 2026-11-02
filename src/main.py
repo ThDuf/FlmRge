@@ -335,17 +335,17 @@ class FlammeRougeGame:
         return len(self.movement_movements) == 0
 
     def _button_rect(self) -> pygame.Rect:
-        """Bouton d'action à l'extrême droite de la barre du bas (sous les violets)."""
+        """Bouton d'action à l'extrême droite de la barre du bas (sous le violet)."""
         bar = self._bar_rect()
-        return pygame.Rect(bar.right - 158, bar.y + 8 + 88, 150, 44)
+        return pygame.Rect(bar.right - 158, bar.y + 8 + 44, 150, 44)
 
     def _random_button_rect(self) -> pygame.Rect:
         """Bouton « Tour aléatoire » (violet) en bas à côté des logs."""
         return self._purple_button_rects()["random"]
 
-    def _placement_button_rect(self) -> pygame.Rect:
-        """Bouton « Placement aléatoire » (violet) en bas à côté des logs."""
-        return self._purple_button_rects()["placement"]
+    def _placement_button_rect(self):
+        """(supprimé) Le placement aléatoire se fait via le bouton d'action en phase PLACEMENT."""
+        return None
 
     def _frame_rect(self) -> pygame.Rect:
         """Cadre du parcours (tout l'écran sauf la barre du bas)."""
@@ -356,23 +356,60 @@ class FlammeRougeGame:
         """Bouton « Podium » dans le bandeau de titre (écran de fin, avec TAB)."""
         return pygame.Rect(self.width - 140, 12, 128, 36)
 
+    def _draw_ui_button(self, rect, label, base_color, mouse, enabled=True, icon=None):
+        """Bouton avec effet d'enfoncement léger (ombre portée en bas) et
+        libellé tronqué pour tenir dans le bouton. `icon` : 'loupe' ou 'dezoom'."""
+        hovered = enabled and rect.collidepoint(mouse)
+        fill = tuple(min(255, c + 30) for c in base_color) if hovered else base_color
+        if not enabled:
+            fill = (52, 56, 62)
+        pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+        # effet enfoncé : bord sombre en bas + ligne claire en haut
+        dark = tuple(max(0, c - 45) for c in fill)
+        light = tuple(min(255, c + 25) for c in fill)
+        pygame.draw.line(self.screen, dark, (rect.x + 6, rect.bottom - 3),
+                         (rect.right - 6, rect.bottom - 3), 3)
+        pygame.draw.line(self.screen, light, (rect.x + 6, rect.y + 2),
+                         (rect.right - 6, rect.y + 2), 1)
+        pygame.draw.rect(self.screen, dark, rect, width=1, border_radius=8)
+        text_color = (120, 124, 130) if not enabled else WHITE
+        # icône à gauche
+        tx = rect.x + 8
+        if icon == "loupe":
+            cx, cy = rect.x + 18, rect.centery - 2
+            pygame.draw.circle(self.screen, text_color, (cx, cy), 6, 2)
+            pygame.draw.line(self.screen, text_color, (cx + 4, cy + 4),
+                             (cx + 9, cy + 9), 2)
+            tx = rect.x + 32
+        elif icon == "dezoom":
+            cx, cy = rect.x + 18, rect.centery
+            pygame.draw.circle(self.screen, text_color, (cx, cy), 7, 2)
+            pygame.draw.line(self.screen, text_color, (cx - 4, cy), (cx + 4, cy), 2)
+            tx = rect.x + 32
+        # libellé tronqué pour tenir dans le bouton
+        max_w = rect.right - 6 - tx
+        while label and self.small_font.render(label, True, (0, 0, 0)).get_width() > max_w:
+            label = label[:-1]
+        surf = self.small_font.render(label, True, text_color)
+        self.screen.blit(surf, (tx + (max_w - surf.get_width()) // 2,
+                                rect.centery - surf.get_height() // 2))
+
     def _frame_button_rects(self):
-        """Boutons en haut à droite DANS le cadre du parcours :
-        Vue d'ensemble, puis Zoom peloton en dessous."""
+        """Boutons caméra à côté de la légende, en bas à droite du cadre :
+        Zoom peloton (loupe), Vue d'ensemble (dezoom)."""
         frame = self._frame_rect()
-        w, h, gap = 142, 32, 6
-        x = frame.right - w - 8
-        return {"ensemble": pygame.Rect(x, frame.y + 8, w, h),
-                "peloton": pygame.Rect(x, frame.y + 8 + (h + gap), w, h)}
+        w, h = 150, 30
+        y = frame.bottom - h - 6
+        return {"peloton": pygame.Rect(frame.right - 8 - w, y, w, h),
+                "ensemble": pygame.Rect(frame.right - 16 - 2 * w, y, w, h)}
 
     def _purple_button_rects(self):
-        """Boutons violets en bas à droite de la barre, à côté des logs :
-        Placement aléatoire, Tour aléatoire (au-dessus du bouton d'action)."""
+        """Bouton violet en bas à droite de la barre, à côté des logs :
+        Tour aléatoire (au-dessus du bouton d'action)."""
         bar = self._bar_rect()
         w = 150
         x = bar.right - w - 8
-        return {"random": pygame.Rect(x, bar.y + 8, w, 38),
-                "placement": pygame.Rect(x, bar.y + 8 + 44, w, 38)}
+        return {"random": pygame.Rect(x, bar.y + 8, w, 38)}
 
     def _camera_button_rects(self):
         """(compat) boutons caméra = ceux du cadre du parcours."""
@@ -612,10 +649,6 @@ class FlammeRougeGame:
                     return
                 elif not self.game.game_over and fbtns["peloton"].collidepoint(event.pos):
                     self._zoom_on_peloton()
-                    return
-                elif self._placement_button_rect().collidepoint(event.pos):
-                    if self.game.current_phase == Phase.PLACEMENT:
-                        self.game.auto_place_riders()
                     return
                 elif not self.game.game_over and self._random_button_rect().collidepoint(event.pos):
                     self._play_random_turn()
@@ -1210,20 +1243,13 @@ class FlammeRougeGame:
                 overlay.fill((18, 20, 24, 210))
                 self.screen.blit(overlay, rect.topleft)
 
-        # boutons d'action (JOUER/Sauver grisés sans tuile d'arrivée)
+        # boutons d'action (même rendu enfoncé que dans le jeu ; JOUER/Sauver
+        # grisés sans tuile d'arrivée)
         has_finish = self._editor_has_finish()
         for key, (label, rect) in self._editor_action_rects().items():
             disabled = key in ("jouer", "sauver") and not has_finish
-            hovered = rect.collidepoint(mouse) and not disabled
             color = (46, 125, 50) if key == "jouer" else (70, 80, 95)
-            if disabled:
-                color = (52, 56, 62)
-            elif hovered:
-                color = tuple(min(255, c + 35) for c in color)
-            pygame.draw.rect(self.screen, color, rect, border_radius=8)
-            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=8)
-            txt = self.font.render(label, True, (120, 124, 130) if disabled else WHITE)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            self._draw_ui_button(rect, label, color, mouse, enabled=not disabled)
 
         # preview de la tuile survolée (panneau dédié, en haut à droite)
         if self.width >= 1100:
@@ -1232,16 +1258,8 @@ class FlammeRougeGame:
             prev = self._editor_preview_panel_rect()
             self._draw_editor_preview(prev)
             # bouton JOUER sous l'aperçu global du parcours (grisé sans arrivée)
-            play = self._editor_play_rect()
-            disabled = not self._editor_has_finish()
-            hovered = play.collidepoint(mouse) and not disabled
-            fill = (52, 56, 62) if disabled else (46, 125, 50)
-            if hovered:
-                fill = tuple(min(255, c + 35) for c in fill)
-            pygame.draw.rect(self.screen, fill, play, border_radius=8)
-            pygame.draw.rect(self.screen, BLACK, play, width=2, border_radius=8)
-            txt = self.font.render("JOUER", True, (120, 124, 130) if disabled else WHITE)
-            self.screen.blit(txt, txt.get_rect(center=play.center))
+            self._draw_ui_button(self._editor_play_rect(), "JOUER", (46, 125, 50),
+                                 mouse, enabled=self._editor_has_finish())
         else:
             self._draw_tile_preview(self.editor_hover_letter,
                                     pygame.Rect(self.width - 240, TOP_H + 40, 220, 160))
@@ -1944,14 +1962,9 @@ class FlammeRougeGame:
             # bouton podium à droite en fin de partie (les boutons caméra sont
             # dans le cadre du parcours, en haut à droite)
             if self.game.game_over:
-                rect = self._podium_button_rect()
-                hovered = rect.collidepoint(pygame.mouse.get_pos())
-                fill = (250, 230, 130) if hovered else (240, 210, 60)
-                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                pygame.draw.rect(self.screen, (60, 50, 10), rect, width=2, border_radius=8)
                 plabel = "Voir le circuit" if self.show_podium else "Voir le podium"
-                pt = self.small_font.render(plabel, True, BLACK)
-                self.screen.blit(pt, pt.get_rect(center=rect.center))
+                self._draw_ui_button(self._podium_button_rect(), plabel, (240, 210, 60),
+                                     pygame.mouse.get_pos())
 
     def _draw_phase_band(self):
         """Bandeau de phase : nom + description de la phase, coloré."""
@@ -2023,59 +2036,46 @@ class FlammeRougeGame:
         button_info = self._button_info()
         if button_info is not None:
             label, button_color = button_info
-            rect = self._button_rect()
-            hovered = rect.collidepoint(pygame.mouse.get_pos())
-            fill = tuple(min(255, c + 35) for c in button_color) if hovered else button_color
-            pygame.draw.rect(self.screen, fill, rect, border_radius=10)
-            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=10)
-            button_text = self.font.render(label, True, WHITE)
-            self.screen.blit(button_text, button_text.get_rect(center=rect.center))
+            self._draw_ui_button(self._button_rect(), label, button_color,
+                                 pygame.mouse.get_pos())
 
     def _draw_frame_buttons(self, mouse):
-        """Boutons en haut à droite du cadre du parcours :
-        Vue d'ensemble, puis Zoom peloton en dessous."""
-        labels = {"ensemble": ("Vue d'ensemble", (70, 80, 95), True),
-                  "peloton": ("Zoom peloton", (70, 80, 95), not self.game.game_over)}
+        """Boutons caméra à côté de la légende (bas droite du cadre) :
+        Zoom peloton (loupe), Vue d'ensemble (dezoom)."""
+        labels = {"peloton": ("Zoom peloton", (70, 80, 95), not self.game.game_over, "loupe"),
+                  "ensemble": ("Vue d'ensemble", (70, 80, 95), True, "dezoom")}
         for key, rect in self._frame_button_rects().items():
-            label, color, enabled = labels[key]
-            hovered = enabled and rect.collidepoint(mouse)
-            fill = tuple(min(255, c + 35) for c in color) if hovered else color
-            if not enabled:
-                fill = (52, 56, 62)
-            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-            pygame.draw.rect(self.screen, (200, 210, 225) if enabled else (90, 95, 105),
-                             rect, width=1, border_radius=8)
-            txt = self.small_font.render(label, True, (120, 124, 130) if not enabled else WHITE)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+            label, color, enabled, icon = labels[key]
+            self._draw_ui_button(rect, label, color, mouse, enabled, icon)
 
     def _draw_purple_buttons(self, mouse):
-        """Boutons violets en bas à droite de la barre, à côté des logs :
-        Tour aléatoire, Placement aléatoire."""
-        labels = {"random": ("Tour aléatoire", not self.game.game_over),
-                  "placement": ("Placement aléatoire",
-                                self.game.current_phase == Phase.PLACEMENT)}
-        for key, rect in self._purple_button_rects().items():
-            label, enabled = labels[key]
-            hovered = enabled and rect.collidepoint(mouse)
-            fill = (150, 110, 210) if hovered else (126, 87, 194)
-            if not enabled:
-                fill = (52, 56, 62)
-            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-            pygame.draw.rect(self.screen, (200, 180, 240) if enabled else (90, 95, 105),
-                             rect, width=1, border_radius=8)
-            txt = self.small_font.render(label, True, (120, 124, 130) if not enabled else WHITE)
-            self.screen.blit(txt, txt.get_rect(center=rect.center))
+        """Bouton violet en bas à droite de la barre, à côté des logs :
+        Tour aléatoire."""
+        rect = self._purple_button_rects()["random"]
+        self._draw_ui_button(rect, "Tour aléatoire", (126, 87, 194), mouse,
+                             enabled=not self.game.game_over)
 
         # Panneau latéral : historique des coups joués (touche J)
         if self.show_history:
             self._draw_history()
 
-        # Légende des couleurs du circuit (bas de la zone circuit)
+        # Légende des couleurs du circuit (bas du cadre) sur fond blanc,
+        # pour ne rien superposer ; les boutons caméra sont à sa droite
         legend_y = self._bar_rect().y - 24  # légende en bas du cadre du parcours
         legend_x = self._left_w() + 20
-        for swatch, label in (((255, 236, 130), "D\u00e9part"), ((240, 210, 60), "Arriv\u00e9e"),
-                              (UPHILL_FILL, "Mont\u00e9e"),
-                              (DOWNHILL_FILL, "Descente"), (WHITE, "Files A|B")):
+        items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
+                 (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente"), (WHITE, "Files A|B")]
+        # fond blanc derrière la légende
+        total_w = 0
+        for _sw, label in items:
+            total_w += 18 + self.label_font.render(label, True, (0, 0, 0)).get_width() + 14
+        frame = self._frame_rect()
+        pygame.draw.rect(self.screen, WHITE,
+                         (frame.x + 4, legend_y - 5, total_w + 14, 24), border_radius=6)
+        pygame.draw.rect(self.screen, (160, 166, 176),
+                         (frame.x + 4, legend_y - 5, total_w + 14, 24), width=1,
+                         border_radius=6)
+        for swatch, label in items:
             pygame.draw.rect(self.screen, swatch, (legend_x, legend_y, 14, 14), border_radius=3)
             pygame.draw.rect(self.screen, BLACK, (legend_x, legend_y, 14, 14),
                              width=1, border_radius=3)
