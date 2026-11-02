@@ -161,22 +161,31 @@ class TestHandLayout(unittest.TestCase):
         self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
     def test_panels_fit_window(self):
-        layout = ui_layout = self.ui._hand_layout()
-        self.assertEqual(len(layout), len(self.ui.game.players))
-        for player, panel, rows in layout:
-            self.assertLessEqual(panel.right, self.ui.width, "panneau hors écran à droite")
-            self.assertLessEqual(panel.bottom, self.ui.height, "panneau hors écran en bas")
-            self.assertGreaterEqual(panel.x, 0)
-            for runner, label, items, rects in rows:
-                self.assertEqual(len(rects), len(items))
-                for rect in rects:
-                    self.assertTrue(panel.contains(rect), "carte hors du panneau")
-
-    def test_panels_do_not_overlap(self):
+        # un seul panneau : celui du joueur en cours, dans la barre du bas
         layout = self.ui._hand_layout()
-        for i in range(len(layout) - 1):
-            self.assertFalse(layout[i][1].colliderect(layout[i + 1][1]),
-                             "les panneaux de joueurs se chevauchent")
+        self.assertEqual(len(layout), 1)
+        player, panel, rows = layout[0]
+        self.assertIs(player, self.ui.game.players[self.ui.current_player_idx])
+        bar = self.ui._bar_rect()
+        self.assertTrue(bar.contains(panel), "panneau hors de la barre du bas")
+        self.assertLessEqual(panel.right, self.ui.width, "panneau hors écran à droite")
+        self.assertLessEqual(panel.bottom, self.ui.height, "panneau hors écran en bas")
+        self.assertGreaterEqual(panel.x, 0)
+        for runner, label, items, rects in rows:
+            self.assertEqual(len(rects), len(items))
+            for rect in rects:
+                self.assertTrue(panel.contains(rect), "carte hors du panneau")
+
+    def test_player_tabs_switch_panel(self):
+        """Les onglets permettent de passer d'un joueur à l'autre (un panneau à la fois)."""
+        import pygame
+        ui = self.ui
+        tabs = ui._player_tab_rects()
+        self.assertEqual(len(tabs), len(ui.game.players))
+        self.assertEqual(ui.current_player_idx, 0)
+        ui._handle_click(tabs[1].center)
+        self.assertEqual(ui.current_player_idx, 1)
+        self.assertEqual(ui._hand_layout()[0][0], ui.game.players[1])
 
     def test_resize_updates_layout(self):
         self.ui.width, self.ui.height = 1600, 1000
@@ -339,13 +348,20 @@ class TestTrackLayout(unittest.TestCase):
         turns = [t.turn for t in self.ui.game.track.tiles]
         self.assertTrue(any(t and abs(t[0] - math.pi / 2) < 1e-9 for t in turns))
 
-    def test_panels_and_button_stay_left_of_track(self):
+    def test_bar_below_track_no_overlap(self):
+        """La barre du bas (cartes + log + boutons) est sous le cadre du parcours."""
+        import pygame
         ui = self.ui
-        geo = ui._track_geometry()
-        leftmost = min(p[0] for p in geo["points"]) - geo["half"]
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        bar = ui._bar_rect()
+        frame = pygame.Rect(4, main.TOP_H + 2, ui.width - 10, bar.y - main.TOP_H - 8)
         for player, panel, rows in ui._hand_layout():
-            self.assertLessEqual(panel.right, leftmost)
-        self.assertLessEqual(ui._button_rect().right, leftmost)
+            self.assertTrue(bar.contains(panel))
+            self.assertFalse(frame.colliderect(panel))
+        self.assertFalse(frame.colliderect(ui._button_rect()))
+        self.assertFalse(frame.colliderect(ui._random_button_rect()))
+        self.assertFalse(frame.colliderect(ui._log_panel_rect()))
 
     def test_geometry_total_arc_matches_cells(self):
         """L'arc total vaut exactement nb_cases * taille_de_case :

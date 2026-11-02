@@ -29,6 +29,7 @@ PANEL_PAD = 10     # padding des panneaux de joueur
 PANEL_HEADER = 30  # hauteur de l'en-tête des panneaux (nom + progression)
 PANEL_H = 170      # hauteur d'un panneau de joueur (colonne de gauche)
 BUTTONS_H = 100    # hauteur réservée en bas de colonne pour les 2 boutons
+BAR_H = 160        # hauteur de la barre du bas (cartes + log + boutons)
 GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
 
@@ -112,7 +113,8 @@ class FlammeRougeGame:
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
-        self.show_history = False  # Panneau historique des coups (touche J)
+        self.show_history = False  # Panneau historique des coups (touche J, overlay)
+        self.current_player_idx = 0  # joueur dont les cartes sont affichées (barre du bas)
         self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
         self.pan_x = 0.0    # panoramique horizontal (flèches ou clic droit)
         self.pan_y = 0.0
@@ -137,8 +139,31 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _left_w(self) -> int:
-        """Largeur de la colonne de gauche (panneaux de cartes des joueurs)."""
-        return min(340, max(280, self.width // 2))
+        """Marge gauche (plus de colonne de panneaux : les cartes sont en bas)."""
+        return 8
+
+    def _bar_rect(self) -> pygame.Rect:
+        """Barre du bas : panneau de cartes (un joueur à la fois) à gauche,
+        panneau de log à droite, boutons à l'extrême droite."""
+        return pygame.Rect(4, self.height - BAR_H - 30, self.width - 10, BAR_H)
+
+    def _card_panel_rect(self) -> pygame.Rect:
+        """Panneau des cartes du joueur en cours (en bas à gauche)."""
+        bar = self._bar_rect()
+        return pygame.Rect(bar.x + 6, bar.y + 26, 440, bar.h - 32)
+
+    def _log_panel_rect(self) -> pygame.Rect:
+        """Petit écran à droite du panneau de cartes : ce qui se passe + historique."""
+        bar = self._bar_rect()
+        card = self._card_panel_rect()
+        return pygame.Rect(card.right + 8, bar.y + 6, 380, bar.h - 12)
+
+    def _player_tab_rects(self):
+        """Onglets des joueurs au-dessus du panneau de cartes (changer de joueur)."""
+        bar = self._bar_rect()
+        card = self._card_panel_rect()
+        return [pygame.Rect(card.x + i * 76, bar.y + 4, 72, 20)
+                for i in range(len(self.game.players))]
 
     def _track_geometry(self) -> dict:
         """Géométrie du circuit (mise en cache), ajustée à la fenêtre.
@@ -157,10 +182,10 @@ class FlammeRougeGame:
         from game.track import compute_track_path
         pts_units = compute_track_path(self.game.track, unit=1.0)
 
-        left = self._left_w() + 12
+        left = 16
         right = self.width - 12
-        top = TOP_H + INFO_H + 6
-        bottom = self.height - 34  # légende en bas
+        top = TOP_H + 8
+        bottom = self._bar_rect().y - 34  # la barre du bas est hors du parcours
         avail_w = max(50.0, right - left)
         avail_h = max(50.0, bottom - top)
 
@@ -215,10 +240,8 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _panel_h(self) -> int:
-        """Hauteur d'un panneau de joueur, réduite si beaucoup de joueurs
-        (en réservant la place des boutons en bas de colonne)."""
-        n = max(1, len(self.game.players))
-        return min(PANEL_H, (self.height - TOP_H - 16 - BUTTONS_H - (n - 1) * 8) // n)
+        """Hauteur du panneau de cartes (joueur en cours, en bas à gauche)."""
+        return self._card_panel_rect().h
 
     def _row_items(self, runner):
         """Cartes affichées d'un coureur : [(carte, jouée), ...].
@@ -234,26 +257,26 @@ class FlammeRougeGame:
         return items
 
     def _hand_layout(self):
-        """Géométrie des panneaux de mains, empilés en colonne à GAUCHE.
+        """Géométrie du panneau de cartes DU JOUEUR EN COURS (en bas à gauche).
 
-        Un panneau compact par joueur : en-tête (nom + progression x/2),
-        2 lignes (Sprinteur / Rouleur) avec libellé à gauche et cartes
-        (carte jouée incluse, en vert) à droite.
-        Retourne [(player, panel_rect, [(runner, label, items, [card_rects]), ...]), ...].
-        Utilisé à la fois pour le dessin et pour la détection des clics,
-        afin de garantir que les zones cliquables correspondent à l'affichage.
+        Un panneau : en-tête (nom + progression x/2), 2 lignes (Sprinteur /
+        Rouleur) avec libellé à gauche et cartes (carte jouée incluse, en
+        vert) à droite.
+        Retourne [(player, panel_rect, [(runner, label, items, [card_rects])])].
+        Utilisé à la fois pour le dessin et pour la détection des clics.
         """
-        panel_h = self._panel_h()
-        panel_w = self._left_w() - 16
+        player = self.game.players[self.current_player_idx]
+        panel = self._card_panel_rect()
+        panel_h = panel.h
+        panel_w = panel.w
         card_h = max(36, (panel_h - PANEL_HEADER - 26) // 2)
         label_w = 88  # zone réservée au libellé ("Sprinteur" / "Rouleur")
         avail = panel_w - label_w - 2 * PANEL_PAD
         card_w = max(28, min(CARD_W, (avail - 3 * CARD_GAP) // 4))
 
         layout = []
-        for idx, player in enumerate(self.game.players):
-            panel = pygame.Rect(8, TOP_H + 8 + idx * (panel_h + 8), panel_w, panel_h)
-            rows = []
+        rows = []
+        if True:
             for row, (runner, label) in enumerate(
                     [(player.sprinter, "Sprinteur"), (player.roller, "Rouleur")]):
                 row_y = panel.y + PANEL_HEADER + 8 + row * (card_h + 10)
@@ -306,15 +329,16 @@ class FlammeRougeGame:
         return len(self.movement_movements) == 0
 
     def _button_rect(self) -> pygame.Rect:
-        """Position du bouton d'action (sous la colonne de panneaux, à gauche)."""
-        n = max(1, len(self.game.players))
-        y = TOP_H + 8 + n * (self._panel_h() + 8) + 6
-        return pygame.Rect(8, min(y, self.height - BUTTONS_H - 6), self._left_w() - 16, 48)
+        """Bouton d'action à l'extrême droite de la barre du bas."""
+        bar = self._bar_rect()
+        log = self._log_panel_rect()
+        x = log.right + 8
+        return pygame.Rect(x, bar.y + 8, bar.right - x - 8, 44)
 
     def _random_button_rect(self) -> pygame.Rect:
-        """Bouton « Tour aléatoire » sous le bouton d'action."""
+        """Bouton « Tour aléatoire » sous le bouton d'action (barre du bas)."""
         r = self._button_rect()
-        return pygame.Rect(r.x, min(r.bottom + 6, self.height - 46), r.w, 40)
+        return pygame.Rect(r.x, r.bottom + 6, r.w, 40)
 
     def _podium_button_rect(self) -> pygame.Rect:
         """Bouton « Podium » dans le bandeau de titre (écran de fin, avec TAB)."""
@@ -510,10 +534,10 @@ class FlammeRougeGame:
                 self._draw_menu()
             else:
                 self.screen.fill(WHITE)
-                # cadre autour de la zone du parcours (sépare bien les espaces)
-                frame = pygame.Rect(self._left_w() + 4, TOP_H + 2,
-                                    self.width - self._left_w() - 10,
-                                    self.height - TOP_H - 38)
+                # cadre autour de la zone du parcours (tout le reste que la barre du bas)
+                bar = self._bar_rect()
+                frame = pygame.Rect(4, TOP_H + 2, self.width - 10,
+                                    bar.y - TOP_H - 8)
                 pygame.draw.rect(self.screen, (238, 240, 244), frame, border_radius=10)
                 pygame.draw.rect(self.screen, (160, 166, 176), frame, width=2,
                                  border_radius=10)
@@ -1483,6 +1507,7 @@ class FlammeRougeGame:
         self.aspiration_movements = []
         self.played_display_index = {}
         self.last_action = None
+        self.current_player_idx = 0
         self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
         self.zoom = 1.0
         self.pan_x = 0.0
@@ -1577,9 +1602,14 @@ class FlammeRougeGame:
                 print("[OK] Placement terminé, début de la course !")
 
     def _handle_click(self, pos):
-        """Gère un clic : jouer une carte via les zones du layout des mains."""
+        """Gère un clic : onglet de joueur, ou jouer une carte du joueur en cours."""
         if not self.show_hands or self.game.current_phase != Phase.ENERGY:
             return
+        # clic sur un onglet de joueur -> on affiche ce joueur
+        for i, tab in enumerate(self._player_tab_rects()):
+            if tab.collidepoint(pos):
+                self.current_player_idx = i
+                return
         if self.game.all_players_ready():
             return
 
@@ -1596,6 +1626,17 @@ class FlammeRougeGame:
                             # reste affichée là où elle a été cliquée (en vert)
                             self.played_display_index[runner.id] = card_idx
                             print(f"[OK] {player.color} {label}: carte {card.value} jouee")
+                            # panneau suivant : joueur prochain qui n'a pas fini
+                            if (self.game.cards_played_per_runner[player.sprinter.id] >= 1
+                                    and self.game.cards_played_per_runner[player.roller.id] >= 1):
+                                n = len(self.game.players)
+                                for k in range(1, n + 1):
+                                    j = (self.current_player_idx + k) % n
+                                    p = self.game.players[j]
+                                    if (self.game.cards_played_per_runner[p.sprinter.id] < 1
+                                            or self.game.cards_played_per_runner[p.roller.id] < 1):
+                                        self.current_player_idx = j
+                                        break
                             if self.game.all_players_ready():
                                 print("Appuyez sur ENTREE pour lancer la phase de mouvement...")
                         return
@@ -1921,10 +1962,14 @@ class FlammeRougeGame:
         self._draw_phase_band()
 
         info_x = self._left_w() + 16  # (les compteurs/infos sont dans le bandeau de phase)
-        # Mains des coureurs : visibles dans toutes les phases (cartes jouées
-        # en vert, progression x/2) ; cliquables uniquement en phase d'énergie
-        if self.show_hands and self.game.current_phase == Phase.ENERGY:
-            self._draw_hands()  # les mains ne sont piochées qu'au 1er tour
+        # Barre du bas : panneau de cartes du joueur en cours (en bas à gauche)
+        # + petit écran "ce qui se passe" (historique) à sa droite — toujours visibles
+        if self.show_hands:
+            bar = self._bar_rect()
+            pygame.draw.rect(self.screen, (238, 240, 244), bar, border_radius=10)
+            pygame.draw.rect(self.screen, (160, 166, 176), bar, width=2, border_radius=10)
+            self._draw_hands()
+            self._draw_log_panel()
 
         # Phase de placement : coureurs non placés affichés en réserve à côté
         # du départ (pas sur la piste, espacés pour ne pas se superposer)
@@ -1961,7 +2006,7 @@ class FlammeRougeGame:
             self._draw_history()
 
         # Légende des couleurs du circuit (bas de la zone circuit)
-        legend_y = self.height - 26
+        legend_y = self._bar_rect().y - 24  # légende en bas du cadre du parcours
         legend_x = self._left_w() + 20
         for swatch, label in (((255, 236, 130), "D\u00e9part"), ((240, 210, 60), "Arriv\u00e9e"),
                               (UPHILL_FILL, "Mont\u00e9e"),
@@ -2014,18 +2059,8 @@ class FlammeRougeGame:
                                       True, (150, 155, 165))
         self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
 
-    def _draw_history(self):
-        """Panneau latéral droit : historique des coups joués (cartes,
-        mouvements, aspirations), du plus récent tour au plus ancien affiché."""
-        rect = pygame.Rect(self.width - 370, TOP_H + 8, 358,
-                           self.height - TOP_H - 60)
-        pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=10)
-        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=10)
-        title = self.phase_font.render("Historique des coups", True, WHITE)
-        self.screen.blit(title, (rect.x + 12, rect.y + 10))
-        y = rect.y + 40
-        line_h = 17
-        max_lines = (rect.bottom - 10 - y) // line_h
+    def _history_lines(self):
+        """Lignes d'historique (texte, couleur), du plus récent au plus ancien."""
         lines = []
         for entry in reversed(self.game.history):
             lines.append((f"Tour {entry['turn']}", (240, 210, 60)))
@@ -2042,7 +2077,37 @@ class FlammeRougeGame:
             for slip in entry["slips"]:
                 desc = ", ".join(f"{rid}:{fx}->{tx}" for rid, fx, tx in slip)
                 lines.append((f"  aspiration: {desc}", (255, 200, 120)))
-        for txt, color in lines[-max_lines:]:
+        return lines
+
+    def _draw_log_panel(self):
+        """Petit écran à droite du panneau de cartes : ce qui se passe
+        (dernières lignes de l'historique), toujours visible."""
+        rect = self._log_panel_rect()
+        pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=8)
+        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+        title = self.small_font.render("Ce qui se passe", True, (150, 155, 165))
+        self.screen.blit(title, (rect.x + 10, rect.y + 6))
+        lines = self._history_lines()
+        line_h = 15
+        max_lines = (rect.bottom - rect.y - 28) // line_h
+        y = rect.y + 24
+        for txt, color in lines[:max_lines]:
+            surf = self.small_font.render(txt, True, color)
+            self.screen.blit(surf, (rect.x + 10, y))
+            y += line_h
+
+    def _draw_history(self):
+        """Overlay historique complet (touche J) : toutes les lignes."""
+        rect = pygame.Rect(self.width - 370, TOP_H + 8, 358,
+                           self.height - TOP_H - 60)
+        pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=10)
+        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=10)
+        title = self.phase_font.render("Historique des coups", True, WHITE)
+        self.screen.blit(title, (rect.x + 12, rect.y + 10))
+        y = rect.y + 40
+        line_h = 17
+        max_lines = (rect.bottom - 10 - y) // line_h
+        for txt, color in self._history_lines()[-max_lines:]:
             surf = self.small_font.render(txt, True, color)
             self.screen.blit(surf, (rect.x + 12, y))
             y += line_h
@@ -2077,14 +2142,27 @@ class FlammeRougeGame:
             self.screen.blit(lbl, (cx - lbl.get_width() // 2, cy - lbl.get_height() // 2))
 
     def _draw_hands(self):
-        """Panneaux de cartes des joueurs, empilés en colonne à gauche.
+        """Panneau de cartes DU JOUEUR EN COURS (en bas à gauche), avec les
+        onglets des joueurs au-dessus pour changer de joueur.
 
-        Panneau compact par joueur : en-tête avec nom + progression x/2,
-        libellés à gauche des cartes, surbrillance au survol, carte jouée
-        en vert, cartes restantes grisées. Les cartes ne sont cliquables
-        qu'en phase d'énergie (cf. _handle_click).
+        Panneau compact : en-tête (nom + progression x/2), 2 lignes
+        (Sprinteur / Rouleur), surbrillance au survol, carte jouée en vert.
+        Cartes cliquables qu'en phase d'énergie (cf. _handle_click).
         """
         mouse = pygame.mouse.get_pos()
+        # onglets des joueurs
+        for i, (player, tab) in enumerate(zip(self.game.players, self._player_tab_rects())):
+            active = (i == self.current_player_idx)
+            hovered = tab.collidepoint(mouse)
+            color = PLAYER_COLORS.get(player.color, BLACK)
+            fill = color if active else ((tuple(min(255, c + 40) for c in color))
+                                         if hovered else (60, 66, 78))
+            pygame.draw.rect(self.screen, fill, tab, border_radius=5)
+            pygame.draw.rect(self.screen, BLACK if active else (90, 95, 105), tab,
+                             width=1, border_radius=5)
+            t = self.small_font.render(player.color[:4], True,
+                                       BLACK if active else WHITE)
+            self.screen.blit(t, t.get_rect(center=tab.center))
         for player, panel, rows in self._hand_layout():
             color = PLAYER_COLORS.get(player.color, BLACK)
 
@@ -2106,6 +2184,8 @@ class FlammeRougeGame:
 
             for runner, label, items, rects in rows:
                 played = self.game.cards_played_per_runner[runner.id] >= 1
+                if not rects:
+                    continue  # main vide (ex. phase de placement)
                 label_surf = self.label_font.render(label, True, GRAY if played else BLACK)
                 self.screen.blit(label_surf, (panel.x + PANEL_PAD,
                                              rects[0].y + rects[0].h // 2 - 8))

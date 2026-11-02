@@ -229,17 +229,15 @@ class TestButtonsLayout(unittest.TestCase):
             ui.width, ui.height = w, h
             ui.screen = pygame.display.set_mode((w, h))
             ui._draw_ui()
+            bar = ui._bar_rect()
             b = ui._button_rect()
             r = ui._random_button_rect()
-            self.assertGreaterEqual(b.y, 0)
             self.assertLessEqual(b.bottom, h, f"bouton action hors écran {w}x{h}")
             self.assertLessEqual(r.bottom, h, f"bouton aléatoire hors écran {w}x{h}")
             self.assertGreater(r.y, b.y)  # le bouton aléatoire est sous l'autre
-            # pas de chevauchement avec les panneaux
-            panel_h = ui._panel_h()
-            panels_bottom = 8 + 112 + 4 * (panel_h + 8)
-            self.assertGreaterEqual(b.y, panels_bottom - 8 - 8,
-                                    f"bouton chevauche les panneaux {w}x{h}")
+            # tous dans la barre du bas, sans chevauchement avec le parcours
+            for rect in (b, r, ui._log_panel_rect(), ui._card_panel_rect()):
+                self.assertTrue(bar.contains(rect), f"hors barre {w}x{h}")
 
 
 class TestTrackEditor(unittest.TestCase):
@@ -737,9 +735,10 @@ class TestCircuitZoom(unittest.TestCase):
         for key, rect in ui._camera_button_rects().items():
             self.assertLess(rect.bottom, main.HEADER_H, f"bouton {key} hors bandeau")
         self.assertLess(ui._podium_button_rect().bottom, main.HEADER_H)
-        frame = pygame.Rect(ui._left_w() + 4, main.TOP_H + 2,
-                            ui.width - ui._left_w() - 10, ui.height - main.TOP_H - 38)
-        self.assertGreaterEqual(frame.left, ui._left_w())  # à droite de la colonne
+        # le cadre du parcours prend toute la largeur, au-dessus de la barre du bas
+        bar = ui._bar_rect()
+        frame = pygame.Rect(4, main.TOP_H + 2, ui.width - 10, bar.y - main.TOP_H - 8)
         b = ui._button_rect()
-        self.assertFalse(frame.colliderect(b))              # boutons à gauche du cadre
+        self.assertFalse(frame.colliderect(b))              # boutons dans la barre, sous le cadre
+        self.assertFalse(frame.colliderect(ui._log_panel_rect()))
         ui._draw_ui()
