@@ -564,8 +564,8 @@ class FlammeRougeGame:
         return marks, s  # s final = longueur totale (cases)
 
     def _draw_menu_preview(self, name, rect):
-        """Mini-carte du tracé de l'étape : chemin + séparateurs de tuiles
-        + lettres des tuiles (a, b, c...) + départ/arrivée."""
+        """Mini-carte du tracé de l'étape : chemin coloré case par case
+        + mini-previews des tuiles (forme, cases, nb de cases) + départ/arrivée."""
         from game.track import path_point_at
         trect = self._preview_track_rect(rect)
         pts = self._stage_preview_points(name)
@@ -625,14 +625,14 @@ class FlammeRougeGame:
                 nx, ny = -ty, tx
                 pygame.draw.line(self.screen, (120, 125, 135),
                                  (sx + nx * 7, sy + ny * 7), (sx - nx * 7, sy - ny * 7), 1)
+        # mini-preview de chaque tuile (forme + cases + nb de cases) à la place des lettres
         for s_mid, letter in marks:
             if not letter:
                 continue
             px, py, tx, ty = path_point_at(pts, s_mid)
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
-            lbl = self.small_font.render(letter, True, (170, 175, 185))
-            self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
+            self._draw_mini_tile(letter, sx + nx * 26, sy + ny * 26, tx, ty, size=28)
 
         # Profil d'altitude de l'étape (montées +1 / descentes -1 par case)
         self._draw_profile(name, self._preview_profile_rect(rect))
@@ -950,13 +950,13 @@ class FlammeRougeGame:
                     px, py, _tx, _ty = path_point_at(pts, cell.x + k / 3)
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, c, False, seg, 5)
-        # lettres des tuiles au milieu de chacune
+        # mini-preview de chaque tuile au milieu d'elle (avec son nb de cases)
         s = 0.0
         for ch, tile in zip(self.editor_code, track.tiles):
             px, py, tx, ty = path_point_at(pts, s + tile.length / 2)
             nx, ny = -ty, tx
-            lbl = self.small_font.render(ch, True, (170, 175, 185))
-            self.screen.blit(lbl, (ox + px * scale + nx * 10 - 3, oy + py * scale + ny * 10 - 5))
+            self._draw_mini_tile(ch, ox + px * scale + nx * 28, oy + py * scale + ny * 28,
+                                 tx, ty, size=30)
             s += tile.length
         # profil sous le tracé
         alt = [0]
@@ -966,6 +966,55 @@ class FlammeRougeGame:
                 alt.append(alt[-1] + (1 if g == CellGeographyType.UPHILL
                                        else -1 if g == CellGeographyType.DOWNHILL else 0))
         self._draw_profile_array(alt, self._preview_profile_rect(rect))
+
+    def _draw_mini_tile(self, ch, sx, sy, tx, ty, size=36):
+        """Dessine la tuile `ch` en miniature, centrée en (sx, sy) et orientée
+        selon la tangente (tx, ty) du tracé. Chaque case est un segment coloré
+        (géographie/ligne) séparé par un trait blanc, et le NOMBRE DE CASES
+        est affiché sous la tuile (ex. « ×6 »)."""
+        from game.game import build_tile
+        from game.track import (Track, compute_track_path, path_point_at,
+                                CellGeographyType, CellRunType)
+        tile = build_tile(ch)
+        t = Track()
+        t.add_tile(build_tile(ch))
+        pts = compute_track_path(t, 1.0)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        cx0 = (min(xs) + max(xs)) / 2
+        cy0 = (min(ys) + max(ys)) / 2
+        bb = max(max(xs) - min(xs), max(ys) - min(ys), 1e-9)
+        scale = size / bb
+        ang = math.atan2(ty, tx)
+        cos, sin = math.cos(ang), math.sin(ang)
+
+        def tr(p):
+            x, y = (p[0] - cx0) * scale, (p[1] - cy0) * scale
+            return (sx + x * cos - y * sin, sy + x * sin + y * cos)
+
+        for cell in tile.cells:
+            if cell.run == CellRunType.START:
+                c = (255, 236, 130)
+            elif cell.run == CellRunType.END:
+                c = (240, 210, 60)
+            elif cell.geography == CellGeographyType.UPHILL:
+                c = (220, 50, 50)
+            elif cell.geography == CellGeographyType.DOWNHILL:
+                c = (50, 90, 220)
+            else:
+                c = (200, 205, 215)
+            seg = [tr(path_point_at(pts, cell.x + k / 3)[:2]) for k in range(4)]
+            pygame.draw.lines(self.screen, c, False, seg, max(4, int(size * 0.3)))
+        # séparateurs blancs entre les cases (rend le nombre de cases visible)
+        for k in range(1, tile.length):
+            p = tr(path_point_at(pts, k)[:2])
+            nx, ny = -sin, cos
+            pygame.draw.line(self.screen, WHITE,
+                             (p[0] + nx * size * 0.18, p[1] + ny * size * 0.18),
+                             (p[0] - nx * size * 0.18, p[1] - ny * size * 0.18), 1)
+        # nombre de cases sous la tuile
+        lbl = self.small_font.render(f"×{tile.length}", True, (200, 205, 215))
+        self.screen.blit(lbl, lbl.get_rect(center=(sx, sy + size * 0.62)))
 
     def _draw_profile_array(self, alt, rect):
         """Variante de _draw_profile prenant directement le tableau d'altitudes."""

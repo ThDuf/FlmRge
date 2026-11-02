@@ -331,3 +331,24 @@ class TestTrackEditor(unittest.TestCase):
         ui._draw_tile_preview('b', ui._tile_preview_rect())
         ui._draw_tile_preview('a', ui._tile_preview_rect())
         ui._draw_tile_preview('U', ui._tile_preview_rect())
+
+    def test_mini_tile_preview_all_letters(self):
+        """_draw_mini_tile fonctionne pour les 42 tuiles (avec nb de cases)."""
+        import pygame
+        from game.game import build_tile
+        ui = main.FlammeRougeGame()
+        ui.screen = pygame.display.set_mode((1200, 800))
+        for i, ch in enumerate(ui.EDITOR_LETTERS + ui.EDITOR_LETTERS.upper()):
+            ui._draw_mini_tile(ch, 100 + (i % 7) * 60, 100 + (i // 7) * 60,
+                               1.0, 0.0, size=30)
+            tile = build_tile(ch)
+            self.assertGreater(tile.length, 0)
+        # les deux previews (menu + éditeur) dessinent les miniatures sans erreur
+        ui.menu_step = "editor"
+        ui.editor_code = "abKcdEfghijklmnopqrstu"
+        ui._draw_menu()
+        ui2 = main.FlammeRougeGame()
+        ui2.width, ui2.height = 1200, 800
+        ui2.screen = pygame.display.set_mode((1200, 800))
+        ui2.menu_index = 0
+        ui2._draw_menu()
