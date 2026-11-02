@@ -572,7 +572,7 @@ class FlammeRougeGame:
 
     def _draw_menu_preview(self, name, rect):
         """Mini-carte du tracé de l'étape : chemin coloré case par case
-        + mini-previews des tuiles (forme, cases, nb de cases) + départ/arrivée."""
+        + lettres des tuiles (a, b, c...) + départ/arrivée."""
         from game.track import path_point_at
         trect = self._preview_track_rect(rect)
         pts = self._stage_preview_points(name)
@@ -632,14 +632,15 @@ class FlammeRougeGame:
                 nx, ny = -ty, tx
                 pygame.draw.line(self.screen, (120, 125, 135),
                                  (sx + nx * 7, sy + ny * 7), (sx - nx * 7, sy - ny * 7), 1)
-        # mini-preview de chaque tuile (forme + cases + nb de cases) à la place des lettres
+        # lettres des tuiles (a, b, c...) au milieu de chaque tuile
         for s_mid, letter in marks:
             if not letter:
                 continue
             px, py, tx, ty = path_point_at(pts, s_mid)
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
-            self._draw_mini_tile(letter, sx + nx * 26, sy + ny * 26, tx, ty, size=28)
+            lbl = self.small_font.render(letter, True, (170, 175, 185))
+            self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
 
         # Profil d'altitude de l'étape (montées +1 / descentes -1 par case)
         self._draw_profile(name, self._preview_profile_rect(rect))
