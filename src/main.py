@@ -514,14 +514,18 @@ class FlammeRougeGame:
         preview_w = 380 if self.width >= 1100 else 0
         w = min(680, self.width - 60 - preview_w)
         x = 20 if preview_w else (self.width - w) // 2
+        n = len(available_stages()) + 1  # + éditeur de piste
+        # hauteur de ligne dynamique pour que toutes les entrées tiennent
+        row = min(66, max(40, (self.height - TOP_H - 56) // n))
         y = TOP_H + 46
         entries = []
         for name, desc, code in available_stages():
-            rect = pygame.Rect(x, y, w, 58)
+            rect = pygame.Rect(x, y, w, row - 8)
             entries.append((name, desc, code, rect))
-            y += 66
+            y += row
         # entrée spéciale : l'éditeur de piste
-        entries.append(("Éditeur de piste", "composer son parcours tuile par tuile", "", pygame.Rect(x, y, w, 58)))
+        entries.append(("Éditeur de piste", "composer son parcours tuile par tuile", "",
+                        pygame.Rect(x, y, w, row - 8)))
         return entries
 
     def _preview_rect(self):
