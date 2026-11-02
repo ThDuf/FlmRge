@@ -385,3 +385,14 @@ class TestHistoryPanel(unittest.TestCase):
         ui._draw_ui()  # panneau historique sans erreur
         ui._game_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_j))
         self.assertFalse(ui.show_history)
+
+    def test_editor_palette_shows_tile_shapes(self):
+        """La palette de l'éditeur dessine des bouts de piste (mini-tuiles)."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.menu_step = "editor"
+        ui.editor_code = "a"
+        ui._draw_menu()  # palette en formes de tuiles, sans erreur
+        self.assertEqual(len(ui._editor_palette_rects()), 42)
