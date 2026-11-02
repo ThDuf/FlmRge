@@ -231,8 +231,11 @@ class TestStageMenu(unittest.TestCase):
         ui = main.FlammeRougeGame()
         self.assertIsNone(ui.game)
         entries = ui._menu_entries()
-        self.assertEqual(len(entries), len(OFFICIAL_STAGES) + 1)  # + éditeur de piste
-        self.assertEqual(entries[-1][0], "Éditeur de piste")
+        kinds = [e[4] for e in entries]
+        self.assertEqual(kinds.count("header"), 2)          # 2 catégories
+        self.assertEqual(kinds.count("base"), len(OFFICIAL_STAGES))
+        self.assertEqual(kinds[-1], "editor")                # bouton créer un circuit
+        self.assertEqual(entries[-1][0], "Créer un circuit")
 
     def test_select_stage_starts_game(self):
         ui = main.FlammeRougeGame()
@@ -246,7 +249,7 @@ class TestStageMenu(unittest.TestCase):
     def test_menu_click_selects_entry(self):
         ui = main.FlammeRougeGame()
         entries = ui._menu_entries()
-        name, _d, _c, rect = entries[1]  # première étape officielle
+        name, _d, _c, rect, _kind = entries[1]  # première étape officielle (après l'en-tête)
         # simule un clic au centre de l'entrée
         import pygame
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
@@ -268,7 +271,7 @@ class TestStageMenu(unittest.TestCase):
         """Étape 'players' du menu : on choisit 3 joueurs au clavier."""
         import pygame
         ui = main.FlammeRougeGame()
-        ui.menu_index = 0
+        ui.menu_index = 1  # 1re étape de base (0 = en-tête de catégorie)
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertEqual(ui.menu_step, "players")
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))

@@ -91,6 +91,7 @@ class FlammeRougeGame:
         self.menu_index = 0
         self.menu_step = "stage"  # "stage" -> "players" / "editor"
         self._pending_stage = None
+        self._pending_code = None  # code perso (JSON) si l'entrée choisie est un circuit perso
         self.show_podium = True
         self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
         self.editor_hover_letter = 'a'  # tuile prévisualisée dans l'éditeur
@@ -509,27 +510,42 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _menu_entries(self):
-        """Entrées du menu : [(nom, description, code, rect), ...].
-
-        Si la fenêtre est assez large, une colonne de droite est réservée
-        à la prévisualisation du tracé de l'étape survolée/sélectionnée.
+        """Entrées du menu, par catégories :
+        [("Circuits du jeu de base", header), 6 étapes officielles,
+         ("Circuits perso", header), 1 entrée par JSON de saves/,
+         ("Créer un circuit", bouton roue crantée -> éditeur)].
+        Chaque entrée = (nom, description, code, rect, kind) avec
+        kind in {"header", "base", "perso", "editor"}.
         """
-        from game.game import available_stages
+        from game.game import available_stages, list_saved_tracks
         preview_w = 380 if self.width >= 1100 else 0
         w = min(680, self.width - 60 - preview_w)
         x = 20 if preview_w else (self.width - w) // 2
-        n = len(available_stages()) + 1  # + éditeur de piste
-        # hauteur de ligne dynamique pour que toutes les entrées tiennent
-        row = min(66, max(40, (self.height - TOP_H - 56) // n))
+        base = available_stages()
+        perso = list_saved_tracks(self.saves_dir)
+        n_entries = len(base) + len(perso) + 1
+        n_headers = 2
+        header_h = 26
+        avail = self.height - TOP_H - 56
+        row = min(58, max(30, (avail - n_headers * (header_h + 8) - n_entries * 8)
+                          // max(n_entries, 1)))
         y = TOP_H + 46
         entries = []
-        for name, desc, code in available_stages():
-            rect = pygame.Rect(x, y, w, row - 8)
-            entries.append((name, desc, code, rect))
-            y += row
-        # entrée spéciale : l'éditeur de piste
-        entries.append(("Éditeur de piste", "composer son parcours tuile par tuile", "",
-                        pygame.Rect(x, y, w, row - 8)))
+
+        def add(name, desc, code, kind, h):
+            nonlocal y
+            rect = pygame.Rect(x, y, w, h)
+            entries.append((name, desc, code, rect, kind))
+            y += h + 8
+
+        add("— Circuits du jeu de base —", "", "", "header", header_h)
+        for name, desc, code in base:
+            add(name, desc, code, "base", row)
+        add("— Circuits perso (saves/*.json) —", "", "", "header", header_h)
+        for s in perso:
+            add(s["name"], f"{len(s['code'])} tuiles · code {s['code']}", s["code"],
+                "perso", row)
+        add("Créer un circuit", "éditeur de piste (roue crantée)", "", "editor", row)
         return entries
 
     def _preview_rect(self):
@@ -554,19 +570,21 @@ class FlammeRougeGame:
         return pygame.Rect(rect.x + 10, pr.bottom + 8, rect.w - 20,
                            max(80, rect.bottom - pr.bottom - 18))
 
-    def _stage_preview_points(self, name):
-        """Polyligne (unités de cases) du tracé d'une étape, mise en cache."""
-        if name not in self._preview_cache:
-            from game.game import build_stage_track
+    def _stage_preview_points(self, name, code=None):
+        """Polyligne (unités de cases) du tracé d'une étape ou d'un code perso."""
+        key = ("code", code) if code else name
+        if key not in self._preview_cache:
+            from game.game import build_stage_track, build_track_from_code
             from game.track import compute_track_path
-            self._preview_cache[name] = compute_track_path(build_stage_track(name), 1.0)
-        return self._preview_cache[name]
+            track = build_track_from_code(code) if code else build_stage_track(name)
+            self._preview_cache[key] = compute_track_path(track, 1.0)
+        return self._preview_cache[key]
 
-    def _preview_tile_marks(self, name):
+    def _preview_tile_marks(self, name, code=None):
         """[(s au milieu de la tuile, lettre ou None), ...] pour la preview."""
-        from game.game import OFFICIAL_STAGES, build_stage_track
-        track = build_stage_track(name)
-        letters = [c for c in OFFICIAL_STAGES.get(name, "") if c.strip()]
+        from game.game import OFFICIAL_STAGES, build_stage_track, build_track_from_code
+        track = build_track_from_code(code) if code else build_stage_track(name)
+        letters = [c for c in (code or OFFICIAL_STAGES.get(name, "")) if c.strip()]
         marks = []
         s = 0.0
         for i, tile in enumerate(track.tiles):
@@ -574,12 +592,12 @@ class FlammeRougeGame:
             s += tile.length
         return marks, s  # s final = longueur totale (cases)
 
-    def _draw_menu_preview(self, name, rect):
-        """Mini-carte du tracé de l'étape : chemin coloré case par case
-        + lettres des tuiles (a, b, c...) + départ/arrivée."""
+    def _draw_menu_preview(self, name, rect, code=None):
+        """Mini-carte du tracé de l'étape (ou du code perso) : chemin coloré
+        case par case + lettres des tuiles (a, b, c...) + départ/arrivée."""
         from game.track import path_point_at
         trect = self._preview_track_rect(rect)
-        pts = self._stage_preview_points(name)
+        pts = self._stage_preview_points(name, code=code)
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         bb_w = max(xs) - min(xs)
@@ -594,11 +612,11 @@ class FlammeRougeGame:
         title = self.label_font.render(name, True, WHITE)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
 
-        # Tracé coloré CASE PAR CASE : départ vert, arrivée rouge,
+        # Tracé coloré CASE PAR CASE : départ jaune clair, arrivée jaune vif,
         # montée ROUGE vif, descente BLEU vif, plat gris clair
-        from game.game import build_stage_track
+        from game.game import build_stage_track, build_track_from_code
         from game.track import CellGeographyType, CellRunType
-        track = build_stage_track(name)
+        track = build_track_from_code(code) if code else build_stage_track(name)
         for tile in track.tiles:
             for cell in tile.cells:
                 s0 = float(cell.x)
@@ -624,10 +642,10 @@ class FlammeRougeGame:
         pygame.draw.circle(self.screen, YELLOW, screen_pts[-1], 5)
 
         # Séparateurs de tuiles + lettres au milieu de chaque tuile
-        marks, total = self._preview_tile_marks(name)
+        marks, total = self._preview_tile_marks(name, code=code)
         s = 0.0
-        from game.game import build_stage_track
-        track = build_stage_track(name)
+        from game.game import build_stage_track, build_track_from_code
+        track = build_track_from_code(code) if code else build_stage_track(name)
         for i, tile in enumerate(track.tiles):
             s += tile.length
             if i < len(track.tiles) - 1:  # petite ligne à la jonction
@@ -1094,7 +1112,11 @@ class FlammeRougeGame:
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
 
         entries = self._menu_entries()
-        for i, (name, desc, code, rect) in enumerate(entries):
+        for i, (name, desc, code, rect, kind) in enumerate(entries):
+            if kind == "header":
+                hdr = self.label_font.render(name, True, (150, 155, 165))
+                self.screen.blit(hdr, (rect.x + 4, rect.y + 4))
+                continue
             selected = (i == self.menu_index)
             hovered = rect.collidepoint(mouse)
             fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
@@ -1102,17 +1124,38 @@ class FlammeRougeGame:
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
                              border_radius=8)
-            name_surf = self.phase_font.render(name, True, WHITE)
-            self.screen.blit(name_surf, (rect.x + 16, rect.y + 8))
-            desc_surf = self.label_font.render(desc, True, (180, 185, 195))
-            self.screen.blit(desc_surf, (rect.x + 16, rect.y + 32))
-            if code:
+            if kind == "editor":
+                # bouton avec roue crantée pour créer un circuit
+                self._draw_gear((rect.x + 34, rect.centery), 15,
+                                (240, 210, 60) if (selected or hovered) else (200, 205, 215))
+                name_surf = self.phase_font.render(name, True, WHITE)
+                self.screen.blit(name_surf, (rect.x + 60, rect.centery - 11))
+            else:
+                name_surf = self.phase_font.render(name, True, WHITE)
+                self.screen.blit(name_surf, (rect.x + 16, rect.y + 6))
+                desc_surf = self.label_font.render(desc, True, (180, 185, 195))
+                self.screen.blit(desc_surf, (rect.x + 16, rect.y + rect.h - 20))
+            if code and kind == "base":
                 code_surf = self.small_font.render(code, True, (120, 125, 135))
-                self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 10))
+                self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 8))
 
-        # Prévisualisation du tracé de l'étape sélectionnée (grandes fenêtres)
-        if self.width >= 1100 and entries and entries[self.menu_index][0] != "Éditeur de piste":
-            self._draw_menu_preview(entries[self.menu_index][0], self._preview_rect())
+        # Prévisualisation du tracé de l'entrée sélectionnée (grandes fenêtres)
+        if self.width >= 1100 and entries:
+            name, _d, code, _r, kind = entries[self.menu_index]
+            if kind in ("base", "perso"):
+                self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
+
+    def _draw_gear(self, center, r, color):
+        """Dessine une roue crantée (engrenage) en `center`."""
+        cx, cy = center
+        for k in range(8):
+            a = k * math.pi / 4
+            x0 = cx + (r - 4) * math.cos(a)
+            y0 = cy + (r - 4) * math.sin(a)
+            pygame.draw.line(self.screen, color, (x0, y0),
+                             (cx + (r + 4) * math.cos(a), cy + (r + 4) * math.sin(a)), 4)
+        pygame.draw.circle(self.screen, color, (cx, cy), r, 3)
+        pygame.draw.circle(self.screen, (45, 50, 58), (cx, cy), max(2, r // 3))
 
     def _draw_players_menu(self, mouse):
         """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
@@ -1148,9 +1191,13 @@ class FlammeRougeGame:
         return rects
 
     def _select_stage(self, name: str):
-        """Démarre une partie sur l'étape choisie (depuis le menu ou R)."""
+        """Démarre une partie sur l'étape choisie (depuis le menu ou R).
+        Si un code perso est en attente (circuit perso JSON), il est utilisé."""
         self.stage = name
-        self.game = Game(stage=name, player_count=self.player_count, auto_place=False)
+        code = self._pending_code
+        self._pending_code = None
+        self.game = Game(stage=name, player_count=self.player_count, auto_place=False,
+                         custom_code=code)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -1174,27 +1221,31 @@ class FlammeRougeGame:
         entries = self._menu_entries()
         mouse = pygame.mouse.get_pos()
         hovered = None
-        for i, (_name, _desc, _code, rect) in enumerate(entries):
-            if rect.collidepoint(mouse):
+        for i, (_name, _desc, _code, rect, kind) in enumerate(entries):
+            if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if hovered is not None:
             self.menu_index = hovered
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and hovered is not None:
-            self._menu_validate(entries[hovered][0])
+            self._menu_validate(entries[hovered])
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
             elif event.key == pygame.K_DOWN:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
-                self._menu_validate(entries[self.menu_index][0])
+                self._menu_validate(entries[self.menu_index])
 
-    def _menu_validate(self, name):
-        """Validation d'une entrée du menu : éditeur ou choix d'étape."""
-        if name == "Éditeur de piste":
+    def _menu_validate(self, entry):
+        """Validation d'une entrée du menu : éditeur, étape de base ou perso."""
+        name, _desc, code, _rect, kind = entry
+        if kind == "header":
+            return
+        if kind == "editor":
             self.menu_step = "editor"
         else:
             self._pending_stage = name
+            self._pending_code = code if kind == "perso" else None
             self.menu_step = "players"
 
     def _players_menu_event(self, event):

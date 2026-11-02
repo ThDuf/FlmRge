@@ -304,11 +304,12 @@ class TestTrackEditor(unittest.TestCase):
         ui = main.FlammeRougeGame()
         ui.screen = pygame.display.set_mode((1200, 800))
         entries = ui._menu_entries()
-        self.assertEqual(entries[-1][0], "Éditeur de piste")
+        self.assertEqual(entries[-1][0], "Créer un circuit")
+        self.assertEqual(entries[-1][4], "editor")
         ui.menu_index = len(entries) - 1
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertEqual(ui.menu_step, "editor")
-        ui._draw_menu()  # dessine l'éditeur sans erreur
+        ui._draw_menu()  # dessine l'éditeur sans erreur (avec roue crantée dans le menu)
 
     def test_editor_tile_preview_on_hover(self):
         """Survol de la palette -> editor_hover_letter + preview dessinée."""
@@ -441,3 +442,28 @@ class TestTrackSaveJson(unittest.TestCase):
         keys = [k for k, _ in ui._editor_action_rects().items()]
         self.assertIn("sauver", keys)
         self.assertIn("charger", keys)
+
+
+class TestMenuCategories(unittest.TestCase):
+    def test_perso_circuits_from_saves_json(self):
+        """Les JSON de saves/ apparaissent en catégorie 'Circuits perso' et
+        lancent une partie avec custom_code."""
+        import tempfile, pygame
+        from game.game import save_track_json
+        ui = main.FlammeRougeGame()
+        ui.saves_dir = tempfile.mkdtemp()
+        save_track_json("abKcdfu", ui.saves_dir, name="mon_beau_parcours")
+        entries = ui._menu_entries()
+        perso = [e for e in entries if e[4] == "perso"]
+        self.assertEqual(len(perso), 1)
+        self.assertEqual(perso[0][0], "mon_beau_parcours")
+        self.assertEqual(perso[0][2], "abKcdfu")
+        # validation -> étape joueurs avec code perso en attente
+        ui.menu_index = entries.index(perso[0])
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "players")
+        self.assertEqual(ui._pending_code, "abKcdfu")
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertIsNotNone(ui.game)
+        self.assertEqual(ui.game.custom_code, "abKcdfu")
+        self.assertEqual([t.letter for t in ui.game.track.tiles], list("abKcdfu"))

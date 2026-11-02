@@ -14,7 +14,7 @@ for w, h in [(900, 600), (1200, 800), (1600, 1000)]:
     ui_menu.screen.fill((28, 32, 38))
     ui_menu._draw_header()
     ui_menu._draw_menu()
-    for i, (name, desc, code, rect) in enumerate(ui_menu._menu_entries()):
+    for i, (name, desc, code, rect, kind) in enumerate(ui_menu._menu_entries()):
         assert rect.bottom <= h, f"entrée menu {name} hors écran"
 print("MENU: rendu OK a 3 tailles, toutes les entrées visibles")
 
