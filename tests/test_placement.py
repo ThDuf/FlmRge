@@ -396,3 +396,18 @@ class TestHistoryPanel(unittest.TestCase):
         ui.editor_code = "a"
         ui._draw_menu()  # palette en formes de tuiles, sans erreur
         self.assertEqual(len(ui._editor_palette_rects()), 42)
+
+    def test_editor_palette_fits_at_all_sizes(self):
+        """La grande palette de l'éditeur tient dans la fenêtre à toutes les tailles."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        for w, h in ((1200, 800), (900, 600), (1600, 1000)):
+            ui.width, ui.height = w, h
+            ui.screen = pygame.display.set_mode((w, h))
+            ui.menu_step = "editor"
+            for ch, rect in ui._editor_palette_rects():
+                self.assertLessEqual(rect.right, w, f"palette {ch} hors écran {w}x{h}")
+                self.assertLessEqual(rect.bottom, h, f"palette {ch} hors écran {w}x{h}")
+            for key, (_l, rect) in ui._editor_action_rects().items():
+                self.assertLessEqual(rect.bottom, h, f"bouton {key} hors écran {w}x{h}")
+            ui._draw_menu()

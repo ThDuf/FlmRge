@@ -755,12 +755,20 @@ class FlammeRougeGame:
         self.last_action = None
         self.show_podium = True
 
+    def _editor_palette_geom(self):
+        """Géométrie de la palette : grosses tuiles qui occupent la gauche,
+        hauteur adaptée pour tenir dans la fenêtre (boutons réservés en bas)."""
+        cols = 6
+        gap = 6
+        x0, y0 = 20, TOP_H + 96
+        bw = 118
+        bh = min(64, max(34, (self.height - y0 - 60 - 6 * gap) // 7))
+        return x0, y0, bw, bh, gap, cols
+
     def _editor_palette_rects(self):
         """Grille des 42 tuiles : 21 faces plates (a-u) puis 21 montagne (A-U)."""
+        x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
         rects = []
-        cols = 7
-        x0, y0 = 20, TOP_H + 96
-        bw, bh, gap = 78, 44, 6
         items = list(self.EDITOR_LETTERS) + [c.upper() for c in self.EDITOR_LETTERS]
         for i, ch in enumerate(items):
             r, c = divmod(i, cols)
@@ -771,9 +779,10 @@ class FlammeRougeGame:
         """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
         labels = [("Retirer", "retirer"), ("Effacer", "effacer"),
                   ("JOUER", "jouer"), ("Retour", "retour")]
+        x0, y0, bw, bh, gap, cols = self._editor_palette_geom()
         rects = {}
-        x = 20
-        y = TOP_H + 96 + 6 * 50 + 8
+        x = x0
+        y = y0 + 7 * (bh + gap) + 10  # sous les 7 lignes de la palette (42/6)
         for label, key in labels:
             w = 150 if key == "jouer" else 110
             rects[key] = (label, pygame.Rect(x, y, w, 42))
@@ -845,9 +854,10 @@ class FlammeRougeGame:
                 fill = tuple(min(255, c + 35) for c in fill)
             pygame.draw.rect(self.screen, fill, rect, border_radius=6)
             pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=6)
-            self._draw_mini_tile(ch, rect.centerx - 8, rect.centery, 1.0, 0.0, size=26)
+            self._draw_mini_tile(ch, rect.centerx - 10, rect.centery, 1.0, 0.0,
+                                 size=rect.h - 14)
             txt = self.small_font.render(ch, True, (200, 205, 215))
-            self.screen.blit(txt, (rect.right - 16, rect.y + 4))
+            self.screen.blit(txt, (rect.right - 18, rect.y + 5))
 
         # boutons d'action
         for key, (label, rect) in self._editor_action_rects().items():
@@ -965,8 +975,8 @@ class FlammeRougeGame:
         for ch, tile in zip(self.editor_code, track.tiles):
             px, py, tx, ty = path_point_at(pts, s + tile.length / 2)
             nx, ny = -ty, tx
-            self._draw_mini_tile(ch, ox + px * scale + nx * 28, oy + py * scale + ny * 28,
-                                 tx, ty, size=30)
+            self._draw_mini_tile(ch, ox + px * scale + nx * 34, oy + py * scale + ny * 34,
+                                 tx, ty, size=38)
             s += tile.length
         # profil sous le tracé
         alt = [0]
@@ -1015,16 +1025,13 @@ class FlammeRougeGame:
                 c = (200, 205, 215)
             seg = [tr(path_point_at(pts, cell.x + k / 3)[:2]) for k in range(4)]
             pygame.draw.lines(self.screen, c, False, seg, max(4, int(size * 0.3)))
-        # séparateurs blancs entre les cases (rend le nombre de cases visible)
+        # séparateurs blancs entre les cases (le nombre de cases se voit aux cases)
         for k in range(1, tile.length):
             p = tr(path_point_at(pts, k)[:2])
             nx, ny = -sin, cos
             pygame.draw.line(self.screen, WHITE,
                              (p[0] + nx * size * 0.18, p[1] + ny * size * 0.18),
                              (p[0] - nx * size * 0.18, p[1] - ny * size * 0.18), 1)
-        # nombre de cases sous la tuile
-        lbl = self.small_font.render(f"×{tile.length}", True, (200, 205, 215))
-        self.screen.blit(lbl, lbl.get_rect(center=(sx, sy + size * 0.62)))
 
     def _draw_profile_array(self, alt, rect):
         """Variante de _draw_profile prenant directement le tableau d'altitudes."""
