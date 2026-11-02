@@ -240,3 +240,72 @@ class TestButtonsLayout(unittest.TestCase):
             panels_bottom = 8 + 112 + 4 * (panel_h + 8)
             self.assertGreaterEqual(b.y, panels_bottom - 8 - 8,
                                     f"bouton chevauche les panneaux {w}x{h}")
+
+
+class TestTrackEditor(unittest.TestCase):
+    def test_game_accepts_custom_code(self):
+        from game.game import Game
+        g = Game(stage="Éditeur", player_count=2, custom_code="abcdu")
+        self.assertEqual(g.custom_code, "abcdu")
+        self.assertEqual([t.letter for t in g.track.tiles], list("abcdu"))
+        self.assertEqual(g.track.length, 6 + 6 + 6 + 6 + 6)
+
+    def test_editor_append_pop_clear(self):
+        ui = main.FlammeRougeGame()
+        ui.editor_code = "a"
+        ui._editor_append('b')
+        ui._editor_append('K')   # majuscule autorisée
+        ui._editor_append('?')   # ignoré
+        self.assertEqual(ui.editor_code, "abK")
+        ui._editor_pop()
+        self.assertEqual(ui.editor_code, "ab")
+        ui._editor_pop()
+        ui._editor_pop()         # on garde au moins 'a'
+        self.assertEqual(ui.editor_code, "a")
+        ui._editor_append('c')
+        ui._editor_clear()
+        self.assertEqual(ui.editor_code, "a")
+
+    def test_editor_play_adds_start_and_finish(self):
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.editor_code = "bcdf"
+        ui._editor_play()
+        self.assertIsNotNone(ui.game)
+        self.assertEqual(ui.game.custom_code, "abcdfu")  # a et u auto-ajoutés
+        self.assertEqual(ui.game.track.length, 6 * 5 + 6)
+        self.assertEqual(ui.game.current_phase, Phase.PLACEMENT)
+
+    def test_editor_keyboard_and_palette_events(self):
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_step = "editor"
+        ui.editor_code = "a"
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_b))
+        self.assertEqual(ui.editor_code, "ab")
+        # MAJ = face montagne
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_k,
+                                          mod=pygame.KMOD_SHIFT))
+        self.assertEqual(ui.editor_code, "abK")
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_BACKSPACE))
+        self.assertEqual(ui.editor_code, "ab")
+        # clic sur une tuile de la palette
+        ch, rect = ui._editor_palette_rects()[4]  # 'e'
+        self.assertEqual(ch, 'e')
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=rect.center))
+        self.assertEqual(ui.editor_code, "abe")
+        # Échap revient au menu d'étape
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
+        self.assertEqual(ui.menu_step, "stage")
+
+    def test_editor_entry_in_menu_and_draw(self):
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.screen = pygame.display.set_mode((1200, 800))
+        entries = ui._menu_entries()
+        self.assertEqual(entries[-1][0], "Éditeur de piste")
+        ui.menu_index = len(entries) - 1
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "editor")
+        ui._draw_menu()  # dessine l'éditeur sans erreur

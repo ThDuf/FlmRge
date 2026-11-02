@@ -89,9 +89,10 @@ class FlammeRougeGame:
         self.player_count = 2  # nombre de joueurs choisi au menu (2-4)
         self.game = Game(stage=stage, player_count=self.player_count) if stage else None
         self.menu_index = 0
-        self.menu_step = "stage"  # "stage" -> "players"
+        self.menu_step = "stage"  # "stage" -> "players" / "editor"
         self._pending_stage = None
         self.show_podium = True
+        self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self._profile_cache = {}  # nom d'étape -> profil d'altitude
         self.show_hands = True
@@ -515,6 +516,8 @@ class FlammeRougeGame:
             rect = pygame.Rect(x, y, w, 58)
             entries.append((name, desc, code, rect))
             y += 66
+        # entrée spéciale : l'éditeur de piste
+        entries.append(("Éditeur de piste", "composer son parcours tuile par tuile", "", pygame.Rect(x, y, w, 58)))
         return entries
 
     def _preview_rect(self):
@@ -703,11 +706,221 @@ class FlammeRougeGame:
                                       True, (110, 115, 125))
         self.screen.blit(hint, (rect.x + 6, rect.y + rect.h // 2 - 6))
 
+    # ------------------------------------------------------------------
+    # Éditeur de piste
+    # ------------------------------------------------------------------
+
+    EDITOR_LETTERS = "abcdefghijklmnopqrstu"
+
+    def _editor_append(self, ch):
+        if ch.lower() in self.EDITOR_LETTERS:
+            self.editor_code += ch
+            self._preview_cache.pop("__editor__", None)
+            self._profile_cache.pop("__editor__", None)
+
+    def _editor_pop(self):
+        if len(self.editor_code) > 1:  # on garde au moins la tuile départ
+            self.editor_code = self.editor_code[:-1]
+            self._preview_cache.pop("__editor__", None)
+            self._profile_cache.pop("__editor__", None)
+
+    def _editor_clear(self):
+        self.editor_code = "a"
+        self._preview_cache.pop("__editor__", None)
+        self._profile_cache.pop("__editor__", None)
+
+    def _editor_play(self):
+        """Lance une partie sur le code édité (départ/arrivée auto-ajoutés)."""
+        code = self.editor_code
+        if code[0].lower() != 'a':
+            code = 'a' + code
+        if code[-1].lower() != 'u':
+            code += 'u'
+        self.stage = "Éditeur de piste"
+        self.game = Game(stage=self.stage, player_count=self.player_count,
+                         auto_place=False, custom_code=code)
+        self.menu_step = "stage"
+        self.showing_movement = False
+        self.showing_aspiration = False
+        self.played_display_index = {}
+        self.last_action = None
+        self.show_podium = True
+
+    def _editor_palette_rects(self):
+        """Grille des 42 tuiles : 21 faces plates (a-u) puis 21 montagne (A-U)."""
+        rects = []
+        cols = 7
+        x0, y0 = 20, TOP_H + 96
+        bw, bh, gap = 78, 44, 6
+        items = list(self.EDITOR_LETTERS) + [c.upper() for c in self.EDITOR_LETTERS]
+        for i, ch in enumerate(items):
+            r, c = divmod(i, cols)
+            rects.append((ch, pygame.Rect(x0 + c * (bw + gap), y0 + r * (bh + gap), bw, bh)))
+        return rects
+
+    def _editor_action_rects(self):
+        """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
+        labels = [("Retirer", "retirer"), ("Effacer", "effacer"),
+                  ("JOUER", "jouer"), ("Retour", "retour")]
+        rects = {}
+        x = 20
+        y = TOP_H + 96 + 6 * 50 + 8
+        for label, key in labels:
+            w = 150 if key == "jouer" else 110
+            rects[key] = (label, pygame.Rect(x, y, w, 42))
+            x += w + 10
+        return rects
+
+    def _editor_event(self, event):
+        """Événements de l'éditeur : clic palette/boutons ou clavier."""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for ch, rect in self._editor_palette_rects():
+                if rect.collidepoint(event.pos):
+                    self._editor_append(ch)
+                    return
+            for key, (_label, rect) in self._editor_action_rects().items():
+                if rect.collidepoint(event.pos):
+                    if key == "retirer":
+                        self._editor_pop()
+                    elif key == "effacer":
+                        self._editor_clear()
+                    elif key == "jouer":
+                        self._editor_play()
+                    elif key == "retour":
+                        self.menu_step = "stage"
+                    return
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.menu_step = "stage"
+            elif event.key == pygame.K_BACKSPACE:
+                self._editor_pop()
+            elif event.key == pygame.K_RETURN:
+                self._editor_play()
+            else:
+                name = pygame.key.name(event.key)
+                if len(name) == 1 and name.lower() in self.EDITOR_LETTERS:
+                    upper = bool(getattr(event, 'mod', 0) & pygame.KMOD_SHIFT)
+                    self._editor_append(name.upper() if upper else name)
+
+    def _editor_track(self):
+        from game.game import build_track_from_code
+        return build_track_from_code(self.editor_code)
+
+    def _draw_editor(self, mouse):
+        """Écran de l'éditeur de piste : palette + code + aperçu + profil."""
+        title = self.title_font.render("Éditeur de piste", True, WHITE)
+        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
+        hint = self.label_font.render(
+            "Clique une tuile (ou tape a-u, MAJ = face montagne) · RETOUR = jouer · Échap = retour",
+            True, (150, 155, 165))
+        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
+
+        # code en cours
+        code_surf = self.font.render(f"Code : {self.editor_code}", True, (240, 210, 60))
+        self.screen.blit(code_surf, (20, TOP_H + 66))
+
+        # palette des 42 tuiles
+        for ch, rect in self._editor_palette_rects():
+            hovered = rect.collidepoint(mouse)
+            upper = ch.isupper()
+            fill = (96, 60, 60) if upper else (60, 66, 78)
+            if hovered:
+                fill = tuple(min(255, c + 35) for c in fill)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=6)
+            pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=6)
+            txt = self.font.render(ch, True, WHITE)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+        # boutons d'action
+        for key, (label, rect) in self._editor_action_rects().items():
+            hovered = rect.collidepoint(mouse)
+            color = (46, 125, 50) if key == "jouer" else (70, 80, 95)
+            if hovered:
+                color = tuple(min(255, c + 35) for c in color)
+            pygame.draw.rect(self.screen, color, rect, border_radius=8)
+            pygame.draw.rect(self.screen, BLACK, rect, width=2, border_radius=8)
+            txt = self.font.render(label, True, WHITE)
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+        # aperçu du tracé + profil à droite
+        if self.width >= 1100:
+            self._draw_editor_preview(self._preview_rect())
+
+    def _draw_editor_preview(self, rect):
+        """Aperçu du tracé du code édité + profil, dans le panneau de droite."""
+        from game.track import path_point_at, compute_track_path, CellGeographyType, CellRunType
+        track = self._editor_track()
+        pts = compute_track_path(track, 1.0)
+        pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
+        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+        title = self.label_font.render("Aperçu", True, WHITE)
+        self.screen.blit(title, (rect.x + 12, rect.y + 10))
+        trect = self._preview_track_rect(rect)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        bb_w = max(xs) - min(xs) if xs else 1
+        bb_h = max(ys) - min(ys) if ys else 1
+        scale = min((trect.w - 16) / max(bb_w, 1e-9), (trect.h - 16) / max(bb_h, 1e-9))
+        ox = trect.x + (trect.w - bb_w * scale) / 2 - min(xs) * scale
+        oy = trect.y + (trect.h - bb_h * scale) / 2 - min(ys) * scale
+        for tile in track.tiles:
+            for cell in tile.cells:
+                if cell.run == CellRunType.START:
+                    c = (255, 236, 130)
+                elif cell.run == CellRunType.END:
+                    c = (240, 210, 60)
+                elif cell.geography == CellGeographyType.UPHILL:
+                    c = (220, 50, 50)
+                elif cell.geography == CellGeographyType.DOWNHILL:
+                    c = (50, 90, 220)
+                else:
+                    c = (200, 205, 215)
+                seg = []
+                for k in range(4):
+                    px, py, _tx, _ty = path_point_at(pts, cell.x + k / 3)
+                    seg.append((ox + px * scale, oy + py * scale))
+                pygame.draw.lines(self.screen, c, False, seg, 5)
+        # lettres des tuiles au milieu de chacune
+        s = 0.0
+        for ch, tile in zip(self.editor_code, track.tiles):
+            px, py, tx, ty = path_point_at(pts, s + tile.length / 2)
+            nx, ny = -ty, tx
+            lbl = self.small_font.render(ch, True, (170, 175, 185))
+            self.screen.blit(lbl, (ox + px * scale + nx * 10 - 3, oy + py * scale + ny * 10 - 5))
+            s += tile.length
+        # profil sous le tracé
+        alt = [0]
+        for tile in track.tiles:
+            for cell in tile.cells:
+                g = cell.geography
+                alt.append(alt[-1] + (1 if g == CellGeographyType.UPHILL
+                                       else -1 if g == CellGeographyType.DOWNHILL else 0))
+        self._draw_profile_array(alt, self._preview_profile_rect(rect))
+
+    def _draw_profile_array(self, alt, rect):
+        """Variante de _draw_profile prenant directement le tableau d'altitudes."""
+        pygame.draw.rect(self.screen, (38, 42, 50), rect, border_radius=6)
+        lbl = self.small_font.render(f"Profil  (alt. {min(alt)} .. {max(alt)})",
+                                     True, (150, 155, 165))
+        self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
+        lo, hi = min(alt), max(alt)
+        span = max(hi - lo, 1)
+        inner = pygame.Rect(rect.x + 6, rect.y + 16, rect.w - 12, rect.h - 22)
+        n = len(alt) - 1
+        pts = [(inner.x + inner.w * i / n,
+                inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
+        pygame.draw.polygon(self.screen, (96, 140, 90),
+                            pts + [(pts[-1][0], inner.bottom), (pts[0][0], inner.bottom)])
+        pygame.draw.lines(self.screen, (180, 220, 180), False, pts, 2)
+
     def _draw_menu(self):
         """Menu de sélection (affiché quand self.game is None)."""
         mouse = pygame.mouse.get_pos()
         if self.menu_step == "players":
             self._draw_players_menu(mouse)
+            return
+        if self.menu_step == "editor":
+            self._draw_editor(mouse)
             return
         title = self.title_font.render("Choisis ton étape", True, WHITE)
         self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
@@ -732,7 +945,7 @@ class FlammeRougeGame:
                 self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 10))
 
         # Prévisualisation du tracé de l'étape sélectionnée (grandes fenêtres)
-        if self.width >= 1100 and entries:
+        if self.width >= 1100 and entries and entries[self.menu_index][0] != "Éditeur de piste":
             self._draw_menu_preview(entries[self.menu_index][0], self._preview_rect())
 
     def _draw_players_menu(self, mouse):
@@ -789,6 +1002,9 @@ class FlammeRougeGame:
         if self.menu_step == "players":
             self._players_menu_event(event)
             return
+        if self.menu_step == "editor":
+            self._editor_event(event)
+            return
         entries = self._menu_entries()
         mouse = pygame.mouse.get_pos()
         hovered = None
@@ -798,16 +1014,22 @@ class FlammeRougeGame:
         if hovered is not None:
             self.menu_index = hovered
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and hovered is not None:
-            self._pending_stage = entries[hovered][0]
-            self.menu_step = "players"
+            self._menu_validate(entries[hovered][0])
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
             elif event.key == pygame.K_DOWN:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
-                self._pending_stage = entries[self.menu_index][0]
-                self.menu_step = "players"
+                self._menu_validate(entries[self.menu_index][0])
+
+    def _menu_validate(self, name):
+        """Validation d'une entrée du menu : éditeur ou choix d'étape."""
+        if name == "Éditeur de piste":
+            self.menu_step = "editor"
+        else:
+            self._pending_stage = name
+            self.menu_step = "players"
 
     def _players_menu_event(self, event):
         """Étape 2 du menu : choix du nombre de joueurs (2-4)."""

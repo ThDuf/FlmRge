@@ -153,9 +153,10 @@ class Game:
     """Moteur principal du jeu Flamme Rouge."""
 
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
-                 auto_place: bool = True):
+                 auto_place: bool = True, custom_code: str = None):
         player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
         self.stage = stage
+        self.custom_code = custom_code  # code de tuiles perso (éditeur), prioritaire
         self.players: List[Player] = []
         self.track = self._build_track(stage)
         self.current_phase: Phase = Phase.PLACEMENT
@@ -285,7 +286,10 @@ class Game:
         return [Card(value, CardType.ENERGY, runner_str) for value in values]
 
     def _build_track(self, stage: str) -> Track:
-        """Construit la piste de l'étape choisie (officielle ou 'test')."""
+        """Construit la piste : code perso (éditeur) si fourni, sinon l'étape
+        nommée (officielle ou 'test')."""
+        if self.custom_code:
+            return build_track_from_code(self.custom_code)
         return build_stage_track(stage)
 
     def _place_runner_at_start(self, runner: Runner) -> None:

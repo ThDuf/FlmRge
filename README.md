@@ -199,7 +199,7 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
 - [ ] **Ajout des étapes officielles** (Avenue Corso Paseo, etc.)
 - [x] **Choix de l'étape** : menu au lancement parmi les 6 étapes officielles de la boîte de base (`tests/test_stages.py`)
-- [ ] **Éditeur de piste** : créer son propre terrain à partir des tuiles (droites, virages, montées, descentes)
+- [x] **Éditeur de piste** : entrée « Éditeur de piste » au menu — palette des 42 tuiles (21 faces plates a-u + 21 faces montagne A-U, clic ou clavier, MAJ = montagne), code affiché, aperçu du tracé + profil en direct, boutons Retirer/Effacer/JOUER (départ `a` et arrivée `u` auto-ajoutés), partie jouable sur le code perso via `Game(custom_code=...)` (`tests/test_placement.py::TestTrackEditor`)
 - [ ] **Extensions** : possibilité d'ajouter des extensions (ex. Peloton : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement)
 - [ ] **Système de sauvegarde/reprise**
 

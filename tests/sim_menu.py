@@ -22,4 +22,12 @@ pygame.display.flip()
 ui._select_stage(names[0])
 ui._draw_ui()
 pygame.display.flip()
-print(f"menu rendu OK ({len(names)} etapes + ecran joueurs + phase placement)")
+# écran de l'éditeur de piste
+ui2 = main.FlammeRougeGame()
+ui2.width, ui2.height = 1200, 800
+ui2.screen = pygame.display.set_mode((1200, 800))
+ui2.menu_step = 'editor'
+ui2.editor_code = 'abKcdEfghijklmnopqrstu'
+ui2._draw_menu()
+pygame.display.flip()
+print(f"menu rendu OK ({len(names)} etapes + ecran joueurs + phase placement + editeur)")

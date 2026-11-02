@@ -231,7 +231,8 @@ class TestStageMenu(unittest.TestCase):
         ui = main.FlammeRougeGame()
         self.assertIsNone(ui.game)
         entries = ui._menu_entries()
-        self.assertEqual(len(entries), len(OFFICIAL_STAGES))
+        self.assertEqual(len(entries), len(OFFICIAL_STAGES) + 1)  # + éditeur de piste
+        self.assertEqual(entries[-1][0], "Éditeur de piste")
 
     def test_select_stage_starts_game(self):
         ui = main.FlammeRougeGame()
