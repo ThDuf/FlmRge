@@ -1064,3 +1064,39 @@ class TestCircuitZoom(unittest.TestCase):
             if kind != "header":
                 self.assertLessEqual(rect.h, main.FlammeRougeGame.MENU_ROW)
         ui._draw_menu()  # sans les descriptions, rendu OK
+
+    def test_menu_scrollbar_left_side(self):
+        """Barre de scroll verticale à gauche de la liste quand ça déborde ;
+        drag du thumb pour scroller."""
+        import tempfile, pygame
+        from game.game import save_track_json
+        ui = main.FlammeRougeGame()
+        ui.saves_dir = tempfile.mkdtemp()
+        for i in range(12):
+            save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
+        ui.width, ui.height = 900, 600
+        ui.screen = pygame.display.set_mode((900, 600))
+        ui._draw_menu()
+        track, thumb = ui._menu_scrollbar_rects()
+        self.assertIsNotNone(thumb, "pas de scrollbar alors que la liste déborde")
+        self.assertLessEqual(track.x, 16)          # bien à gauche
+        self.assertGreater(ui._menu_max_scroll, 0)
+        # drag du thumb vers le bas -> scroll augmente
+        s0 = ui.menu_scroll
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                         pos=thumb.center))
+        ui._menu_event(pygame.event.Event(pygame.MOUSEMOTION,
+                                         pos=(thumb.centerx, thumb.centery + 120)))
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1,
+                                         pos=(thumb.centerx, thumb.centery + 120)))
+        self.assertGreater(ui.menu_scroll, s0)
+        self.assertIsNone(ui._menu_sb_drag)
+        ui._draw_menu()  # scrollbar dessinée sans erreur
+        # s'il n'y a pas de débordement, pas de scrollbar
+        ui2 = main.FlammeRougeGame()
+        ui2.saves_dir = tempfile.mkdtemp()
+        ui2.width, ui2.height = 1600, 1000
+        ui2.screen = pygame.display.set_mode((1600, 1000))
+        ui2._menu_entries()
+        _t, th = ui2._menu_scrollbar_rects()
+        self.assertIsNone(th)

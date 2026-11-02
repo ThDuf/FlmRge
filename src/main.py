@@ -103,6 +103,7 @@ class FlammeRougeGame:
         self.menu_scroll = 0        # scroll de la liste du menu
         self.menu_search = ""       # filtre de recherche (parcours perso)
         self.menu_search_active = False
+        self._menu_sb_drag = None   # offset du drag du thumb de la scrollbar
         self._pending_code = None  # code perso (JSON) si l'entrée choisie est un circuit perso
         self.show_podium = True
         self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
@@ -800,6 +801,18 @@ class FlammeRougeGame:
         top = self._menu_search_rect().bottom + 8
         return pygame.Rect(0, top, self.width, self.height - 40 - top)
 
+    def _menu_scrollbar_rects(self):
+        """Barre de scroll verticale à gauche de la liste : (track, thumb)."""
+        area = self._menu_list_area()
+        track = pygame.Rect(area.x + 3, area.y, 10, area.h)
+        max_scroll = getattr(self, "_menu_max_scroll", 0)
+        if max_scroll <= 0:
+            return track, None
+        content_h = getattr(self, "_menu_content_h", area.h)
+        thumb_h = max(24, area.h * area.h // max(content_h, 1))
+        thumb_y = area.y + (area.h - thumb_h) * self.menu_scroll // max_scroll
+        return track, pygame.Rect(track.x, thumb_y, track.w, thumb_h)
+
     def _menu_entries(self):
         """Entrées du menu, par catégories, SCROLLABLES (menu_scroll) et filtrées
         par la recherche (menu_search, ne filtre que les parcours perso) :
@@ -824,6 +837,8 @@ class FlammeRougeGame:
         content_h = (2 + len(base) + (1 if perso else 0) + len(perso) + 1) * (row + 6) \
             + 2 * (header_h + 6)
         max_scroll = max(0, content_h - area.h)
+        self._menu_content_h = content_h
+        self._menu_max_scroll = max_scroll
         self.menu_scroll = max(0, min(max_scroll, self.menu_scroll))
         y = area.y - self.menu_scroll
         entries = []
@@ -1629,6 +1644,13 @@ class FlammeRougeGame:
                                              rect.centery - name_surf.get_height() // 2))
 
         self.screen.set_clip(None)  # fin de la zone scrollable
+        # barre de scroll verticale à gauche de la liste (si contenu > zone)
+        track, thumb = self._menu_scrollbar_rects()
+        if thumb is not None:
+            pygame.draw.rect(self.screen, (40, 44, 52), track, border_radius=5)
+            hovered = thumb.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(self.screen, (150, 158, 170) if hovered else (110, 118, 130),
+                             thumb, border_radius=5)
         # Prévisualisation du tracé de l'entrée sélectionnée (grandes fenêtres)
         if self.width >= 1100 and entries:
             name, _d, code, _r, kind = entries[self.menu_index]
@@ -1727,6 +1749,29 @@ class FlammeRougeGame:
                 self.menu_scroll = max(0, self.menu_scroll - event.y * 40)
                 self._menu_entries()  # re-clamp le scroll
             return
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            track, thumb = self._menu_scrollbar_rects()
+            if thumb is not None and (thumb.collidepoint(event.pos)
+                                      or track.collidepoint(event.pos)):
+                area = self._menu_list_area()
+                if thumb.collidepoint(event.pos):
+                    self._menu_sb_drag = event.pos[1] - thumb.y  # drag du thumb
+                else:
+                    # clic sur la piste = page haut/bas
+                    self.menu_scroll += area.h if event.pos[1] > thumb.centery else -area.h
+                    self._menu_entries()
+                return
+        if event.type == pygame.MOUSEMOTION and getattr(self, "_menu_sb_drag", None) is not None:
+            track, thumb = self._menu_scrollbar_rects()
+            if thumb is not None:
+                area = self._menu_list_area()
+                max_scroll = self._menu_max_scroll
+                frac = (event.pos[1] - self._menu_sb_drag - area.y) / max(1, area.h - thumb.h)
+                self.menu_scroll = int(frac * max_scroll)
+                self._menu_entries()
+            return
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self._menu_sb_drag = None
         if self.menu_search_active and event.type == pygame.KEYDOWN:
             # saisie dans la barre de recherche
             if event.key == pygame.K_ESCAPE:
