@@ -321,6 +321,10 @@ class TestTrackEditor(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.MOUSEMOTION, pos=rect.center))
         self.assertEqual(ui.editor_hover_letter, 'k')
         ui._draw_menu()  # dessine l'éditeur + la preview de 'k' sans erreur
+        # la preview de tuile ne recouvre PAS l'aperçu du tracé
+        tile_r = ui._tile_preview_rect()
+        prev_r = pygame.Rect(ui.width - 350, main.TOP_H + 246, 330, 300)
+        self.assertFalse(tile_r.colliderect(prev_r))
         # preview d'un virage montagne (K) et d'une droite (b)
         ui.editor_hover_letter = 'K'
         ui._draw_tile_preview('K', ui._tile_preview_rect())

@@ -850,16 +850,20 @@ class FlammeRougeGame:
             txt = self.font.render(label, True, WHITE)
             self.screen.blit(txt, txt.get_rect(center=rect.center))
 
-        # preview de la tuile survolée (en haut à droite de la zone palette)
-        self._draw_tile_preview(self.editor_hover_letter,
-                                pygame.Rect(self.width - 340, TOP_H + 56, 320, 190))
-
-        # aperçu du tracé + profil à droite
+        # preview de la tuile survolée (panneau dédié, en haut à droite)
         if self.width >= 1100:
-            self._draw_editor_preview(self._preview_rect())
+            self._draw_tile_preview(self.editor_hover_letter, self._tile_preview_rect())
+            # aperçu du tracé + profil dans le panneau juste en dessous
+            prev = pygame.Rect(self.width - 350, TOP_H + 246, 330,
+                               max(120, min(560, self.height - TOP_H - 56) - 206))
+            self._draw_editor_preview(prev)
+        else:
+            self._draw_tile_preview(self.editor_hover_letter,
+                                    pygame.Rect(self.width - 240, TOP_H + 40, 220, 160))
 
     def _tile_preview_rect(self):
-        return pygame.Rect(self.width - 340, TOP_H + 56, 320, 190)
+        """Panneau de preview de la tuile (au-dessus de l'aperçu du tracé)."""
+        return pygame.Rect(self.width - 340, TOP_H + 40, 320, 190)
 
     def _draw_tile_preview(self, ch, rect):
         """Grande preview de la tuile ch : forme (droite/virage), cases colorées
