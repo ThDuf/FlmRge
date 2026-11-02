@@ -557,13 +557,38 @@ class TestMenuCategories(unittest.TestCase):
         self.assertEqual(ui.editor_code, "Abc")
         ui._editor_append('u')           # arrivée ajoutée -> dernière
         self.assertEqual(ui.editor_code, "Abcu")
-        ui._editor_append('d')           # s'insère AVANT l'arrivée
-        self.assertEqual(ui.editor_code, "Abcdu")
-        ui._editor_append('K')           # idem : juste avant l'arrivée
-        self.assertEqual(ui.editor_code, "AbcdKu")
-        ui._editor_append('U')           # bascule la face de l'arrivée
-        self.assertEqual(ui.editor_code, "AbcdKU")
+        # une fois l'arrivée placée, on ne peut plus rien ajouter
+        ui._editor_append('d')
+        ui._editor_append('K')
+        self.assertEqual(ui.editor_code, "Abcu")
+        ui._editor_append('U')           # seule l'arrivée reste modifiable (u <-> U)
+        self.assertEqual(ui.editor_code, "AbcU")
         self.assertEqual(ui.editor_code[-1].lower(), 'u')
         # pop peut retirer l'arrivée (elle sera remise au JOUER)
         ui._editor_pop()
-        self.assertEqual(ui.editor_code, "AbcdK")
+        self.assertEqual(ui.editor_code, "Abc")
+        ui._editor_append('d')           # déverrouillé : on peutrajouter
+        self.assertEqual(ui.editor_code, "Abcd")
+
+    def test_palette_locked_after_finish_placed(self):
+        """Une fois u/U placé (dernier), on ne peut plus rien ajouter sauf
+        basculer la face de l'arrivée."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_step = "editor"
+        ui.editor_code = "abcu"
+        ui._editor_append('b')   # ignoré : arrivée déjà placée
+        self.assertEqual(ui.editor_code, "abcu")
+        ui._editor_append('K')   # idem
+        self.assertEqual(ui.editor_code, "abcu")
+        ui._editor_append('U')   # bascule la face de l'arrivée : autorisé
+        self.assertEqual(ui.editor_code, "abcU")
+        # au clavier aussi
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_d, unicode='d'))
+        self.assertEqual(ui.editor_code, "abcU")
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_u, unicode='u'))
+        self.assertEqual(ui.editor_code, "abcu")
+        # rendu avec tuiles grisées
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui._draw_menu()

@@ -762,6 +762,10 @@ class FlammeRougeGame:
         if ch.lower() not in self.EDITOR_LETTERS:
             return
         code = self.editor_code
+        # une fois l'arrivée placée (dernière tuile), on ne peut plus rien
+        # ajouter : seule la tuile d'arrivée reste modifiable (u <-> U)
+        if code and code[-1].lower() == 'u' and ch.lower() != 'u':
+            return
         if ch.lower() == 'a':
             if code and code[0].lower() == 'a':
                 code = ch + code[1:]          # bascule a <-> A en 1re position
@@ -1040,10 +1044,10 @@ class FlammeRougeGame:
 
         # palette des 42 tuiles : des BOUTS DE PISTE cliquables (forme réelle),
         # avec la lettre en petit dans le coin pour identifier la tuile
+        locked = bool(self.editor_code) and self.editor_code[-1].lower() == 'u'
         for ch, rect in self._editor_palette_rects():
-            hovered = rect.collidepoint(mouse)
-            upper = ch.isupper()
-            fill = (96, 60, 60) if upper else (60, 66, 78)
+            hovered = rect.collidepoint(mouse) and not (locked and ch.lower() != 'u')
+            fill = (60, 66, 78)  # même fond pour toutes les tuiles (majuscules comprises)
             if hovered:
                 fill = tuple(min(255, c + 35) for c in fill)
             pygame.draw.rect(self.screen, fill, rect, border_radius=6)
@@ -1052,6 +1056,11 @@ class FlammeRougeGame:
                                  size=rect.h - 14)
             txt = self.small_font.render(ch, True, (200, 205, 215))
             self.screen.blit(txt, (rect.right - 18, rect.y + 5))
+            if locked and ch.lower() != 'u':
+                # arrivée placée : toutes les autres tuiles sont grisées
+                overlay = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+                overlay.fill((18, 20, 24, 210))
+                self.screen.blit(overlay, rect.topleft)
 
         # boutons d'action
         for key, (label, rect) in self._editor_action_rects().items():
