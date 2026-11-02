@@ -93,6 +93,7 @@ class FlammeRougeGame:
         self._pending_stage = None
         self.show_podium = True
         self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
+        self.editor_hover_letter = 'a'  # tuile prévisualisée dans l'éditeur
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self._profile_cache = {}  # nom d'étape -> profil d'altitude
         self.show_hands = True
@@ -773,9 +774,16 @@ class FlammeRougeGame:
 
     def _editor_event(self, event):
         """Événements de l'éditeur : clic palette/boutons ou clavier."""
+        if event.type == pygame.MOUSEMOTION:
+            for ch, rect in self._editor_palette_rects():
+                if rect.collidepoint(event.pos):
+                    self.editor_hover_letter = ch
+                    break
+            return
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for ch, rect in self._editor_palette_rects():
                 if rect.collidepoint(event.pos):
+                    self.editor_hover_letter = ch
                     self._editor_append(ch)
                     return
             for key, (_label, rect) in self._editor_action_rects().items():
@@ -842,9 +850,67 @@ class FlammeRougeGame:
             txt = self.font.render(label, True, WHITE)
             self.screen.blit(txt, txt.get_rect(center=rect.center))
 
+        # preview de la tuile survolée (en haut à droite de la zone palette)
+        self._draw_tile_preview(self.editor_hover_letter,
+                                pygame.Rect(self.width - 340, TOP_H + 56, 320, 190))
+
         # aperçu du tracé + profil à droite
         if self.width >= 1100:
             self._draw_editor_preview(self._preview_rect())
+
+    def _tile_preview_rect(self):
+        return pygame.Rect(self.width - 340, TOP_H + 56, 320, 190)
+
+    def _draw_tile_preview(self, ch, rect):
+        """Grande preview de la tuile ch : forme (droite/virage), cases colorées
+        (géographie + lignes), lettre et infos."""
+        from game.game import build_tile
+        from game.track import compute_track_path, Track, CellGeographyType, CellRunType
+        tile = build_tile(ch)
+        pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
+        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+        # infos : lettre + forme + nb cases + largeur
+        if tile.turn is not None:
+            deg = round(math.degrees(tile.turn[0]))
+            sens = "droite" if tile.turn[1] < 0 else "gauche"
+            shape = f"virage {deg}° {sens}"
+        else:
+            shape = "ligne droite"
+        info = self.small_font.render(
+            f"{shape} · {tile.length} cases · {tile.width} files"
+            + (" · face montagne" if ch.isupper() else ""), True, (170, 175, 185))
+        self.screen.blit(info, (rect.x + 10, rect.y + 8))
+        big = self.big_font.render(ch, True, WHITE)
+        self.screen.blit(big, (rect.x + 10, rect.y + 26))
+        # tracé de la tuile seule, mis à l'échelle dans le reste du panneau
+        t = Track()
+        t.add_tile(build_tile(ch))
+        pts = compute_track_path(t, 1.0)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        bb_w = max(max(xs) - min(xs), 1e-9)
+        bb_h = max(max(ys) - min(ys), 1e-9)
+        area = pygame.Rect(rect.x + 60, rect.y + 26, rect.w - 70, rect.h - 36)
+        scale = min(area.w / bb_w, area.h / bb_h)
+        ox = area.x + (area.w - bb_w * scale) / 2 - min(xs) * scale
+        oy = area.y + (area.h - bb_h * scale) / 2 - min(ys) * scale
+        from game.track import path_point_at
+        for cell in tile.cells:
+            if cell.run == CellRunType.START:
+                c = (255, 236, 130)
+            elif cell.run == CellRunType.END:
+                c = (240, 210, 60)
+            elif cell.geography == CellGeographyType.UPHILL:
+                c = (220, 50, 50)
+            elif cell.geography == CellGeographyType.DOWNHILL:
+                c = (50, 90, 220)
+            else:
+                c = (200, 205, 215)
+            seg = []
+            for k in range(4):
+                px, py, _tx, _ty = path_point_at(pts, cell.x + k / 3)
+                seg.append((ox + px * scale, oy + py * scale))
+            pygame.draw.lines(self.screen, c, False, seg, 7)
 
     def _draw_editor_preview(self, rect):
         """Aperçu du tracé du code édité + profil, dans le panneau de droite."""

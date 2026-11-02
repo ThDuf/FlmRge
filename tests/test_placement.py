@@ -309,3 +309,21 @@ class TestTrackEditor(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertEqual(ui.menu_step, "editor")
         ui._draw_menu()  # dessine l'éditeur sans erreur
+
+    def test_editor_tile_preview_on_hover(self):
+        """Survol de la palette -> editor_hover_letter + preview dessinée."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui.menu_step = "editor"
+        ch, rect = ui._editor_palette_rects()[10]  # 'k'
+        ui._menu_event(pygame.event.Event(pygame.MOUSEMOTION, pos=rect.center))
+        self.assertEqual(ui.editor_hover_letter, 'k')
+        ui._draw_menu()  # dessine l'éditeur + la preview de 'k' sans erreur
+        # preview d'un virage montagne (K) et d'une droite (b)
+        ui.editor_hover_letter = 'K'
+        ui._draw_tile_preview('K', ui._tile_preview_rect())
+        ui._draw_tile_preview('b', ui._tile_preview_rect())
+        ui._draw_tile_preview('a', ui._tile_preview_rect())
+        ui._draw_tile_preview('U', ui._tile_preview_rect())
