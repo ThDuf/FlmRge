@@ -1033,3 +1033,28 @@ class TestCircuitZoom(unittest.TestCase):
         entries4 = ui._menu_entries()
         self.assertEqual(len([e for e in entries4 if e[4] == "perso"]), 1)
         ui._draw_menu()
+
+    def test_profile_works_for_user_tracks(self):
+        """Le profil d'altitude marche aussi pour un parcours perso (code)."""
+        ui = main.FlammeRougeGame()
+        alt_perso = ui._stage_profile("nimporte", code="abKKcdu")  # 2 cases montée (K,K)
+        from game.game import build_track_from_code
+        from game.track import CellGeographyType
+        track = build_track_from_code("abKKcdu")
+        geos = [c.geography for t in track.tiles for c in t.cells]
+        self.assertEqual(alt_perso[-1], geos.count(CellGeographyType.UPHILL)
+                         - geos.count(CellGeographyType.DOWNHILL))
+        self.assertGreater(max(alt_perso), 0)
+        # le profil d'une étape officielle reste bon
+        alt_base = ui._stage_profile("La Haut Montagne")
+        self.assertGreater(max(alt_base), 0)
+
+    def test_menu_entries_compact(self):
+        """Entrées du menu compactes (hauteur fixe réduite), sans détails."""
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1200, 800
+        ui.screen = __import__('pygame').display.set_mode((1200, 800))
+        for name, desc, code, rect, kind in ui._menu_entries():
+            if kind != "header":
+                self.assertLessEqual(rect.h, main.FlammeRougeGame.MENU_ROW)
+        ui._draw_menu()  # sans les descriptions, rendu OK

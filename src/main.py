@@ -785,8 +785,8 @@ class FlammeRougeGame:
     # Menu de sélection d'étape
     # ------------------------------------------------------------------
 
-    MENU_ROW = 48      # hauteur fixe d'une entrée du menu
-    MENU_HEADER_H = 24 # hauteur d'un titre de catégorie
+    MENU_ROW = 36      # hauteur fixe d'une entrée du menu (compacte, sans détails)
+    MENU_HEADER_H = 22 # hauteur d'un titre de catégorie
 
     def _menu_search_rect(self):
         """Barre de recherche (filtre les parcours perso par nom/code)."""
@@ -959,17 +959,20 @@ class FlammeRougeGame:
             lbl = self.small_font.render(letter, True, (170, 175, 185))
             self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
 
-        # Profil d'altitude de l'étape (montées +1 / descentes -1 par case)
-        self._draw_profile(name, self._preview_profile_rect(rect))
+        # Profil d'altitude de l'étape / du parcours perso (code si fourni)
+        alt = self._stage_profile(name, code=code)
+        self._draw_profile_array(alt, self._preview_profile_rect(rect))
         # Image de la vraie carte d'étape si fournie (assets/stages/<nom>.jpg)
         self._draw_stage_card(name, self._preview_card_rect(rect))
 
-    def _stage_profile(self, name):
-        """Altitude relative case par case : montée +1, descente -1, plat 0."""
-        if name not in self._profile_cache:
-            from game.game import build_stage_track
+    def _stage_profile(self, name, code=None):
+        """Altitude relative case par case : montée +1, descente -1, plat 0.
+        `code` = code de tuiles perso (prioritaire sur le nom d'étape)."""
+        key = ("code", code) if code else name
+        if key not in self._profile_cache:
+            from game.game import build_stage_track, build_track_from_code
             from game.track import CellGeographyType
-            track = build_stage_track(name)
+            track = build_track_from_code(code) if code else build_stage_track(name)
             alt = [0]
             for tile in track.tiles:
                 for cell in tile.cells:
@@ -977,8 +980,8 @@ class FlammeRougeGame:
                     alt.append(alt[-1] + (1 if g == CellGeographyType.UPHILL
                                            else -1 if g == CellGeographyType.DOWNHILL
                                            else 0))
-            self._profile_cache[name] = alt
-        return self._profile_cache[name]
+            self._profile_cache[key] = alt
+        return self._profile_cache[key]
 
     def _draw_profile(self, name, rect):
         """Dessine le profil d'altitude de l'étape dans son sous-panneau."""
@@ -1617,13 +1620,10 @@ class FlammeRougeGame:
                 name_surf = self.phase_font.render(name, True, WHITE)
                 self.screen.blit(name_surf, (rect.x + 60, rect.centery - 11))
             else:
-                name_surf = self.phase_font.render(name, True, WHITE)
-                self.screen.blit(name_surf, (rect.x + 16, rect.y + 6))
-                desc_surf = self.label_font.render(desc, True, (180, 185, 195))
-                self.screen.blit(desc_surf, (rect.x + 16, rect.y + rect.h - 20))
-            if code and kind == "base":
-                code_surf = self.small_font.render(code, True, (120, 125, 135))
-                self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 8))
+                # entrée compacte : juste le nom, centré verticalement, sans détails
+                name_surf = self.label_font.render(name, True, WHITE)
+                self.screen.blit(name_surf, (rect.x + 16,
+                                             rect.centery - name_surf.get_height() // 2))
 
         self.screen.set_clip(None)  # fin de la zone scrollable
         # Prévisualisation du tracé de l'entrée sélectionnée (grandes fenêtres)
