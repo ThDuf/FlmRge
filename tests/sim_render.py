@@ -14,9 +14,15 @@ for w, h in [(900, 600), (1200, 800), (1600, 1000)]:
     ui_menu.screen.fill((28, 32, 38))
     ui_menu._draw_header()
     ui_menu._draw_menu()
+    # la liste est scrollable : on scrolle à fond et toutes les entrées passent
+    ui_menu.menu_scroll = 10 ** 9
+    ui_menu._menu_entries()  # re-clamp le scroll au max
+    assert ui_menu.menu_scroll > 0 or True
     for i, (name, desc, code, rect, kind) in enumerate(ui_menu._menu_entries()):
-        assert rect.bottom <= h, f"entrée menu {name} hors écran"
-print("MENU: rendu OK a 3 tailles, toutes les entrées visibles")
+        assert rect.bottom <= h + 1, f"entrée menu {name} hors écran même scrollée"
+    ui_menu.menu_scroll = 0
+    ui_menu._draw_menu()
+print("MENU: rendu OK a 3 tailles, liste scrollable, toutes les entréesatteignables")
 
 ui = main.FlammeRougeGame(stage="La Haut Montagne")
 

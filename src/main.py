@@ -100,6 +100,9 @@ class FlammeRougeGame:
         self.menu_index = 0
         self.menu_step = "stage"  # "stage" -> "players" / "editor"
         self._pending_stage = None
+        self.menu_scroll = 0        # scroll de la liste du menu
+        self.menu_search = ""       # filtre de recherche (parcours perso)
+        self.menu_search_active = False
         self._pending_code = None  # code perso (JSON) si l'entrée choisie est un circuit perso
         self.show_podium = True
         self.editor_code = "a"  # code de la piste en cours d'édition (éditeur)
@@ -782,42 +785,61 @@ class FlammeRougeGame:
     # Menu de sélection d'étape
     # ------------------------------------------------------------------
 
+    MENU_ROW = 48      # hauteur fixe d'une entrée du menu
+    MENU_HEADER_H = 24 # hauteur d'un titre de catégorie
+
+    def _menu_search_rect(self):
+        """Barre de recherche (filtre les parcours perso par nom/code)."""
+        preview_w = 380 if self.width >= 1100 else 0
+        w = min(680, self.width - 60 - preview_w)
+        x = 20 if preview_w else (self.width - w) // 2
+        return pygame.Rect(x, TOP_H + 44, w, 28)
+
+    def _menu_list_area(self):
+        """Zone visible (scrollable) de la liste des entrées."""
+        top = self._menu_search_rect().bottom + 8
+        return pygame.Rect(0, top, self.width, self.height - 40 - top)
+
     def _menu_entries(self):
-        """Entrées du menu, par catégories :
-        [("Circuits du jeu de base", header), 6 étapes officielles,
-         ("Circuits perso", header), 1 entrée par JSON de saves/,
-         ("Créer un circuit", bouton roue crantée -> éditeur)].
-        Chaque entrée = (nom, description, code, rect, kind) avec
-        kind in {"header", "base", "perso", "editor"}.
-        """
+        """Entrées du menu, par catégories, SCROLLABLES (menu_scroll) et filtrées
+        par la recherche (menu_search, ne filtre que les parcours perso) :
+        [("— Circuits du jeu de base —", header), 6 étapes officielles,
+         ("— Circuits perso —", header) + entrées perso filtrées,
+         ("Créer un circuit", éditeur)].
+        Chaque entrée = (nom, description, code, rect, kind)."""
         from game.game import available_stages, list_saved_tracks
         preview_w = 380 if self.width >= 1100 else 0
         w = min(680, self.width - 60 - preview_w)
         x = 20 if preview_w else (self.width - w) // 2
         base = available_stages()
         perso = list_saved_tracks(self.saves_dir)
-        n_entries = len(base) + len(perso) + 1
-        n_headers = 2
-        header_h = 26
-        avail = self.height - TOP_H - 56
-        row = min(58, max(30, (avail - n_headers * (header_h + 8) - n_entries * 8)
-                          // max(n_entries, 1)))
-        y = TOP_H + 46
+        q = self.menu_search.strip().lower()
+        if q:
+            perso = [s for s in perso
+                     if q in s["name"].lower() or q in s["code"].lower()]
+        row, header_h = self.MENU_ROW, self.MENU_HEADER_H
+        area = self._menu_list_area()
+        content_h = (2 + len(base) + (1 if perso else 0) + len(perso) + 1) * (row + 6) \
+            + 2 * (header_h + 6)
+        max_scroll = max(0, content_h - area.h)
+        self.menu_scroll = max(0, min(max_scroll, self.menu_scroll))
+        y = area.y - self.menu_scroll
         entries = []
 
         def add(name, desc, code, kind, h):
             nonlocal y
             rect = pygame.Rect(x, y, w, h)
             entries.append((name, desc, code, rect, kind))
-            y += h + 8
+            y += h + 6
 
         add("— Circuits du jeu de base —", "", "", "header", header_h)
         for name, desc, code in base:
             add(name, desc, code, "base", row)
-        add("— Circuits perso (saves/*.json) —", "", "", "header", header_h)
-        for s in perso:
-            add(s["name"], f"{len(s['code'])} tuiles · code {s['code']}", s["code"],
-                "perso", row)
+        if perso:
+            add("— Circuits perso —", "", "", "header", header_h)
+            for s in perso:
+                add(s["name"], f"{len(s['code'])} tuiles · code {s['code']}",
+                    s["code"], "perso", row)
         add("Créer un circuit", "éditeur de piste (roue crantée)", "", "editor", row)
         return entries
 
@@ -1563,7 +1585,19 @@ class FlammeRougeGame:
         hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, (150, 155, 165))
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
 
+        # barre de recherche (filtre les parcours perso)
+        srect = self._menu_search_rect()
+        pygame.draw.rect(self.screen, (24, 28, 34) if self.menu_search_active else (45, 50, 58),
+                         srect, border_radius=8)
+        pygame.draw.rect(self.screen, (235, 60, 60) if self.menu_search_active else (90, 95, 105),
+                         srect, width=2 if self.menu_search_active else 1, border_radius=8)
+        stext = self.menu_search if self.menu_search else "Rechercher un parcours perso…"
+        surf = self.label_font.render(stext, True, WHITE if self.menu_search else (120, 125, 135))
+        self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
+
         entries = self._menu_entries()
+        area = self._menu_list_area()
+        self.screen.set_clip(area)  # la liste est scrollable dans sa zone
         for i, (name, desc, code, rect, kind) in enumerate(entries):
             if kind == "header":
                 hdr = self.label_font.render(name, True, (150, 155, 165))
@@ -1591,6 +1625,7 @@ class FlammeRougeGame:
                 code_surf = self.small_font.render(code, True, (120, 125, 135))
                 self.screen.blit(code_surf, (rect.right - 12 - code_surf.get_width(), rect.y + 8))
 
+        self.screen.set_clip(None)  # fin de la zone scrollable
         # Prévisualisation du tracé de l'entrée sélectionnée (grandes fenêtres)
         if self.width >= 1100 and entries:
             name, _d, code, _r, kind = entries[self.menu_index]
@@ -1682,14 +1717,40 @@ class FlammeRougeGame:
             return
         entries = self._menu_entries()
         mouse = pygame.mouse.get_pos()
+        if event.type == pygame.MOUSEWHEEL:
+            # molette sur la liste = scroll du menu
+            area = self._menu_list_area()
+            if area.collidepoint(mouse) or True:
+                self.menu_scroll = max(0, self.menu_scroll - event.y * 40)
+                self._menu_entries()  # re-clamp le scroll
+            return
+        if self.menu_search_active and event.type == pygame.KEYDOWN:
+            # saisie dans la barre de recherche
+            if event.key == pygame.K_ESCAPE:
+                self.menu_search_active = False
+                self.menu_search = ""
+                self.menu_scroll = 0
+            elif event.key == pygame.K_BACKSPACE:
+                self.menu_search = self.menu_search[:-1]
+                self.menu_scroll = 0
+            elif event.key == pygame.K_RETURN:
+                self.menu_search_active = False
+            elif event.unicode and event.unicode.isprintable() and len(self.menu_search) < 40:
+                self.menu_search += event.unicode
+                self.menu_scroll = 0
+            return
         hovered = None
         for i, (_name, _desc, _code, rect, kind) in enumerate(entries):
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if hovered is not None:
             self.menu_index = hovered
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and hovered is not None:
-            self._menu_validate(entries[hovered])
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._menu_search_rect().collidepoint(event.pos):
+                self.menu_search_active = True  # focus barre de recherche
+                return
+            if hovered is not None:
+                self._menu_validate(entries[hovered])
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
@@ -1697,6 +1758,11 @@ class FlammeRougeGame:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
                 self._menu_validate(entries[self.menu_index])
+            elif event.key == pygame.K_PAGEUP:
+                self.menu_scroll = max(0, self.menu_scroll - 200)
+            elif event.key == pygame.K_PAGEDOWN:
+                self.menu_scroll += 200
+                self._menu_entries()
 
     def _menu_validate(self, entry):
         """Validation d'une entrée du menu : éditeur, étape de base ou perso."""

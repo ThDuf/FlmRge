@@ -993,3 +993,43 @@ class TestCircuitZoom(unittest.TestCase):
             r"(Sprinteur|Rouleur) \d+ avance de \d+ case\(s\) : de \d+ à \d+.*", l.strip())
             for l in lines))
         self.assertTrue(any("glisse" in l for l in lines) or True)  # aspiration si présente
+
+    def test_menu_scrollable_and_searchable(self):
+        """Menu scrollable (molette) + barre de recherche filtrant les parcours perso."""
+        import tempfile, pygame
+        from game.game import save_track_json
+        ui = main.FlammeRougeGame()
+        ui.saves_dir = tempfile.mkdtemp()
+        for i in range(8):
+            save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
+        save_track_json("abcdu", ui.saves_dir, name="col_du_ballon_perso")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        ui._draw_menu()
+        entries = ui._menu_entries()
+        perso = [e for e in entries if e[4] == "perso"]
+        self.assertEqual(len(perso), 9)
+        # scroll : la molette décale la liste
+        y0 = entries[0][3].y
+        ui._menu_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1, pos=(300, 400)))
+        entries2 = ui._menu_entries()
+        self.assertLess(entries2[0][3].y, y0)  # remonté dans la liste
+        self.assertGreater(ui.menu_scroll, 0)
+        # recherche : filtre les parcours perso
+        ui.menu_search = "ballon"
+        entries3 = ui._menu_entries()
+        perso3 = [e for e in entries3 if e[4] == "perso"]
+        self.assertEqual(len(perso3), 1)
+        self.assertEqual(perso3[0][0], "col_du_ballon_perso")
+        # saisie au clavier dans la barre de recherche
+        ui.menu_search = ""
+        ui.menu_search_active = True
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._menu_search_rect().center))
+        for ch in "ballon":
+            ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_UNKNOWN,
+                                              unicode=ch))
+        self.assertEqual(ui.menu_search, "ballon")
+        entries4 = ui._menu_entries()
+        self.assertEqual(len([e for e in entries4 if e[4] == "perso"]), 1)
+        ui._draw_menu()
