@@ -121,7 +121,8 @@ class FlammeRougeGame:
         self.zoom = 1.0     # zoom sur le circuit (+/- ou molette)
         self.pan_x = 0.0    # panoramique horizontal (flèches ou clic droit)
         self.pan_y = 0.0
-        self._cam_drag = None  # dernier point du drag caméra (clic droit)
+        self._cam_drag = None  # dernier point du drag caméra (clic gauche sur le parcours)
+        self._cam_drag_moved = False
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -676,7 +677,15 @@ class FlammeRougeGame:
             dy = event.pos[1] - self._cam_drag[1]
             self.pan_x += dx
             self.pan_y += dy
+            if math.hypot(dx, dy) > 2:
+                self._cam_drag_moved = True
             self._cam_drag = event.pos
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self._cam_drag is not None:
+            # clic gauche sur le parcours sans déplacer = clic simple (placement)
+            if not self._cam_drag_moved and self.game.current_phase == Phase.PLACEMENT:
+                self._placement_click(event.pos)
+            self._cam_drag = None
+            self._cam_drag_moved = False
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             self._pressed_button = None  # relâche le bouton enfoncé
         elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -694,21 +703,27 @@ class FlammeRougeGame:
                 if hit is None and self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
                     hit = "podium"
                 self._pressed_button = hit
-                if self.game.game_over and self._podium_button_rect().collidepoint(event.pos):
-                    self.show_podium = not self.show_podium  # podium <-> circuit final
-                elif not self.game.game_over and fbtns["ensemble"].collidepoint(event.pos):
-                    self.zoom, self.pan_x, self.pan_y = 1.0, 0.0, 0.0
+                if hit is not None:
+                    # actions des boutons (inchangé)
+                    if hit == "podium":
+                        self.show_podium = not self.show_podium
+                    elif hit == "ensemble" and not self.game.game_over:
+                        self.zoom, self.pan_x, self.pan_y = 1.0, 0.0, 0.0
+                    elif hit == "tete" and not self.game.game_over:
+                        self._zoom_on_leader()
+                    elif hit == "peloton" and not self.game.game_over:
+                        self._zoom_on_peloton()
+                    elif hit == "random" and not self.game.game_over:
+                        self._play_random_turn()
+                    elif hit == "action":
+                        self._try_button_click(event.pos)
                     return
-                elif not self.game.game_over and fbtns["tete"].collidepoint(event.pos):
-                    self._zoom_on_leader()
+                if self._frame_rect().collidepoint(event.pos):
+                    # clic GAUCHE sur le parcours = début du drag caméra
+                    self._cam_drag = event.pos
+                    self._cam_drag_moved = False
                     return
-                elif not self.game.game_over and fbtns["peloton"].collidepoint(event.pos):
-                    self._zoom_on_peloton()
-                    return
-                elif not self.game.game_over and self._random_button_rect().collidepoint(event.pos):
-                    self._play_random_turn()
-                    return
-                elif not self._try_button_click(event.pos):
+                if not self._try_button_click(event.pos):
                     if self.game.current_phase == Phase.PLACEMENT:
                         self._placement_click(event.pos)
                     elif self.game.current_phase == Phase.ENERGY and self.show_hands:
@@ -1626,6 +1641,8 @@ class FlammeRougeGame:
         self.current_player_idx = 0
         self.log_scroll = 0
         self._pressed_button = None
+        self._cam_drag = None
+        self._cam_drag_moved = False
         self.show_podium = True  # écran de victoire : podium (TAB = circuit final)
         self.zoom = 1.0
         self.pan_x = 0.0
@@ -1995,7 +2012,7 @@ class FlammeRougeGame:
                                     (HEADER_H - info.get_height()) // 2))
             # contrôles en une ligne au milieu du bandeau (tronquée avant les boutons)
             controls = (f"H mains · D decks · J histo · R restart · "
-                        f"+/- zoom x{self.zoom:.2f} · flèches/clic droit pan")
+                        f"+/- zoom x{self.zoom:.2f} · flèches/clic gauche pan")
             cx = 58 + flamme.get_width() + rouge.get_width() + 18 + info.get_width() + 24
             max_w = self._camera_button_rects()["peloton"].x - 16 - cx
             csurf = self.small_font.render(controls, True, (140, 146, 156))

@@ -707,10 +707,12 @@ class TestCircuitZoom(unittest.TestCase):
         ui.screen = pygame.display.set_mode((1200, 800))
         g0 = ui._track_geometry()
         p0 = g0["points"][0]
-        # drag au clic droit
-        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=3, pos=(500, 400)))
-        ui._game_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(560, 430)))
-        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=3, pos=(560, 430)))
+        # drag caméra au clic GAUCHE sur le parcours
+        frame = ui._frame_rect()
+        start = (frame.x + 100, frame.y + 100)
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=start))
+        ui._game_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(start[0] + 60, start[1] + 30)))
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(start[0] + 60, start[1] + 30)))
         g1 = ui._track_geometry()
         self.assertAlmostEqual(g1["points"][0][0], p0[0] + 60, places=1)
         self.assertAlmostEqual(g1["points"][0][1], p0[1] + 30, places=1)
@@ -906,3 +908,19 @@ class TestCircuitZoom(unittest.TestCase):
         ui._draw_ui()
         # aucun pixel noir isolé de lettre A/B hors route : on vérifie juste le rendu
         # et l'absence de l'item de légende (test indirect : le rendu passe)
+
+    def test_left_click_on_track_without_move_still_places(self):
+        """Clic gauche sur le parcours SANS bouger = clic simple (placement)."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui._select_stage("test")
+        ui.width, ui.height = 1200, 800
+        ui.screen = pygame.display.set_mode((1200, 800))
+        limit = ui.game.track.start_line_x()
+        px, py, tx, ty = ui._cell_anchor(limit - 1)
+        nx, ny = -ty, tx
+        geo = ui._track_geometry()
+        pos = (px + nx * geo["half"] * 0.5, py + ny * geo["half"] * 0.5)
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pos))
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=pos))  # pas bougé
+        self.assertEqual(len(ui.game.track.get_all_runners()), 1)  # placé !
