@@ -586,7 +586,8 @@ class FlammeRougeGame:
         """Événements quand une partie est en cours."""
         if event.type == pygame.MOUSEWHEEL:
             # molette au-dessus des logs -> scroll de l'historique, sinon zoom
-            if self._log_panel_rect().collidepoint(getattr(event, 'pos', (0, 0))):
+            # (les events MOUSEWHEEL n'ont pas de pos fiable : on prend la souris)
+            if self._log_panel_rect().collidepoint(pygame.mouse.get_pos()):
                 lines = len(self._history_lines())
                 self.log_scroll = max(0, min(lines - 1, self.log_scroll - event.y))
             else:

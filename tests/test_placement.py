@@ -794,9 +794,15 @@ class TestCircuitZoom(unittest.TestCase):
         self.assertGreater(len(ui.game.history), 1)
         log = ui._log_panel_rect()
         self.assertEqual(ui.log_scroll, 0)
-        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1, pos=log.center))
-        self.assertGreater(ui.log_scroll, 0)          # a scrollé
-        self.assertAlmostEqual(ui.zoom, 1.0, places=3)  # sans zoomer
-        ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=1, pos=log.center))
-        self.assertEqual(ui.log_scroll, 0)             # remonté
+        # les events MOUSEWHEEL n'ont pas de pos : le handler lit pygame.mouse.get_pos()
+        from unittest import mock
+        with mock.patch.object(pygame.mouse, 'get_pos', return_value=log.center):
+            ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-1))
+            self.assertGreater(ui.log_scroll, 0)          # a scrollé
+            self.assertAlmostEqual(ui.zoom, 1.0, places=3)  # sans zoomer
+            ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=1))
+            self.assertEqual(ui.log_scroll, 0)             # remonté
+        with mock.patch.object(pygame.mouse, 'get_pos', return_value=(600, 300)):
+            ui._game_event(pygame.event.Event(pygame.MOUSEWHEEL, y=1))  # hors log -> zoom
+            self.assertGreater(ui.zoom, 1.0)
         ui._draw_ui()  # panneau scrollable rendu sans erreur
