@@ -510,6 +510,13 @@ class FlammeRougeGame:
                 self._draw_menu()
             else:
                 self.screen.fill(WHITE)
+                # cadre autour de la zone du parcours (sépare bien les espaces)
+                frame = pygame.Rect(self._left_w() + 4, TOP_H + 2,
+                                    self.width - self._left_w() - 10,
+                                    self.height - TOP_H - 38)
+                pygame.draw.rect(self.screen, (238, 240, 244), frame, border_radius=10)
+                pygame.draw.rect(self.screen, (160, 166, 176), frame, width=2,
+                                 border_radius=10)
                 self._draw_track()
                 self._draw_runners()
                 self._draw_ui()
