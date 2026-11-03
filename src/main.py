@@ -1906,14 +1906,25 @@ class FlammeRougeGame:
         pygame.draw.circle(self.screen, color, (cx, cy), r, 3)
         pygame.draw.circle(self.screen, PANEL, (cx, cy), max(2, r // 3))
 
+    def _players_frame_rect(self):
+        """Même cadre à gauche que l'écran de sélection d'étape (~1/4 largeur)."""
+        srect = self._menu_search_rect()
+        return pygame.Rect(srect.x - 8, TOP_H + 36, srect.w + 16,
+                           self.height - 32 - (TOP_H + 36))
+
     def _draw_players_menu(self, mouse):
-        """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
-        title = self.title_font.render(f"{self._pending_stage} — combien de joueurs ?",
-                                       True, BLACK)
-        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
-        hint = self.label_font.render("Clic ou flèches gauche/droite + ENTRÉE (Échap = retour)",
+        """Étape 2 du menu : choix du nombre de joueurs (2-4), DANS le cadre
+        de gauche (comme la sélection d'étape), preview à droite."""
+        frame = self._players_frame_rect()
+        pygame.draw.rect(self.screen, PANEL, frame, border_radius=10)
+        pygame.draw.rect(self.screen, BORDER, frame, width=1, border_radius=10)
+        title = self.title_font.render("Combien de joueurs ?", True, BLACK)
+        self.screen.blit(title, (frame.x + 16, frame.y + 14))
+        stage = self.label_font.render(self._pending_stage or "", True, TEXT_DIM)
+        self.screen.blit(stage, (frame.x + 16, frame.y + 46))
+        hint = self.small_font.render("Clic ou flèches G/D + ENTRÉE (Échap = retour)",
                                       True, TEXT_DIM)
-        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
+        self.screen.blit(hint, (frame.x + 16, frame.y + 70))
         for count, rect in self._player_count_rects():
             selected = (count == self.player_count)
             hovered = rect.collidepoint(mouse)
@@ -1922,21 +1933,19 @@ class FlammeRougeGame:
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
                              border_radius=8)
-            n_surf = self.big_font.render(str(count), True, BLACK)
-            self.screen.blit(n_surf, (rect.centerx - n_surf.get_width() // 2,
-                                      rect.centery - n_surf.get_height() // 2))
+            n_surf = self.big_font.render(f"{count} joueurs", True, BLACK)
+            self.screen.blit(n_surf, n_surf.get_rect(center=rect.center))
         if self.width >= 1100 and self._pending_stage:
             self._draw_menu_preview(self._pending_stage, self._preview_rect())
 
     def _player_count_rects(self):
-        """Boutons 2/3/4 joueurs de l'étape 'players' du menu."""
+        """Boutons 2/3/4 joueurs, empilés DANS le cadre de gauche du menu."""
+        frame = self._players_frame_rect()
         rects = []
-        total_w = 3 * 110 + 2 * 20
-        x = (self.width - total_w) // 2
-        y = TOP_H + 220
+        y = frame.y + 104
         for count in (2, 3, 4):
-            rects.append((count, pygame.Rect(x, y, 110, 80)))
-            x += 130
+            rects.append((count, pygame.Rect(frame.x + 20, y, frame.w - 40, 56)))
+            y += 68
         return rects
 
     def _select_stage(self, name: str):
