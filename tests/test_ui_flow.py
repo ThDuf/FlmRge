@@ -40,6 +40,18 @@ class TestUiFlow(unittest.TestCase):
     def setUp(self):
         self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
 
+    def test_back_button_returns_to_menu_like_escape(self):
+        """Le bouton « ← Retour » en haut à droite (hors bandeau titre) fait
+        comme ÉCHAP : retour au menu (game = None)."""
+        import pygame
+        ui = self.ui
+        self.assertIsNotNone(ui.game)
+        r = ui._back_button_rect()
+        self.assertGreaterEqual(r.x, ui.width - 120)  # bien à droite
+        self.assertGreater(r.y, main.HEADER_H)         # hors du bandeau FLAMME ROUGE
+        ui._game_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=r.center))
+        self.assertIsNone(ui.game)
+
     def _play_energy_phase(self):
         """Joue la première carte de chaque coureur, comme les clics souris."""
         game = self.ui.game

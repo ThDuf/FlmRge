@@ -783,6 +783,9 @@ class FlammeRougeGame:
                 self._cam_drag_moved = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
+                if self._back_button_rect().collidepoint(event.pos):
+                    self.game = None  # comme ÉCHAP : retour au menu
+                    return
                 fbtns = self._frame_button_rects()
                 hit = None
                 for key, rect in fbtns.items():
@@ -2484,8 +2487,19 @@ class FlammeRougeGame:
                 f"{self._short_id(r)}:{fx}→{tx}" for r, fx, _fl, tx, _tl in step))
         for i, line in enumerate(right_lines[-2:]):
             surf = self.small_font.render(line, True, (250, 250, 250))
-            self.screen.blit(surf, (rect.right - 10 - surf.get_width(),
+            self.screen.blit(surf, (rect.right - 10 - self._back_button_rect().w - 10
+                                    - surf.get_width(),
                                     rect.y + 6 + i * 16))
+        # Bouton « retour » en haut à droite, DANS le bandeau de phase (hors du
+        # bandeau FLAMME ROUGE) : fait comme ÉCHAP (retour au menu)
+        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
+                             pygame.mouse.get_pos())
+
+    def _back_button_rect(self):
+        """Bouton retour en haut à droite du bandeau de phase (hors du bandeau
+        titre FLAMME ROUGE)."""
+        return pygame.Rect(self.width - 104, HEADER_H + 4 + (PHASE_H - 26) // 2,
+                           96, 26)
 
     def _group_names(self):
         """Une entrée par pack, de l'avant vers l'arrière : le premier est la
