@@ -1899,25 +1899,24 @@ class FlammeRougeGame:
 
         self.screen.set_clip(None)  # fin de la zone scrollable
         # entrée « Créer un circuit » épinglée en bas, toujours visible :
-        # même style qu'une ligne de parcours (fond blanc/gris, trait rouge si
-        # sélectionné, jamais entouré) + écrou amélioré + animation d'enfoncement
-        for idx, (name, desc, code, rect, kind) in enumerate(entries):
+        # même style que le gros bouton SUIVANT (rouge, blanc) + animation
+        # d'enfoncement au clic ; ouvre l'éditeur directement au clic
+        for name, desc, code, rect, kind in entries:
             if kind == "editor":
-                selected = (idx == self.menu_index)
-                hovered = rect.collidepoint(pygame.mouse.get_pos())
+                mouse = pygame.mouse.get_pos()
+                hovered = rect.collidepoint(mouse)
                 pressed = (self._pressed_button == "editor")
-                fill = ROW_SEL if hovered else PANEL
+                fill = (200, 45, 45)
+                if hovered:
+                    fill = tuple(min(255, c + 30) for c in fill)
                 if pressed:
                     fill = tuple(max(0, c - 35) for c in fill)  # enfoncé au clic
                 pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                if selected:
-                    pygame.draw.rect(self.screen, (235, 60, 60),
-                                     (rect.x, rect.y + 2, 4, rect.h - 4))
-                self._draw_gear((rect.x + 34, rect.centery), 16,
-                                (235, 60, 60) if (selected or hovered or pressed)
-                                else (120, 126, 138))
-                name_surf = self.phase_font.render(name, True, BLACK)
-                self.screen.blit(name_surf, (rect.x + 62, rect.centery - 11))
+                self._draw_gear((rect.x + 34, rect.centery), 16, WHITE)
+                name_surf = self.phase_font.render(name, True, WHITE)
+                self.screen.blit(name_surf, name_surf.get_rect(
+                    center=(rect.x + 62 + (rect.right - rect.x - 70) // 2,
+                            rect.centery)))
         # barre de scroll verticale à gauche de la liste (si contenu > zone)
         track, thumb = self._menu_scrollbar_rects()
         if thumb is not None:
@@ -2094,9 +2093,14 @@ class FlammeRougeGame:
                 self.menu_search_active = True  # focus barre de recherche
                 return
             if hovered is not None:
-                self.menu_index = hovered  # le clic ne fait QUE sélectionner
                 if entries[hovered][4] == "editor":
-                    self._pressed_button = "editor"  # animation d'enfoncement au clic
+                    # « Créer un circuit » = comme le bouton SUIVANT : ouvre
+                    # l'éditeur au clic direct, avec animation d'enfoncement
+                    self._pressed_button = "editor"
+                    self._menu_validate(entries[hovered])
+                    self._pressed_button = None
+                    return
+                self.menu_index = hovered  # les autres entrées : clic = sélectionner
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
