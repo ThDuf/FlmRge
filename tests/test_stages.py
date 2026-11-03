@@ -327,8 +327,8 @@ class TestStageMenu(unittest.TestCase):
             bb_h = max(ys) - min(ys)
             scale = min((trect.w - 16) / max(bb_w, 1e-9), (trect.h - 16) / max(bb_h, 1e-9))
             self.assertGreater(scale, 0)
-            self.assertLessEqual(bb_w * scale, trect.w - 16, name)
-            self.assertLessEqual(bb_h * scale, trect.h - 16, name)
+            self.assertLessEqual(bb_w * scale, trect.w - 16 + 1e-6, name)  # tolérance float
+            self.assertLessEqual(bb_h * scale, trect.h - 16 + 1e-6, name)
 
     def test_stage_profile_matches_geography(self):
         """Le profil d'altitude monte en montée (+1/case) et descend en descente."""

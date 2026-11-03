@@ -822,10 +822,14 @@ class FlammeRougeGame:
     MENU_HEADER_H = 22 # hauteur d'un titre de catégorie
     EDITOR_ROW = 56    # hauteur du gros bouton « Créer un circuit » épinglé en bas
 
+    def _menu_preview_w(self) -> int:
+        """Largeur du panneau de preview à droite du menu (0 si fenêtre étroite)."""
+        return 470 if self.width >= 1100 else 0
+
     def _menu_search_rect(self):
         """Barre de recherche (filtre les parcours perso par nom/code)."""
-        preview_w = 380 if self.width >= 1100 else 0
-        w = min(680, self.width - 60 - preview_w)
+        preview_w = self._menu_preview_w()
+        w = min(680, self.width - 60 - preview_w - 36)
         x = 20 if preview_w else (self.width - w) // 2
         return pygame.Rect(x, TOP_H + 44, w, 28)
 
@@ -854,8 +858,8 @@ class FlammeRougeGame:
          ("Créer un circuit", éditeur)].
         Chaque entrée = (nom, description, code, rect, kind)."""
         from game.game import available_stages, list_saved_tracks
-        preview_w = 380 if self.width >= 1100 else 0
-        w = min(680, self.width - 60 - preview_w)
+        preview_w = self._menu_preview_w()
+        w = min(680, self.width - 60 - preview_w - 36)
         x = 20 if preview_w else (self.width - w) // 2
         base = available_stages()
         perso = list_saved_tracks(self.saves_dir)
@@ -903,8 +907,9 @@ class FlammeRougeGame:
     def _preview_rect(self):
         """Panneau de prévisualisation (colonne de droite du menu) :
         tracé de l'étape + profil d'altitude + image de la carte du jeu."""
-        return pygame.Rect(self.width - 350, TOP_H + 40, 330,
-                           min(560, self.height - TOP_H - 56))
+        pw = self._menu_preview_w() or 330
+        return pygame.Rect(self.width - pw - 16, TOP_H + 40, pw,
+                           min(640, self.height - TOP_H - 56))
 
     def _preview_track_rect(self, rect):
         """Sous-zone du tracé dans le panneau de preview."""
