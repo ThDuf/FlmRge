@@ -837,8 +837,11 @@ class FlammeRougeGame:
     EDITOR_ROW = 56    # hauteur du gros bouton « Créer un circuit » épinglé en bas
 
     def _menu_preview_w(self) -> int:
-        """Largeur du panneau de preview à droite du menu (0 si fenêtre étroite)."""
-        return 470 if self.width >= 1100 else 0
+        """Largeur du panneau de preview à droite du menu, proportionnelle à
+        la largeur de la fenêtre (0 si fenêtre étroite)."""
+        if self.width < 1100:
+            return 0
+        return min(600, max(430, int(self.width * 0.38)))
 
     def _menu_search_rect(self):
         """Barre de recherche (filtre les parcours perso par nom/code)."""
@@ -920,10 +923,10 @@ class FlammeRougeGame:
 
     def _preview_rect(self):
         """Panneau de prévisualisation (colonne de droite du menu) :
-        tracé de l'étape + profil d'altitude + image de la carte du jeu."""
+        tracé de l'étape + profil d'altitude. Sa taille suit la fenêtre."""
         pw = self._menu_preview_w() or 330
         return pygame.Rect(self.width - pw - 16, TOP_H + 40, pw,
-                           min(640, self.height - TOP_H - 56))
+                           self.height - TOP_H - 48)
 
     def _preview_track_rect(self, rect):
         """Sous-zone du tracé dans le panneau de preview."""
@@ -935,11 +938,13 @@ class FlammeRougeGame:
         tr = self._preview_track_rect(rect)
         return pygame.Rect(rect.x + 10, tr.bottom + 8, rect.w - 20, 84)
 
-    def _preview_card_rect(self, rect):
-        """Sous-zone de l'image de la carte d'étape (si fournie)."""
-        pr = self._preview_profile_rect(rect)
-        return pygame.Rect(rect.x + 10, pr.bottom + 8, rect.w - 20,
-                           max(80, rect.bottom - pr.bottom - 18))
+    def _menu_profile_rect(self, rect):
+        """Profil du menu : occupe tout l'espace restant sous le tracé
+        (plus haut que dans l'éditeur, qui garde un profil compact)."""
+        tr = self._preview_track_rect(rect)
+        top = tr.bottom + 8
+        return pygame.Rect(rect.x + 10, top, rect.w - 20,
+                           max(84, rect.bottom - 8 - top))
 
     def _stage_preview_points(self, name, code=None):
         """Polyligne (unités de cases) du tracé d'une étape ou d'un code perso."""
@@ -1035,11 +1040,10 @@ class FlammeRougeGame:
             lbl = self.small_font.render(letter, True, TEXT_DIM)
             self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
 
-        # Profil d'altitude de l'étape / du parcours perso (code si fourni)
+        # Profil d'altitude de l'étape / du parcours perso (code si fourni),
+        # en grand : il occupe tout l'espace restant sous le tracé
         alt = self._stage_profile(name, code=code)
-        self._draw_profile_array(alt, self._preview_profile_rect(rect))
-        # Image de la vraie carte d'étape si fournie (assets/stages/<nom>.jpg)
-        self._draw_stage_card(name, self._preview_card_rect(rect))
+        self._draw_profile_array(alt, self._menu_profile_rect(rect))
 
     def _stage_profile(self, name, code=None):
         """Altitude relative case par case : montée +1, descente -1, plat 0.
@@ -1075,41 +1079,6 @@ class FlammeRougeGame:
         pygame.draw.polygon(self.screen, (96, 140, 90),
                             pts + [(pts[-1][0], inner.bottom), (pts[0][0], inner.bottom)])
         pygame.draw.lines(self.screen, (180, 220, 180), False, pts, 2)
-
-    def _stage_card_path(self, name):
-        """Chemin de l'image de la carte d'étape si elle a été déposée dans
-        assets/stages/ (ex. 'La Haut Montagne.jpg' ou 'la_haut_montagne.png')."""
-        import os
-        import re
-        base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            '..', 'assets', 'stages')
-        slug = re.sub(r'[^A-Za-z0-9]+', '_', name).strip('_')
-        for cand in (name, slug):
-            for ext in ('.png', '.jpg', '.jpeg'):
-                p = os.path.join(base, cand + ext)
-                if os.path.exists(p):
-                    return p
-        return None
-
-    def _draw_stage_card(self, name, rect):
-        """Affiche l'image de la vraie carte du jeu à côté de la preview,
-        si elle est présente dans assets/stages/."""
-        path = self._stage_card_path(name)
-        if path:
-            try:
-                img = pygame.image.load(path)
-                scale = min(rect.w / img.get_width(), rect.h / img.get_height())
-                img = pygame.transform.smoothscale(
-                    img, (max(1, int(img.get_width() * scale)),
-                          max(1, int(img.get_height() * scale))))
-                self.screen.blit(img, (rect.x + (rect.w - img.get_width()) // 2,
-                                       rect.y + (rect.h - img.get_height()) // 2))
-                return
-            except Exception:
-                pass
-        hint = self.small_font.render("carte du jeu : assets/stages/<etape>.jpg",
-                                      True, TEXT_DIM)
-        self.screen.blit(hint, (rect.x + 6, rect.y + rect.h // 2 - 6))
 
     # ------------------------------------------------------------------
     # Éditeur de piste

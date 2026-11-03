@@ -348,10 +348,21 @@ class TestStageMenu(unittest.TestCase):
                 self.assertEqual(d, 0)
         self.assertGreater(max(alt), 0)  # il y a bien des montées
 
-    def test_stage_card_image_optional(self):
-        """Pas d'image de carte déposée -> None (la preview affiche un indice)."""
+    def test_menu_preview_scales_with_window(self):
+        """La preview du menu grandit avec la fenêtre (largeur proportionnelle,
+        hauteur = tout l'espace sous les bandeaux, profil en grand en dessous
+        du tracé, plus de zone image)."""
         ui = main.FlammeRougeGame()
-        self.assertIsNone(ui._stage_card_path("Avenue Corso Paseo"))
+        sizes = []
+        for w, h in ((1200, 800), (1400, 900), (1920, 1080)):
+            ui.width, ui.height = w, h
+            rect = ui._preview_rect()
+            sizes.append((rect.w, rect.h))
+            prof = ui._menu_profile_rect(rect)
+            self.assertGreaterEqual(prof.bottom, rect.bottom - 8 - 1)
+            self.assertGreaterEqual(prof.h, 84)
+        self.assertTrue(sizes[0][0] < sizes[1][0] < sizes[2][0], sizes)
+        self.assertTrue(sizes[0][1] < sizes[1][1] < sizes[2][1], sizes)
 
     def test_escape_returns_to_menu_and_r_restarts_stage(self):
         ui = main.FlammeRougeGame(stage="Firenze - Milano")

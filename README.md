@@ -79,8 +79,7 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 
 ```
 FlmRge/
-├── assets/
-│   └── stages/             # Images des vraies cartes d'étape (optionnel : assets/stages/<nom de l'étape>.jpg)
+├── assets/                 # (aucun asset embarqué : tout est dessiné en vectoriel)
 ├── saves/                  # Parcours personnalisés sauvegardés en JSON (éditeur de piste)
 ├── src/
 │   ├── __init__.py
@@ -109,7 +108,6 @@ python -m unittest discover -s tests
 
 ### Ajouter une nouvelle étape
 1. Ajouter son code de tuiles (lettres) dans `OFFICIAL_STAGES` dans `src/game/game.py` — la piste est construite par `_build_track` / `build_track_from_code`.
-2. (Optionnel) Déposer l'image de la vraie carte du jeu dans `assets/stages/<nom de l'étape>.jpg` : elle s'affiche à côté de la preview au menu.
 
 Un parcours personnalisé se crée directement dans l'**éditeur de piste** (menu) et se sauvegarde en JSON dans `saves/` (`save_track_json` / `load_track_json` / `list_saved_tracks`).
 
@@ -120,9 +118,7 @@ Un parcours personnalisé se crée directement dans l'**éditeur de piste** (men
 
 ## 🎨 Assets
 
-Le seul dossier d'assets du dépôt est `assets/stages/` : images optionnelles des vraies cartes d'étape (affichées à côté de la preview au menu si vous déposez `<nom de l'étape>.jpg`).
-
-Les autres assets (images, sons) ne sont pas inclus dans ce dépôt pour des raisons de droits d'auteur. Vous pouvez :
+Aucun asset (image, son) n'est embarqué : tout est dessiné en vectoriel par le code (piste, coureurs, cartes). Vous pouvez créer vos propres assets (ex. [Kenney.nl](https://kenney.nl/)) si vous le souhaitez. Vous pouvez :
 - **Créer vos propres assets** (recommandé pour un projet personnel).
 - **Utiliser des assets libres de droits** (ex: [Kenney.nl](https://kenney.nl/)).
 - **Ajouter des placeholders** pour tester le jeu.
@@ -175,7 +171,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 ## 🗺️ Étapes disponibles
 
-Menu de sélection au lancement : choix de l'étape (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours) **avec prévisualisation du tracé** de l'étape survolée à droite (grande fenêtre, profil d'altitude et image de la carte si disponible), puis choix du **nombre de joueurs (2 à 4)**. La liste est scrollable, filtrable via une barre de recherche, et organisée en catégories : circuits du jeu de base, circuits perso (`saves/*.json`), plus le bouton « Créer un circuit » (éditeur de piste) toujours visible en bas. Les **6 étapes officielles de la boîte de base** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
+Menu de sélection au lancement : choix de l'étape (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours) **avec prévisualisation du tracé** de l'étape survolée à droite (panneau qui grandit avec la fenêtre, avec profil d'altitude km/D+ en grand sous le tracé), puis choix du **nombre de joueurs (2 à 4)**. La liste est scrollable, filtrable via une barre de recherche, et organisée en catégories : circuits du jeu de base, circuits perso (`saves/*.json`), plus le bouton « Créer un circuit » (éditeur de piste) toujours visible en bas. Les **6 étapes officielles de la boîte de base** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
 
 | Étape | Code | Profil |
 |-------|------|--------|
@@ -186,7 +182,7 @@ Menu de sélection au lancement : choix de l'étape (clic ou flèches + ENTRÉE 
 | La Classicissima | `A eb Q R N H P cgik D F s L ojmtu` | vallonné |
 | Col du Ballon | `AnLHgceqtrMBoipjDFkSu` | montagne (Vosges) |
 
-> **Modèle de tuile** : chaque tuile = `(virage, largeur, cases)` dans `src/game/game.py` (`TILE_DEFS`, `MOUNTAIN_DEFS` pour les faces majuscules). `virage` = (angle en radians, sens +1/-1), `None` = droite ; `largeur` = nombre de files (2 en base) ; `cases` = alphabet `CELL_CHARS` de `src/game/track.py` (initiales anglaises : `f`=flat, `u`=uphill, `d`=downhill, `s`=ligne de départ, `e`=ligne d'arrivée) — ex. `a` = `"sssssf"` (6 cases, ligne sur les 5 premières), `B` = `"ddddff"` (descente sur les 4 premières cases seulement). Une tuile majuscule est la **face montagne** de la tuile : géographie case par case (`CellGeographyType` : FLAT/UPHILL/DOWNHILL) et virage propre relevé sur la tuile physique (pas forcément le miroir de la face plate — voir `MOUNTAIN_DEFS`) ; la ligne de course vit sur la case (`CellRunType` : NONE/START/END). Longueurs officielles : départ 6, arrivée 6 (`u` = `"feeeee"`, ligne sur les 5 dernières), droites 6, virages 2 → étapes officielles = 78 cases. Angles des virages officiels : 45° (léger) / 90° (serré). Dans la prévisualisation du menu (panneau de droite), le tracé est coloré **case par case** : départ jaune clair, arrivée jaune vif (deux jaunes différents), montées en rouge vif, descentes en bleu vif, avec la lettre de chaque tuile. Dans l'**éditeur de piste**, la palette de sélection montre chaque tuile sous forme de **mini-preview cliquable** (bout de piste : forme droite/virage, cases colorées rouge/bleu selon la géographie) tandis que l'**aperçu global à droite** affiche le tracé avec la **lettre** de chaque tuile. Le panneau affiche aussi le **profil d'altitude** de l'étape (montée +1/case, descente -1/case, segments orange doux/bleu doux) avec **échelle de distance (1 case = 1 km), distance totale et D+**, les mots « départ »/« arrivée » et un **petit drapeau damier** sur la ligne d'arrivée, et, si tu déposes une photo de la vraie carte dans `assets/stages/<nom de l'étape>.jpg`, l'**image de la carte du jeu** à côté de la preview. L'application a un **thème clair** ; dans l'écran de course, un panneau « Groupes » (en haut à gauche du cadre du parcours) liste **une ligne par pack** : « Tête de course » (premier), « Peloton » (plus gros groupe), « Lanterne rouge » (dernier), « Groupe \<cycliste connu\> » pour les autres, avec les coureurs et la case de chacun.
+> **Modèle de tuile** : chaque tuile = `(virage, largeur, cases)` dans `src/game/game.py` (`TILE_DEFS`, `MOUNTAIN_DEFS` pour les faces majuscules). `virage` = (angle en radians, sens +1/-1), `None` = droite ; `largeur` = nombre de files (2 en base) ; `cases` = alphabet `CELL_CHARS` de `src/game/track.py` (initiales anglaises : `f`=flat, `u`=uphill, `d`=downhill, `s`=ligne de départ, `e`=ligne d'arrivée) — ex. `a` = `"sssssf"` (6 cases, ligne sur les 5 premières), `B` = `"ddddff"` (descente sur les 4 premières cases seulement). Une tuile majuscule est la **face montagne** de la tuile : géographie case par case (`CellGeographyType` : FLAT/UPHILL/DOWNHILL) et virage propre relevé sur la tuile physique (pas forcément le miroir de la face plate — voir `MOUNTAIN_DEFS`) ; la ligne de course vit sur la case (`CellRunType` : NONE/START/END). Longueurs officielles : départ 6, arrivée 6 (`u` = `"feeeee"`, ligne sur les 5 dernières), droites 6, virages 2 → étapes officielles = 78 cases. Angles des virages officiels : 45° (léger) / 90° (serré). Dans la prévisualisation du menu (panneau de droite), le tracé est coloré **case par case** : départ jaune clair, arrivée jaune vif (deux jaunes différents), montées en rouge vif, descentes en bleu vif, avec la lettre de chaque tuile. Dans l'**éditeur de piste**, la palette de sélection montre chaque tuile sous forme de **mini-preview cliquable** (bout de piste : forme droite/virage, cases colorées rouge/bleu selon la géographie) tandis que l'**aperçu global à droite** affiche le tracé avec la **lettre** de chaque tuile. Le panneau affiche aussi le **profil d'altitude** de l'étape (montée +1/case, descente -1/case, segments orange doux/bleu doux) avec **échelle de distance (1 case = 1 km), distance totale et D+**, les mots « départ »/« arrivée » et un **petit drapeau damier** sur la ligne d'arrivée. Le panneau de preview **grandit avec la fenêtre** (largeur proportionnelle, profil en grand sous le tracé). L'application a un **thème clair** ; dans l'écran de course, un panneau « Groupes » (en haut à gauche du cadre du parcours) liste **une ligne par pack** : « Tête de course » (premier), « Peloton » (plus gros groupe), « Lanterne rouge » (dernier), « Groupe \<cycliste connu\> » pour les autres, avec les coureurs et la case de chacun.
 
 > Les 21 faces majuscules sont définies **explicitement** dans `MOUNTAIN_DEFS` (relevées une par une sur les tuiles physiques : cases case par case + virage propre — qui n'est pas toujours le miroir de la face plate, ex. `K` tourne à gauche comme la face montagne imprimée, `H` à droite alors que `h` va à gauche). Sens des virages minuscules relevés sur la carte imprimée Corso Paseo.
 

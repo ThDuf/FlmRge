@@ -27,7 +27,7 @@ def main_():
     ui._draw_menu()
     corner = px(ui.screen, (30, 700))
     print("fond menu (30,700):", corner, "-> clair:", sum(corner) > 600)
-    pr = ui._preview_profile_rect(ui._preview_rect())
+    pr = ui._menu_profile_rect(ui._preview_rect())
     found = {"orange": 0, "blue": 0, "flag": 0, "gold": 0}
     for x in range(pr.x, pr.right):
         for y in range(pr.y, pr.bottom):
