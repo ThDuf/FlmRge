@@ -970,7 +970,7 @@ class FlammeRougeGame:
 
     def _preview_track_rect(self, rect):
         """Sous-zone du tracé dans le panneau de preview."""
-        h = max(120, rect.h - 250)
+        h = max(120, rect.h - 208)
         return pygame.Rect(rect.x + 10, rect.y + 34, rect.w - 20, h)
 
     def _preview_profile_rect(self, rect):
@@ -979,12 +979,12 @@ class FlammeRougeGame:
         return pygame.Rect(rect.x + 10, tr.bottom + 8, rect.w - 20, 84)
 
     def _menu_profile_rect(self, rect):
-        """Profil du menu : occupe tout l'espace restant sous le tracé
-        (plus haut que dans l'éditeur, qui garde un profil compact)."""
+        """Profil du menu : hauteur réduite (plafonnée à 150 px) sous le tracé,
+        le tracé prend le reste du panneau."""
         tr = self._preview_track_rect(rect)
         top = tr.bottom + 8
         return pygame.Rect(rect.x + 10, top, rect.w - 20,
-                           max(84, rect.bottom - 8 - top))
+                           min(150, max(84, rect.bottom - 8 - top)))
 
     def _stage_preview_points(self, name, code=None):
         """Polyligne (unités de cases) du tracé d'une étape ou d'un code perso."""
@@ -1755,11 +1755,11 @@ class FlammeRougeGame:
             quad = top + [(top[-1][0], inner.bottom), (top[0][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
             pygame.draw.lines(self.screen, seg_line[key], False, top, 2)
-        # petit fanion rouge sur CHAQUE col (maximum local) : catégorie selon
-        # la longueur de la montée qui précède ce col
+        # petit fanion rouge sur CHAQUE col : une cote = une montée qui se
+        # TERMINE par du plat (ou par l'arrivée, qui peut donc être un col).
+        # Catégorie selon la longueur de la montée qui précède ce col.
         for i in range(1, len(alt)):
-            right = alt[i + 1] if i + 1 < len(alt) else -(10 ** 9)
-            if alt[i] > alt[i - 1] and alt[i] > right:
+            if alt[i] > alt[i - 1] and (i + 1 >= len(alt) or alt[i] >= alt[i + 1]):
                 cat = col_category(climb_length_at(alt, i))
                 if cat is None:
                     continue
