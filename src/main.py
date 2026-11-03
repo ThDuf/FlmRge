@@ -1065,9 +1065,10 @@ class FlammeRougeGame:
 
         # Départ noté à la LIGNE de départ, arrivée à la LIGNE d'arrivée :
         # lignes en travers de la route à ces positions + mots « départ » /
-        # « arrivée » à côté (départ côté +n, arrivée côté -n, loin du drapeau)
+        # « arrivée » en plus gros à côté (départ côté +n, arrivée côté -n)
         s_start = float(track.start_line_x())
         s_end = float(track.end_line_x())
+        arr_lbl = None
         for s_line, col, word, side in ((s_start, (255, 236, 130), "départ", 1),
                                         (s_end, (240, 210, 60), "arrivée", -1)):
             px, py, tx, ty = path_point_at(pts, s_line)
@@ -1076,14 +1077,17 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, col,
                              (sx + nx * half, sy + ny * half),
                              (sx - nx * half, sy - ny * half), 3)
-            lbl = self.small_font.render(word, True, (40, 44, 52))
+            lbl = self.label_font.render(word, True, (40, 44, 52))
+            if word == "arrivée":
+                arr_lbl = (lbl, sx, sy, nx, ny)
             lx = sx + nx * (half + 8) * side - lbl.get_width() // 2
             ly = sy + ny * (half + 8) * side - lbl.get_height() // 2
             self.screen.blit(lbl, (lx, ly))
 
         # Ligne d'arrivée sur le tracé (comme sur le profil) : pointillés jaunes
-        # en travers de la route + petit drapeau damier PERPENDICULAIRE à la
-        # piste (mât le long de la normale, pavillon le long de la tangente)
+        # en travers de la route + drapeau damier PERPENDICULAIRE à la piste,
+        # plus grand et placé à côté du mot « arrivée » (même côté -n, au-delà
+        # du texte, sans superposition)
         ex, ey, etx, ety = path_point_at(pts, s_end)
         sx, sy = ox + ex * scale, oy + ey * scale
         nx, ny = -ety, etx
@@ -1093,13 +1097,17 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, (240, 210, 60),
                              (sx + nx * a, sy + ny * a), (sx + nx * b, sy + ny * b), 2)
             a = b + 3
-        ph = road_w / 2 + 8          # hauteur du mât (perpendiculaire)
-        fw, fh = 12, 8               # pavillon : le long de la tangente
-        exx, eyy = sx + nx * ph, sy + ny * ph   # sommet du mât
-        pygame.draw.line(self.screen, (120, 120, 120), (sx, sy), (exx, eyy), 2)
-        ux, uy = etx * fw / 3, ety * fw / 3     # pas le long de la tangente
-        vx, vy = -nx * fh / 2, -ny * fh / 2     # pas le long du mât (retour)
-        for i in range(3):
+        fw, fh = 16, 10              # pavillon plus grand, le long de la tangente
+        base_d = half + 2            # départ du mât sur le bord de la route
+        if arr_lbl is not None:      # le mât part au-delà du mot « arrivée »
+            base_d += arr_lbl[0].get_height() + 4
+        ph = base_d + fh + 4         # sommet du mât (perpendiculaire, côté -n)
+        exx, eyy = sx - nx * ph, sy - ny * ph   # sommet du mât
+        pygame.draw.line(self.screen, (120, 120, 120),
+                         (sx - nx * base_d, sy - ny * base_d), (exx, eyy), 2)
+        ux, uy = etx * fw / 4, ety * fw / 4     # pas le long de la tangente
+        vx, vy = nx * fh / 2, ny * fh / 2       # pas le long du mât (retour)
+        for i in range(4):
             for j in range(2):
                 c = BLACK if (i + j) % 2 == 0 else WHITE
                 x0, y0 = exx + ux * i + vx * j, eyy + uy * i + vy * j
@@ -1689,27 +1697,32 @@ class FlammeRougeGame:
         inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
         pts = [(inner.x + inner.w * i / n,
                 inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
-        # profil très légèrement accidenté comme un vrai : petits aléas
-        # aléatoires (seedés par index -> pas de clignotement) uniquement
-        # ENTRE les cols, c'est-à-dire sur les portions plates
+        # profil très légèrement accidenté comme un vrai : petits aléas en
+        # hauteur mais BEAUCOUP plus fréquents (chaque segment est subdivisé),
+        # aléatoires (seedés -> pas de clignotement), uniquement ENTRE les cols
+        # (sur les portions plates)
         import random as _random
         amp = max(0.6, inner.h * 0.02)
-        jpts = list(pts)
-        for i in range(1, n):
-            flat_before = alt[i] == alt[i - 1]
-            flat_after = alt[i] == alt[i + 1] if i < n else True
-            if flat_before or flat_after:
-                jit = _random.Random(1000 + i).uniform(-amp, amp)
-                jpts[i] = (pts[i][0], pts[i][1] + jit)
+        sub = 3  # sous-segments par case -> aléas plus fréquents
+        line_pts = [pts[0]]
+        for i in range(n):
+            for k in range(1, sub + 1):
+                frac = k / sub
+                bx = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * frac
+                by = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * frac
+                if k < sub and alt[i + 1] == alt[i]:  # intérieur d'un plat
+                    by += _random.Random(1000 + i * sub + k).uniform(-amp, amp)
+                line_pts.append((bx, by))
+        jpts = line_pts[::sub]  # points aux cases (pour le fanion)
         soft_fill = {1: (255, 205, 150), -1: (160, 195, 255), 0: (214, 219, 227)}
         seg_line = {1: (235, 145, 50), -1: (80, 120, 235), 0: TEXT_DIM}
         for i in range(n):
             d = alt[i + 1] - alt[i]
             key = 1 if d > 0 else -1 if d < 0 else 0
-            quad = [jpts[i], jpts[i + 1],
-                    (jpts[i + 1][0], inner.bottom), (jpts[i][0], inner.bottom)]
+            top = line_pts[i * sub:(i + 1) * sub + 1]
+            quad = top + [(top[-1][0], inner.bottom), (top[0][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
-            pygame.draw.line(self.screen, seg_line[key], jpts[i], jpts[i + 1], 2)
+            pygame.draw.lines(self.screen, seg_line[key], False, top, 2)
         # petit fanion rouge au sommet : catégorie selon la longueur de la
         # montée qui précède le col
         cat = col_category(climb_length_before_summit(alt))
