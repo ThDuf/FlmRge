@@ -995,8 +995,9 @@ class FlammeRougeGame:
         title = self.label_font.render(name, True, BLACK)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
 
-        # Tracé coloré CASE PAR CASE : départ jaune clair, arrivée jaune vif,
-        # montée ROUGE vif, descente BLEU vif, plat gris clair
+        # Tracé coloré CASE PAR CASE, route large : départ jaune clair,
+        # arrivée jaune vif, montée ROUGE vif, descente BLEU vif, plat gris clair
+        road_w = max(9, min(16, round(scale * 1.3)))  # largeur de la route
         from game.game import build_stage_track, build_track_from_code
         from game.track import CellGeographyType, CellRunType
         track = build_track_from_code(code) if code else build_stage_track(name)
@@ -1018,17 +1019,15 @@ class FlammeRougeGame:
                 for k in range(steps + 1):
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
                     seg.append((ox + px * scale, oy + py * scale))
-                pygame.draw.lines(self.screen, seg_color, False, seg, 5)
+                pygame.draw.lines(self.screen, seg_color, False, seg, road_w)
 
         # départ (jaune clair) et arrivée (jaune vif)
-        pygame.draw.circle(self.screen, (255, 236, 130), screen_pts[0], 5)
-        pygame.draw.circle(self.screen, YELLOW, screen_pts[-1], 5)
+        pygame.draw.circle(self.screen, (255, 236, 130), screen_pts[0], road_w // 2 + 2)
+        pygame.draw.circle(self.screen, YELLOW, screen_pts[-1], road_w // 2 + 2)
 
-        # Séparateurs de tuiles + lettres au milieu de chaque tuile
-        marks, total = self._preview_tile_marks(name, code=code)
+        # Séparateurs de tuiles (petite ligne à chaque jonction, sans lettres)
+        _marks, total = self._preview_tile_marks(name, code=code)
         s = 0.0
-        from game.game import build_stage_track, build_track_from_code
-        track = build_track_from_code(code) if code else build_stage_track(name)
         for i, tile in enumerate(track.tiles):
             s += tile.length
             if i < len(track.tiles) - 1:  # petite ligne à la jonction
@@ -1036,16 +1035,27 @@ class FlammeRougeGame:
                 sx, sy = ox + px * scale, oy + py * scale
                 nx, ny = -ty, tx
                 pygame.draw.line(self.screen, TEXT_DIM,
-                                 (sx + nx * 7, sy + ny * 7), (sx - nx * 7, sy - ny * 7), 1)
-        # lettres des tuiles (a, b, c...) au milieu de chaque tuile
-        for s_mid, letter in marks:
-            if not letter:
-                continue
-            px, py, tx, ty = path_point_at(pts, s_mid)
-            sx, sy = ox + px * scale, oy + py * scale
-            nx, ny = -ty, tx
-            lbl = self.small_font.render(letter, True, TEXT_DIM)
-            self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
+                                 (sx + nx * (road_w // 2 + 3), sy + ny * (road_w // 2 + 3)),
+                                 (sx - nx * (road_w // 2 + 3), sy - ny * (road_w // 2 + 3)), 1)
+
+        # Ligne d'arrivée sur le tracé (comme sur le profil) : pointillés jaunes
+        # en travers de la route + petit drapeau damier juste après
+        ex, ey, etx, ety = path_point_at(pts, float(total))
+        sx, sy = ox + ex * scale, oy + ey * scale
+        nx, ny = -ety, etx
+        half = road_w / 2 + 5
+        a = -half
+        while a < half:
+            b = min(a + 4, half)
+            pygame.draw.line(self.screen, (240, 210, 60),
+                             (sx + nx * a, sy + ny * a), (sx + nx * b, sy + ny * b), 2)
+            a = b + 3
+        fx, fy = sx + etx * (road_w + 4), sy + ety * (road_w + 4)
+        pygame.draw.line(self.screen, (120, 120, 120), (sx, sy), (fx, fy), 2)
+        for i in range(3):
+            for j in range(2):
+                c = BLACK if (i + j) % 2 == 0 else WHITE
+                pygame.draw.rect(self.screen, c, (fx + 1 + i * 4, fy - 10 + j * 5, 4, 5))
 
         # Profil d'altitude de l'étape / du parcours perso (code si fourni),
         # en grand : il occupe tout l'espace restant sous le tracé

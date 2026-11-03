@@ -66,6 +66,32 @@ def main_():
     groups = ui._group_names()
     print("groupes au départ:", [(g[0], g[2]) for g in groups])
     assert groups and groups[0][0] in ("Peloton", "Tête de course")
+
+    # --- Preview du menu : route épaisse + ligne d'arrivée, PAS de lettres ---
+    ui2 = main.FlammeRougeGame()
+    ui2.width, ui2.height = 1200, 800
+    ui2.screen = pygame.display.set_mode((1200, 800))
+    ui2.menu_index = names.index("Avenue Corso Paseo") + 1  # +1 : l'index 0 est l'en-tête de catégorie
+    ui2.screen.fill(main.BG)
+    ui2._draw_menu()
+    rect = ui2._preview_rect()
+    trect = ui2._preview_track_rect(rect)
+    yellow = black = 0
+    for x in range(trect.x, trect.right):
+        for y in range(trect.y, trect.bottom):
+            c = px(ui2.screen, (x, y))
+            if c == (240, 210, 60):
+                yellow += 1
+            elif c == (0, 0, 0):
+                black += 1
+    print(f"preview tracé: px arrivée (240,210,60)={yellow}, px noirs drapeau={black}")
+    assert yellow > 30, "ligne d'arrivée absente du tracé"
+    assert black > 8, "drapeau damier absent du tracé"
+
+    # --- Éditeur : les lettres des tuiles sont toujours dessinées ---
+    ui2.menu_step = 'editor'
+    ui2.editor_code = 'abKcdEfghijklmnopqrstu'
+    ui2._draw_editor(pygame.mouse.get_pos())
     print("thème clair + profil + groupes OK")
 
 
