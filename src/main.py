@@ -144,7 +144,8 @@ class FlammeRougeGame:
         self.stage = stage  # None -> menu de sélection d'étape affiché
         self.player_count = 2  # nombre de joueurs choisi au menu (2-4)
         self.game = Game(stage=stage, player_count=self.player_count) if stage else None
-        self.menu_index = 0
+        self.menu_index = 1          # à l'arrivée, sélection sur le 1er parcours (index 0 = en-tête)
+        self.menu_preview_index = 1  # la preview ne change qu'au clic/validation
         self.menu_step = "stage"  # "stage" -> "players" / "editor"
         self._pending_stage = None
         self.menu_scroll = 0        # scroll de la liste du menu
@@ -1847,19 +1848,25 @@ class FlammeRougeGame:
                 continue
             selected = (i == self.menu_index)
             hovered = rect.collidepoint(mouse)
-            fill = ROW_SEL if (selected or hovered) else PANEL
-            border = (235, 60, 60) if (selected or hovered) else BORDER
-            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
-                             border_radius=8)
             if kind == "editor":
-                # bouton avec roue crantée pour créer un circuit
+                # bouton avec roue crantée pour créer un circuit (avec entourage)
+                fill = ROW_SEL if (selected or hovered) else PANEL
+                border = (235, 60, 60) if (selected or hovered) else BORDER
+                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
+                                 border_radius=8)
                 self._draw_gear((rect.x + 34, rect.centery), 15,
                                 (240, 210, 60) if (selected or hovered) else (200, 205, 215))
                 name_surf = self.phase_font.render(name, True, BLACK)
                 self.screen.blit(name_surf, (rect.x + 60, rect.centery - 11))
             else:
-                # entrée compacte : juste le nom, centré verticalement, sans détails
+                # entrée de parcours : fond BLANC, grisé au survol, jamais
+                # entourée ; si sélectionnée, trait rouge à gauche
+                fill = ROW_SEL if hovered else PANEL
+                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                if selected:
+                    pygame.draw.rect(self.screen, (235, 60, 60),
+                                     (rect.x, rect.y + 2, 4, rect.h - 4))
                 name_surf = self.label_font.render(name, True, BLACK)
                 self.screen.blit(name_surf, (rect.x + 16,
                                              rect.centery - name_surf.get_height() // 2))
@@ -1888,9 +1895,9 @@ class FlammeRougeGame:
             hovered = thumb.collidepoint(pygame.mouse.get_pos())
             pygame.draw.rect(self.screen, (150, 158, 170) if hovered else (110, 118, 130),
                              thumb, border_radius=5)
-        # Prévisualisation du tracé de l'entrée sélectionnée (grandes fenêtres)
-        if self.width >= 1100 and entries:
-            name, _d, code, _r, kind = entries[self.menu_index]
+        # Prévisualisation du tracé : ne change qu'au CLIC (menu_preview_index)
+        if self.width >= 1100 and entries and 0 <= self.menu_preview_index < len(entries):
+            name, _d, code, _r, kind = entries[self.menu_preview_index]
             if kind in ("base", "perso"):
                 self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
 
@@ -2039,12 +2046,14 @@ class FlammeRougeGame:
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if hovered is not None:
-            self.menu_index = hovered
+            self.menu_index = hovered  # la sélection suit la souris...
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self._menu_search_rect().collidepoint(event.pos):
                 self.menu_search_active = True  # focus barre de recherche
                 return
             if hovered is not None:
+                # ...mais la PREVIEW ne change qu'au clic
+                self.menu_preview_index = hovered
                 self._menu_validate(entries[hovered])
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
@@ -2052,6 +2061,7 @@ class FlammeRougeGame:
             elif event.key == pygame.K_DOWN:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
+                self.menu_preview_index = self.menu_index  # ENTRÉE = clic
                 self._menu_validate(entries[self.menu_index])
             elif event.key == pygame.K_PAGEUP:
                 self.menu_scroll = max(0, self.menu_scroll - 200)
@@ -2089,6 +2099,9 @@ class FlammeRougeGame:
                 self._select_stage(self._pending_stage)
             elif event.key == pygame.K_ESCAPE:
                 self.menu_step = "stage"
+                # retour à l'écran de sélection : sélection sur le 1er parcours
+                self.menu_index = 1
+                self.menu_preview_index = 1
 
     def _placement_click(self, pos):
         """Phase de placement : clic sur une case derrière la ligne DÉPART."""

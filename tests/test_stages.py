@@ -399,5 +399,47 @@ class TestStageMenu(unittest.TestCase):
             ui._stage_profile("Avenue Corso Paseo"))))       # plat
 
 
+class TestMenuSelectionRules(unittest.TestCase):
+    """Règles de l'écran de sélection de parcours."""
+
+    def setUp(self):
+        import pygame
+        self.pygame = pygame
+        pygame.display.set_mode((1200, 800))
+        self.ui = main.FlammeRougeGame()
+        self.ui.width, self.ui.height = 1200, 800
+        self.ui.screen = pygame.display.set_mode((1200, 800))
+
+    def test_selection_starts_on_first_course(self):
+        """À l'arrivée sur le menu, la sélection est sur le 1er parcours
+        (index 0 = en-tête de catégorie)."""
+        entries = self.ui._menu_entries()
+        self.assertEqual(entries[0][4], "header")
+        self.assertEqual(self.ui.menu_index, 1)
+        self.assertEqual(entries[1][4], "base")
+        self.assertEqual(self.ui.menu_preview_index, 1)
+
+    def test_hover_highlights_but_preview_only_on_click(self):
+        """Le survol déplace la sélection (highlight) sans changer la preview ;
+        seul le clic met à jour la preview."""
+        pygame = self.pygame
+        ui = self.ui
+        entries = ui._menu_entries()
+        target = next(i for i, e in enumerate(entries) if e[4] == "base" and i != 1)
+        rect = entries[target][3]
+        orig_get_pos = pygame.mouse.get_pos
+        pygame.mouse.get_pos = lambda: rect.center  # headless : set_pos ne marche pas
+        try:
+            ui._menu_event(pygame.event.Event(pygame.MOUSEMOTION, pos=rect.center))
+            self.assertEqual(ui.menu_index, target)      # sélection survolée
+            self.assertEqual(ui.menu_preview_index, 1)    # preview inchangée
+            ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center))
+        finally:
+            pygame.mouse.get_pos = orig_get_pos
+        self.assertEqual(ui.menu_preview_index, target)   # clic -> preview
+        self.assertEqual(ui.menu_step, "players")
+        self.assertEqual(ui._pending_stage, entries[target][0])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
