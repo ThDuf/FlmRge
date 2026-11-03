@@ -76,17 +76,34 @@ def main_():
     ui2._draw_menu()
     rect = ui2._preview_rect()
     trect = ui2._preview_track_rect(rect)
-    yellow = black = 0
+    counts = {(240, 210, 60): 0, (0, 0, 0): 0, (48, 52, 60): 0,
+              (235, 145, 50): 0, (80, 120, 235): 0, (255, 236, 130): 0}
     for x in range(trect.x, trect.right):
         for y in range(trect.y, trect.bottom):
             c = px(ui2.screen, (x, y))
-            if c == (240, 210, 60):
-                yellow += 1
-            elif c == (0, 0, 0):
-                black += 1
-    print(f"preview tracé: px arrivée (240,210,60)={yellow}, px noirs drapeau={black}")
-    assert yellow > 30, "ligne d'arrivée absente du tracé"
-    assert black > 8, "drapeau damier absent du tracé"
+            if c in counts:
+                counts[c] += 1
+    print("preview tracé Corso Paseo:", counts)
+    assert counts[(240, 210, 60)] > 30, "ligne d'arrivée absente du tracé"
+    assert counts[(0, 0, 0)] > 8, "drapeau damier absent du tracé"
+    assert counts[(48, 52, 60)] > 500, "plat pas en gris très foncé"
+    assert counts[(255, 236, 130)] > 30, "ligne de départ jaune clair absente"
+
+    # étape de montagne : mêmes couleurs que le profil (orange/bleu)
+    ui2.menu_index = names.index("La Haut Montagne") + 1
+    ui2.screen.fill(main.BG)
+    ui2._draw_menu()
+    trect = ui2._preview_track_rect(ui2._preview_rect())
+    orange = blue = 0
+    for x in range(trect.x, trect.right):
+        for y in range(trect.y, trect.bottom):
+            c = px(ui2.screen, (x, y))
+            if c == (235, 145, 50):
+                orange += 1
+            elif c == (80, 120, 235):
+                blue += 1
+    print(f"preview tracé Haut Montagne: orange={orange}, bleu={blue}")
+    assert orange > 100 and blue > 100, "montée/descente pas aux couleurs du profil"
 
     # --- Profil accidenté + fanion rouge de catégorie au sommet ---
     ui3 = main.FlammeRougeGame()

@@ -1011,8 +1011,9 @@ class FlammeRougeGame:
         title = self.label_font.render(name, True, BLACK)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
 
-        # Tracé coloré CASE PAR CASE, route large : départ jaune clair,
-        # arrivée jaune vif, montée ROUGE vif, descente BLEU vif, plat gris clair
+        # Tracé coloré CASE PAR CASE, route large : mêmes couleurs que le
+        # profil (montée orange, descente bleu), plat en gris très foncé,
+        # départ jaune clair, arrivée jaune vif
         road_w = max(9, min(16, round(scale * 1.3)))  # largeur de la route
         from game.game import build_stage_track, build_track_from_code
         from game.track import CellGeographyType, CellRunType
@@ -1025,11 +1026,11 @@ class FlammeRougeGame:
                 elif cell.run == CellRunType.END:
                     seg_color = (240, 210, 60)   # arrivée : jaune vif (différent)
                 elif cell.geography == CellGeographyType.UPHILL:
-                    seg_color = (220, 50, 50)
+                    seg_color = (235, 145, 50)   # montée : orange (comme le profil)
                 elif cell.geography == CellGeographyType.DOWNHILL:
-                    seg_color = (50, 90, 220)
+                    seg_color = (80, 120, 235)   # descente : bleu (comme le profil)
                 else:
-                    seg_color = (200, 205, 215)
+                    seg_color = (48, 52, 60)     # plat : gris très foncé
                 steps = 3
                 seg = []
                 for k in range(steps + 1):
@@ -1037,29 +1038,35 @@ class FlammeRougeGame:
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, seg_color, False, seg, road_w)
 
-        # départ (jaune clair) et arrivée (jaune vif)
-        pygame.draw.circle(self.screen, (255, 236, 130), screen_pts[0], road_w // 2 + 2)
-        pygame.draw.circle(self.screen, YELLOW, screen_pts[-1], road_w // 2 + 2)
-
-        # Séparateurs de tuiles (petite ligne à chaque jonction, sans lettres)
+        # Un trait par CASE (pas par tuile) : petite ligne claire à chaque
+        # jonction de case, en travers de la route
         _marks, total = self._preview_tile_marks(name, code=code)
-        s = 0.0
-        for i, tile in enumerate(track.tiles):
-            s += tile.length
-            if i < len(track.tiles) - 1:  # petite ligne à la jonction
-                px, py, tx, ty = path_point_at(pts, s)
-                sx, sy = ox + px * scale, oy + py * scale
-                nx, ny = -ty, tx
-                pygame.draw.line(self.screen, TEXT_DIM,
-                                 (sx + nx * (road_w // 2 + 3), sy + ny * (road_w // 2 + 3)),
-                                 (sx - nx * (road_w // 2 + 3), sy - ny * (road_w // 2 + 3)), 1)
+        half = road_w / 2 + 3
+        for s in range(1, int(total)):
+            px, py, tx, ty = path_point_at(pts, float(s))
+            sx, sy = ox + px * scale, oy + py * scale
+            nx, ny = -ty, tx
+            pygame.draw.line(self.screen, (225, 229, 235),
+                             (sx + nx * half, sy + ny * half),
+                             (sx - nx * half, sy - ny * half), 1)
+
+        # Départ noté à la LIGNE de départ, arrivée à la LIGNE d'arrivée :
+        # lignes en travers de la route à ces positions
+        s_start = float(track.start_line_x())
+        s_end = float(track.end_line_x())
+        for s_line, col in ((s_start, (255, 236, 130)), (s_end, (240, 210, 60))):
+            px, py, tx, ty = path_point_at(pts, s_line)
+            sx, sy = ox + px * scale, oy + py * scale
+            nx, ny = -ty, tx
+            pygame.draw.line(self.screen, col,
+                             (sx + nx * half, sy + ny * half),
+                             (sx - nx * half, sy - ny * half), 3)
 
         # Ligne d'arrivée sur le tracé (comme sur le profil) : pointillés jaunes
         # en travers de la route + petit drapeau damier juste après
-        ex, ey, etx, ety = path_point_at(pts, float(total))
+        ex, ey, etx, ety = path_point_at(pts, s_end)
         sx, sy = ox + ex * scale, oy + ey * scale
         nx, ny = -ety, etx
-        half = road_w / 2 + 5
         a = -half
         while a < half:
             b = min(a + 4, half)
