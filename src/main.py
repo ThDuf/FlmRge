@@ -836,17 +836,24 @@ class FlammeRougeGame:
     MENU_HEADER_H = 22 # hauteur d'un titre de catégorie
     EDITOR_ROW = 56    # hauteur du gros bouton « Créer un circuit » épinglé en bas
 
+    def _menu_list_w(self) -> int:
+        """Largeur de la zone de sélection (recherche + liste) : ~1/4 de la
+        fenêtre en grand écran, centrée sinon."""
+        if self.width < 1100:
+            return min(680, self.width - 60)
+        return max(260, self.width // 4 - 20)
+
     def _menu_preview_w(self) -> int:
-        """Largeur du panneau de preview à droite du menu, proportionnelle à
-        la largeur de la fenêtre (0 si fenêtre étroite)."""
+        """Largeur du panneau de preview à droite du menu : tout le reste de
+        la fenêtre (0 si fenêtre étroite, liste centrée alors)."""
         if self.width < 1100:
             return 0
-        return min(760, max(520, int(self.width * 0.46)))
+        return self.width - self._menu_list_w() - 52
 
     def _menu_search_rect(self):
         """Barre de recherche (filtre les parcours perso par nom/code)."""
         preview_w = self._menu_preview_w()
-        w = min(680, self.width - 60 - preview_w - 36)
+        w = self._menu_list_w()
         x = 20 if preview_w else (self.width - w) // 2
         return pygame.Rect(x, TOP_H + 44, w, 28)
 
@@ -876,7 +883,7 @@ class FlammeRougeGame:
         Chaque entrée = (nom, description, code, rect, kind)."""
         from game.game import available_stages, list_saved_tracks
         preview_w = self._menu_preview_w()
-        w = min(680, self.width - 60 - preview_w - 36)
+        w = self._menu_list_w()
         x = 20 if preview_w else (self.width - w) // 2
         base = available_stages()
         perso = list_saved_tracks(self.saves_dir)
@@ -1679,8 +1686,15 @@ class FlammeRougeGame:
         hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, TEXT_DIM)
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
 
-        # barre de recherche (filtre les parcours perso)
+        # la sélection (recherche + liste) est dans un CADRE à gauche (~1/4 de
+        # la fenêtre), le reste de la largeur est pour la preview à droite
         srect = self._menu_search_rect()
+        frame = pygame.Rect(srect.x - 8, TOP_H + 36, srect.w + 16,
+                            self.height - 32 - (TOP_H + 36))
+        pygame.draw.rect(self.screen, PANEL, frame, border_radius=10)
+        pygame.draw.rect(self.screen, BORDER, frame, width=1, border_radius=10)
+
+        # barre de recherche (filtre les parcours perso)
         pygame.draw.rect(self.screen, PANEL_ALT if self.menu_search_active else PANEL,
                          srect, border_radius=8)
         pygame.draw.rect(self.screen, (235, 60, 60) if self.menu_search_active else BORDER,
