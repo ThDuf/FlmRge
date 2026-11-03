@@ -416,10 +416,12 @@ class FlammeRougeGame:
         return pygame.Rect(self.width - 140, 12, 128, 36)
 
     def _draw_ui_button(self, rect, label, base_color, mouse, enabled=True, icon=None,
-                        pressed=False):
+                        pressed=False, font=None):
         """Bouton avec effet d'enfoncement léger (ombre en bas) ; au clic,
         le bouton s'enfonce vraiment (ombre inversée). Libellé tronqué pour
-        tenir dans le bouton. `icon` : 'loupe', 'groupe' ou 'rect'."""
+        tenir dans le bouton. `icon` : 'loupe', 'groupe', 'rect' ou 'gear'.
+        `font` : police du libellé (par défaut small_font)."""
+        fnt = font or self.small_font
         hovered = enabled and rect.collidepoint(mouse)
         fill = tuple(min(255, c + 30) for c in base_color) if hovered else base_color
         if not enabled:
@@ -462,11 +464,14 @@ class FlammeRougeGame:
             for dx, r in ((-6, 4), (0, 5), (6, 4)):
                 pygame.draw.circle(self.screen, text_color, (rect.x + 18 + dx, cy), r)
             tx = rect.x + 34
+        elif icon == "gear":
+            self._draw_gear((rect.x + 18, rect.centery), 12, text_color)
+            tx = rect.x + 36
         # libellé tronqué pour tenir dans le bouton
         max_w = rect.right - 6 - tx
-        while label and self.small_font.render(label, True, (0, 0, 0)).get_width() > max_w:
+        while label and fnt.render(label, True, (0, 0, 0)).get_width() > max_w:
             label = label[:-1]
-        surf = self.small_font.render(label, True, text_color)
+        surf = fnt.render(label, True, text_color)
         self.screen.blit(surf, (tx + (max_w - surf.get_width()) // 2,
                                 rect.centery - surf.get_height() // 2))
 
@@ -1900,24 +1905,14 @@ class FlammeRougeGame:
 
         self.screen.set_clip(None)  # fin de la zone scrollable
         # entrée « Créer un circuit » épinglée en bas, toujours visible :
-        # même style que le gros bouton SUIVANT (rouge, blanc) + animation
-        # d'enfoncement au clic ; ouvre l'éditeur directement au clic
+        # exactement le même bouton que SUIVANT (même rendu _draw_ui_button,
+        # même typo phase_font, même profondeur/ombre, enfoncement au clic),
+        # seule la couleur diffère : teal doux, complémentaire du rouge
         for name, desc, code, rect, kind in entries:
             if kind == "editor":
-                mouse = pygame.mouse.get_pos()
-                hovered = rect.collidepoint(mouse)
-                pressed = (self._pressed_button == "editor")
-                fill = (200, 45, 45)
-                if hovered:
-                    fill = tuple(min(255, c + 30) for c in fill)
-                if pressed:
-                    fill = tuple(max(0, c - 35) for c in fill)  # enfoncé au clic
-                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                self._draw_gear((rect.x + 34, rect.centery), 16, WHITE)
-                name_surf = self.phase_font.render(name, True, WHITE)
-                self.screen.blit(name_surf, name_surf.get_rect(
-                    center=(rect.x + 62 + (rect.right - rect.x - 70) // 2,
-                            rect.centery)))
+                self._draw_ui_button(rect, name, (60, 170, 150), pygame.mouse.get_pos(),
+                                     icon="gear", font=self.phase_font,
+                                     pressed=(self._pressed_button == "editor"))
         # barre de scroll verticale à gauche de la liste (si contenu > zone)
         track, thumb = self._menu_scrollbar_rects()
         if thumb is not None:
@@ -1930,9 +1925,11 @@ class FlammeRougeGame:
             name, _d, code, _r, kind = entries[self.menu_index]
             if kind in ("base", "perso"):
                 self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
-        # Gros bouton rouge en bas à droite : passer à l'écran suivant
+        # Gros bouton en bas à droite : passer à l'écran suivant (même rendu
+        # que « Créer un circuit », en rouge ; même typo phase_font)
         self._draw_ui_button(self._next_button_rect(), "SUIVANT →", (200, 45, 45),
-                             mouse, pressed=(self._pressed_button == "next"))
+                             mouse, pressed=(self._pressed_button == "next"),
+                             font=self.phase_font)
 
     def _draw_gear(self, center, r, color):
         """Dessine un écrou en `center` : hexagone plein avec trou central."""
@@ -1978,9 +1975,10 @@ class FlammeRougeGame:
             self.screen.blit(n_surf, n_surf.get_rect(center=rect.center))
         if self.width >= 1100 and self._pending_stage:
             self._draw_menu_preview(self._pending_stage, self._preview_rect())
-        # Gros bouton rouge en bas à droite : JOUER (démarrer la partie)
+        # Gros bouton en bas à droite : JOUER (démarrer la partie) — idem SUIVANT
         self._draw_ui_button(self._next_button_rect(), "JOUER", (200, 45, 45),
-                             mouse, pressed=(self._pressed_button == "next"))
+                             mouse, pressed=(self._pressed_button == "next"),
+                             font=self.phase_font)
 
     def _player_count_rects(self):
         """Boutons 2/3/4 joueurs, empilés DANS le cadre de gauche du menu."""
