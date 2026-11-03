@@ -1977,6 +1977,9 @@ class FlammeRougeGame:
             self.screen.blit(n_surf, n_surf.get_rect(center=rect.center))
         if self.width >= 1100 and self._pending_stage:
             self._draw_menu_preview(self._pending_stage, self._preview_rect())
+        # Bouton « ← Retour » en haut à droite : comme ÉCHAP (retour au choix d'étape)
+        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
+                             mouse, pressed=(self._pressed_button == "back"))
         # Gros bouton en bas à droite : JOUER (démarrer la partie) — idem SUIVANT
         self._draw_ui_button(self._next_button_rect(), "JOUER", (200, 45, 45),
                              mouse, pressed=(self._pressed_button == "next"),
@@ -2130,7 +2133,14 @@ class FlammeRougeGame:
     def _players_menu_event(self, event):
         """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
         counts = [2, 3, 4]
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self._pressed_button = None  # relâche : les boutons reviennent à la normale
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._back_button_rect().collidepoint(event.pos):
+                # « ← Retour » = ÉCHAP : retour au choix de l'étape
+                self.menu_step = "stage"
+                self.menu_index = 1
+                return
             if self._next_button_rect().collidepoint(event.pos):
                 self._pressed_button = "next"  # animation d'enfoncement au clic
                 self._select_stage(self._pending_stage)  # gros bouton rouge JOUER
