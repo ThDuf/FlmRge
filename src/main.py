@@ -1793,9 +1793,9 @@ class FlammeRougeGame:
                 if cat is None:
                     continue
                 mx, my = jpts[i]
-                # mât TOUJOURS visible et DANS le panneau profil (marge haute de
-                # 40 px réservée), même si le col est déjà tout en haut
-                top = rect.y + 4
+                # mât pour CHAQUE col, mais plus petit (18 px), et toujours
+                # DANS le panneau profil (clampé sous la marge haute)
+                top = max(rect.y + 18, my - 18)
                 pygame.draw.line(self.screen, (90, 90, 90), (mx, my), (mx, top), 2)
                 # drapeau rouge avec la catégorie écrite DESSUS (blanc sur rouge)
                 fw, fh = 26, 13
