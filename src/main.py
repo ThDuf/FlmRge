@@ -1068,52 +1068,39 @@ class FlammeRougeGame:
         # « arrivée » en plus gros à côté (départ côté +n, arrivée côté -n)
         s_start = float(track.start_line_x())
         s_end = float(track.end_line_x())
-        arr_lbl = None
         for s_line, col, word, side in ((s_start, (255, 236, 130), "départ", 1),
-                                        (s_end, (240, 210, 60), "arrivée", -1)):
+                                        (s_end, None, "arrivée", -1)):
             px, py, tx, ty = path_point_at(pts, s_line)
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
-            pygame.draw.line(self.screen, col,
-                             (sx + nx * half, sy + ny * half),
-                             (sx - nx * half, sy - ny * half), 3)
+            if col is not None:  # ligne de départ : trait jaune clair
+                pygame.draw.line(self.screen, col,
+                                 (sx + nx * half, sy + ny * half),
+                                 (sx - nx * half, sy - ny * half), 3)
             lbl = self.label_font.render(word, True, (40, 44, 52))
-            if word == "arrivée":
-                arr_lbl = (lbl, sx, sy, nx, ny)
             lx = sx + nx * (half + 8) * side - lbl.get_width() // 2
             ly = sy + ny * (half + 8) * side - lbl.get_height() // 2
             self.screen.blit(lbl, (lx, ly))
 
-        # Ligne d'arrivée sur le tracé (comme sur le profil) : pointillés jaunes
-        # en travers de la route + drapeau damier PERPENDICULAIRE à la piste,
-        # plus grand et placé à côté du mot « arrivée » (même côté -n, au-delà
-        # du texte, sans superposition)
+        # Ligne d'arrivée sur le tracé : DAMIER noir/blanc en travers de la
+        # route (pas de fanion ici), perpendiculaire à la piste
         ex, ey, etx, ety = path_point_at(pts, s_end)
         sx, sy = ox + ex * scale, oy + ey * scale
         nx, ny = -ety, etx
+        step = 4   # taille d'un carreau du damier (le long de la normale)
+        thick = 3  # épaisseur du damier (le long de la piste)
         a = -half
+        i = 0
         while a < half:
-            b = min(a + 4, half)
-            pygame.draw.line(self.screen, (240, 210, 60),
-                             (sx + nx * a, sy + ny * a), (sx + nx * b, sy + ny * b), 2)
-            a = b + 3
-        fw, fh = 16, 10              # pavillon plus grand, le long de la tangente
-        base_d = half + 2            # départ du mât sur le bord de la route
-        if arr_lbl is not None:      # le mât part au-delà du mot « arrivée »
-            base_d += arr_lbl[0].get_height() + 4
-        ph = base_d + fh + 4         # sommet du mât (perpendiculaire, côté -n)
-        exx, eyy = sx - nx * ph, sy - ny * ph   # sommet du mât
-        pygame.draw.line(self.screen, (120, 120, 120),
-                         (sx - nx * base_d, sy - ny * base_d), (exx, eyy), 2)
-        ux, uy = etx * fw / 4, ety * fw / 4     # pas le long de la tangente
-        vx, vy = nx * fh / 2, ny * fh / 2       # pas le long du mât (retour)
-        for i in range(4):
-            for j in range(2):
-                c = BLACK if (i + j) % 2 == 0 else WHITE
-                x0, y0 = exx + ux * i + vx * j, eyy + uy * i + vy * j
-                quad = [(x0, y0), (x0 + ux, y0 + uy),
-                        (x0 + ux + vx, y0 + uy + vy), (x0 + vx, y0 + vy)]
-                pygame.draw.polygon(self.screen, c, quad)
+            b = min(a + step, half)
+            c = BLACK if i % 2 == 0 else WHITE
+            quad = [(sx + nx * a - etx * thick, sy + ny * a - ety * thick),
+                    (sx + nx * b - etx * thick, sy + ny * b - ety * thick),
+                    (sx + nx * b + etx * thick, sy + ny * b + ety * thick),
+                    (sx + nx * a + etx * thick, sy + ny * a + ety * thick)]
+            pygame.draw.polygon(self.screen, c, quad)
+            a = b
+            i += 1
 
         # Profil d'altitude de l'étape / du parcours perso (code si fourni),
         # en grand : il occupe tout l'espace restant sous le tracé

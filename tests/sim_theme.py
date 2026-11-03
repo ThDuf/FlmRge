@@ -84,8 +84,7 @@ def main_():
             if c in counts:
                 counts[c] += 1
     print("preview tracé Corso Paseo:", counts)
-    assert counts[(240, 210, 60)] > 30, "ligne d'arrivée absente du tracé"
-    assert counts[(0, 0, 0)] > 8, "drapeau damier absent du tracé"
+    assert counts[(0, 0, 0)] > 20, "damier noir/blanc de la ligne d'arrivée absent"
     assert counts[(48, 52, 60)] > 500, "plat pas en gris très foncé"
     assert counts[(255, 236, 130)] > 30, "ligne de départ jaune clair absente"
 
