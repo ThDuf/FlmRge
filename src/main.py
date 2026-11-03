@@ -1052,9 +1052,11 @@ class FlammeRougeGame:
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, seg_color, False, seg, road_w)
-                # jonctions rondes DANS la case uniquement (pas aux extrémités,
-                # sinon la couleur déborde sur la case suivante)
-                for pt in seg[1:-1]:
+                # jonctions rondes à chaque point -> bords bien droits et lisses.
+                # Les cases sont tracées dans l'ordre : la case suivante
+                # recouvre le débord de la précédente, donc chaque couleur
+                # reste dans sa case (le trait de case les sépare).
+                for pt in seg:
                     pygame.draw.circle(self.screen, seg_color, pt, road_w // 2)
 
         # Un trait par CASE (pas par tuile) : petite ligne claire à chaque
@@ -1696,7 +1698,7 @@ class FlammeRougeGame:
         # (sur les portions plates)
         import random as _random
         amp = max(0.6, inner.h * 0.02)
-        sub = 3  # sous-segments par case -> aléas plus fréquents
+        sub = 2  # sous-segments par case -> aléas peu fréquents
         line_pts = [pts[0]]
         for i in range(n):
             for k in range(1, sub + 1):
