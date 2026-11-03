@@ -1091,24 +1091,29 @@ class FlammeRougeGame:
             self.screen.blit(lbl, (lx, ly))
 
         # Ligne d'arrivée sur le tracé : DAMIER noir/blanc en travers de la
-        # route (pas de fanion ici), perpendiculaire à la piste
+        # route, exactement sur la largeur de la route (sans dépasser),
+        # avec au moins deux rangées de carreaux le long de la piste
         ex, ey, etx, ety = path_point_at(pts, s_end)
         sx, sy = ox + ex * scale, oy + ey * scale
         nx, ny = -ety, etx
-        step = 4   # taille d'un carreau du damier (le long de la normale)
-        thick = 3  # épaisseur du damier (le long de la piste)
-        a = -half
-        i = 0
-        while a < half:
-            b = min(a + step, half)
-            c = BLACK if i % 2 == 0 else WHITE
-            quad = [(sx + nx * a - etx * thick, sy + ny * a - ety * thick),
-                    (sx + nx * b - etx * thick, sy + ny * b - ety * thick),
-                    (sx + nx * b + etx * thick, sy + ny * b + ety * thick),
-                    (sx + nx * a + etx * thick, sy + ny * a + ety * thick)]
-            pygame.draw.polygon(self.screen, c, quad)
-            a = b
-            i += 1
+        step = 4                    # taille d'un carreau
+        rh = road_w / 2             # le damier tient DANS la route
+        rows = max(2, int(road_w // (2 * step)))  # rangées le long de la piste
+        for r in range(rows):
+            u0 = -step * rows / 2 + r * step   # bande le long de la tangente
+            u1 = u0 + step
+            a = -rh
+            i = 0
+            while a < rh:
+                b = min(a + step, rh)
+                c = BLACK if (i + r) % 2 == 0 else WHITE
+                quad = [(sx + nx * a + etx * u0, sy + ny * a + ety * u0),
+                        (sx + nx * b + etx * u0, sy + ny * b + ety * u0),
+                        (sx + nx * b + etx * u1, sy + ny * b + ety * u1),
+                        (sx + nx * a + etx * u1, sy + ny * a + ety * u1)]
+                pygame.draw.polygon(self.screen, c, quad)
+                a = b
+                i += 1
 
         # Profil d'altitude de l'étape / du parcours perso (code si fourni),
         # en grand : il occupe tout l'espace restant sous le tracé
