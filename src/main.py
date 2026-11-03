@@ -841,7 +841,7 @@ class FlammeRougeGame:
         la largeur de la fenêtre (0 si fenêtre étroite)."""
         if self.width < 1100:
             return 0
-        return min(600, max(430, int(self.width * 0.38)))
+        return min(760, max(520, int(self.width * 0.46)))
 
     def _menu_search_rect(self):
         """Barre de recherche (filtre les parcours perso par nom/code)."""
@@ -1616,7 +1616,7 @@ class FlammeRougeGame:
                                      True, TEXT_DIM)
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
         stats = self.small_font.render(f"{n} km · D+ {dplus}", True, TEXT_DIM)
-        self.screen.blit(stats, (rect.right - 18 - stats.get_width(), rect.y + 3))
+        self.screen.blit(stats, (rect.right - 44 - stats.get_width(), rect.y + 3))
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
         inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
@@ -1631,20 +1631,21 @@ class FlammeRougeGame:
                     (pts[i + 1][0], inner.bottom), (pts[i][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
             pygame.draw.line(self.screen, seg_line[key], pts[i], pts[i + 1], 2)
-        # ligne d'arrivée : mât en pointillés jaunes + petit drapeau damier
+        # ligne d'arrivée : mât en pointillés jaunes sur toute la hauteur du
+        # profil + drapeau damier hissé tout en haut du panneau
         fx = pts[-1][0]
         for yy in range(inner.y, inner.bottom, 6):
             pygame.draw.line(self.screen, (240, 210, 60),
                              (fx, yy), (fx, min(yy + 3, inner.bottom)), 2)
-        fy = max(rect.y + 2, inner.y - 11)  # sommet du drapeau
-        pygame.draw.line(self.screen, (120, 120, 120), (fx, fy), (fx, inner.y + 2), 2)
-        fw, fh = 14, 9
-        for i in range(3):
+        fy = rect.y + 2  # drapeau en haut du panneau
+        pygame.draw.line(self.screen, (120, 120, 120), (fx, fy), (fx, inner.bottom), 2)
+        fw, fh = 16, 10
+        for i in range(4):
             for j in range(2):
                 c = BLACK if (i + j) % 2 == 0 else WHITE
                 pygame.draw.rect(self.screen, c,
-                                 (fx + 2 + i * (fw // 3), fy + j * (fh // 2),
-                                  fw // 3, fh // 2))
+                                 (fx - 2 - fw + i * (fw // 4), fy + j * (fh // 2),
+                                  fw // 4, fh // 2))
         # échelle de distance sous le profil : 1 case = 1 km
         sy = inner.bottom + 6
         pygame.draw.line(self.screen, TEXT_DIM, (pts[0][0], sy), (fx, sy), 1)
