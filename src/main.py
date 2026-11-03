@@ -103,15 +103,20 @@ def col_category(climb_len: int):
     return "4"
 
 
+def climb_length_at(alt, i: int) -> int:
+    """Longueur (en cases) de la montée continue qui précède le point i."""
+    length = 0
+    j = i
+    while j > 0 and alt[j] > alt[j - 1]:
+        length += 1
+        j -= 1
+    return length
+
+
 def climb_length_before_summit(alt) -> int:
     """Longueur (en cases) de la montée continue qui précède le sommet."""
     imax = max(range(len(alt)), key=lambda i: alt[i])
-    length = 0
-    i = imax
-    while i > 0 and alt[i] > alt[i - 1]:
-        length += 1
-        i -= 1
-    return length
+    return climb_length_at(alt, imax)
 
 
 class FlammeRougeGame:
@@ -1047,8 +1052,9 @@ class FlammeRougeGame:
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, seg_color, False, seg, road_w)
-                # jonctions rondes : évite les encoches dans les virages
-                for pt in seg:
+                # jonctions rondes DANS la case uniquement (pas aux extrémités,
+                # sinon la couleur déborde sur la case suivante)
+                for pt in seg[1:-1]:
                     pygame.draw.circle(self.screen, seg_color, pt, road_w // 2)
 
         # Un trait par CASE (pas par tuile) : petite ligne claire à chaque
@@ -1710,18 +1716,21 @@ class FlammeRougeGame:
             quad = top + [(top[-1][0], inner.bottom), (top[0][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
             pygame.draw.lines(self.screen, seg_line[key], False, top, 2)
-        # petit fanion rouge au sommet : catégorie selon la longueur de la
-        # montée qui précède le col
-        cat = col_category(climb_length_before_summit(alt))
-        if cat is not None and n > 0:
-            imax = max(range(len(alt)), key=lambda i: alt[i])
-            mx, my = jpts[imax]
-            top = max(rect.y + 15, my - 16)
-            pygame.draw.line(self.screen, (120, 120, 120), (mx, my), (mx, top), 2)
-            pygame.draw.polygon(self.screen, (215, 45, 45),
-                                ((mx, top), (mx + 13, top + 3), (mx, top + 7)))
-            clbl = self.small_font.render(cat, True, (215, 45, 45))
-            self.screen.blit(clbl, (mx + 15, top - 2))
+        # petit fanion rouge sur CHAQUE col (maximum local) : catégorie selon
+        # la longueur de la montée qui précède ce col
+        for i in range(1, len(alt)):
+            right = alt[i + 1] if i + 1 < len(alt) else -(10 ** 9)
+            if alt[i] > alt[i - 1] and alt[i] > right:
+                cat = col_category(climb_length_at(alt, i))
+                if cat is None:
+                    continue
+                mx, my = jpts[i]
+                top = max(rect.y + 15, my - 13)
+                pygame.draw.line(self.screen, (120, 120, 120), (mx, my), (mx, top), 2)
+                pygame.draw.polygon(self.screen, (215, 45, 45),
+                                    ((mx, top), (mx + 10, top + 2.5), (mx, top + 5)))
+                clbl = self.small_font.render(cat, True, (215, 45, 45))
+                self.screen.blit(clbl, (mx + 12, top - 2))
         # ligne d'arrivée : mât en pointillés jaunes sur toute la hauteur du
         # profil + drapeau damier hissé tout en haut du panneau
         fx = pts[-1][0]
