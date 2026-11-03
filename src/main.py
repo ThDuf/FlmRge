@@ -1895,22 +1895,26 @@ class FlammeRougeGame:
                                              rect.centery - name_surf.get_height() // 2))
 
         self.screen.set_clip(None)  # fin de la zone scrollable
-        # entrée « Créer un circuit » épinglée en bas, toujours visible
-        for name, desc, code, rect, kind in entries:
+        # entrée « Créer un circuit » épinglée en bas, toujours visible :
+        # même style qu'une ligne de parcours (fond blanc/gris, trait rouge si
+        # sélectionné, jamais entouré) + écrou amélioré + animation d'enfoncement
+        for idx, (name, desc, code, rect, kind) in enumerate(entries):
             if kind == "editor":
-                selected = (entries.index((name, desc, code, rect, kind)) == self.menu_index)
+                selected = (idx == self.menu_index)
                 hovered = rect.collidepoint(pygame.mouse.get_pos())
-                fill = ROW_SEL if (selected or hovered) else PANEL_ALT
-                border = (240, 210, 60) if (selected or hovered) else (110, 116, 128)
-                pygame.draw.rect(self.screen, fill, rect, border_radius=10)
-                pygame.draw.rect(self.screen, border, rect, width=2, border_radius=10)
-                # roue crantée + texte centré et un peu plus gros
-                self._draw_gear((rect.x + 44, rect.centery), 18,
-                                (240, 210, 60) if (selected or hovered) else (220, 225, 235))
+                pressed = (self._pressed_button == "editor")
+                fill = ROW_SEL if hovered else PANEL
+                if pressed:
+                    fill = tuple(max(0, c - 35) for c in fill)  # enfoncé au clic
+                pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+                if selected:
+                    pygame.draw.rect(self.screen, (235, 60, 60),
+                                     (rect.x, rect.y + 2, 4, rect.h - 4))
+                self._draw_gear((rect.x + 34, rect.centery), 16,
+                                (235, 60, 60) if (selected or hovered or pressed)
+                                else (120, 126, 138))
                 name_surf = self.phase_font.render(name, True, BLACK)
-                self.screen.blit(name_surf, name_surf.get_rect(
-                    center=(rect.x + 44 + 26 + (rect.right - rect.x - 70) // 2,
-                            rect.centery)))
+                self.screen.blit(name_surf, (rect.x + 62, rect.centery - 11))
         # barre de scroll verticale à gauche de la liste (si contenu > zone)
         track, thumb = self._menu_scrollbar_rects()
         if thumb is not None:
@@ -1928,16 +1932,17 @@ class FlammeRougeGame:
                              mouse, pressed=(self._pressed_button == "next"))
 
     def _draw_gear(self, center, r, color):
-        """Dessine une roue crantée (engrenage) en `center`."""
+        """Dessine un écrou en `center` : hexagone plein avec trou central."""
         cx, cy = center
-        for k in range(8):
-            a = k * math.pi / 4
-            x0 = cx + (r - 4) * math.cos(a)
-            y0 = cy + (r - 4) * math.sin(a)
-            pygame.draw.line(self.screen, color, (x0, y0),
-                             (cx + (r + 4) * math.cos(a), cy + (r + 4) * math.sin(a)), 4)
-        pygame.draw.circle(self.screen, color, (cx, cy), r, 3)
-        pygame.draw.circle(self.screen, PANEL, (cx, cy), max(2, r // 3))
+        pts = [(cx + r * math.cos(math.pi / 6 + k * math.pi / 3),
+                cy + r * math.sin(math.pi / 6 + k * math.pi / 3)) for k in range(6)]
+        pygame.draw.polygon(self.screen, color, pts)                       # corps
+        pygame.draw.polygon(self.screen, tuple(max(0, c - 45) for c in color),
+                            pts, 2)                                        # chanfrein
+        pygame.draw.circle(self.screen, PANEL, (int(cx), int(cy)),
+                           max(2, r // 2))                                 # trou
+        pygame.draw.circle(self.screen, tuple(max(0, c - 45) for c in color),
+                           (int(cx), int(cy)), max(2, r // 2), 1)         # bord du trou
 
     def _players_frame_rect(self):
         """Même cadre à gauche que l'écran de sélection d'étape."""
@@ -2087,6 +2092,8 @@ class FlammeRougeGame:
                 return
             if hovered is not None:
                 self.menu_index = hovered  # le clic ne fait QUE sélectionner
+                if entries[hovered][4] == "editor":
+                    self._pressed_button = "editor"  # animation d'enfoncement au clic
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
