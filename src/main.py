@@ -48,8 +48,8 @@ GRAY = (200, 200, 200)
 LIGHT_GRAY = (220, 220, 220)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
-YELLOW = (255, 255, 0)
+GREEN = (0, 165, 0)      # assez foncé pour être lisible sur fond clair
+YELLOW = (215, 175, 0)   # idem (jaune vif illisible sur blanc)
 ORANGE = (255, 165, 0)
 
 PLAYER_COLORS = {
@@ -58,6 +58,15 @@ PLAYER_COLORS = {
     "green": GREEN,
     "yellow": YELLOW,
 }
+
+# Thème clair
+BG = (238, 241, 246)            # fond général (menu)
+HEADER_BG = (255, 255, 255)     # bandeau de titre
+PANEL = (255, 255, 255)         # panneaux (preview, éditeur, log, cartes)
+PANEL_ALT = (245, 247, 250)     # sous-fonds (recherche, tuiles, onglets...)
+BORDER = (198, 204, 212)        # bordures de panneaux
+ROW_SEL = (226, 232, 240)       # entrée/bouton sélectionné ou survolé
+TEXT_DIM = (95, 102, 114)       # texte secondaire sur fond clair
 
 
 def _dense_points(pts, length, per_cell=6):
@@ -70,6 +79,11 @@ STAGE_NAMES = {
     "test": "Piste d'essai",
     "Avenue Corso Paseo": "Avenue Corso Paseo",
 }
+
+# Cyclistes connus pour nommer les groupes intermédiaires
+CYCLISTES_CONNUS = ["Pogačar", "Vingegaard", "Evenepoel", "Van der Poel", "Roglič",
+                    "Merckx", "Hinault", "Anquetil", "Poulidor", "Coppi",
+                    "Bartali", "Van Aert", "Nibali", "Fignon"]
 
 
 class FlammeRougeGame:
@@ -375,7 +389,7 @@ class FlammeRougeGame:
         hovered = enabled and rect.collidepoint(mouse)
         fill = tuple(min(255, c + 30) for c in base_color) if hovered else base_color
         if not enabled:
-            fill = (52, 56, 62)
+            fill = PANEL_ALT
         if pressed and enabled:
             fill = tuple(max(0, c - 35) for c in fill)  # enfoncé au clic
         pygame.draw.rect(self.screen, fill, rect, border_radius=8)
@@ -393,7 +407,7 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, light, (rect.x + 6, rect.y + 2),
                              (rect.right - 6, rect.y + 2), 1)
         pygame.draw.rect(self.screen, dark, rect, width=1, border_radius=8)
-        text_color = (120, 124, 130) if not enabled else WHITE
+        text_color = TEXT_DIM if not enabled else WHITE
         # icône à gauche
         tx = rect.x + 8
         if icon == "loupe":
@@ -670,7 +684,7 @@ class FlammeRougeGame:
                     self._game_event(event)
 
             if self.game is None:
-                self.screen.fill((28, 32, 38))
+                self.screen.fill(BG)
                 self._draw_header()
                 self._draw_menu()
             else:
@@ -917,9 +931,9 @@ class FlammeRougeGame:
         return pygame.Rect(rect.x + 10, rect.y + 34, rect.w - 20, h)
 
     def _preview_profile_rect(self, rect):
-        """Sous-zone du profil d'altitude."""
+        """Sous-zone du profil d'altitude (avec échelle km + D+ + drapeau)."""
         tr = self._preview_track_rect(rect)
-        return pygame.Rect(rect.x + 10, tr.bottom + 8, rect.w - 20, 62)
+        return pygame.Rect(rect.x + 10, tr.bottom + 8, rect.w - 20, 84)
 
     def _preview_card_rect(self, rect):
         """Sous-zone de l'image de la carte d'étape (si fournie)."""
@@ -964,9 +978,9 @@ class FlammeRougeGame:
         oy = trect.y + (trect.h - bb_h * scale) / 2 - min(ys) * scale
         screen_pts = [(ox + px * scale, oy + py * scale) for px, py in pts]
 
-        pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
-        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
-        title = self.label_font.render(name, True, WHITE)
+        pygame.draw.rect(self.screen, PANEL, rect, border_radius=8)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=8)
+        title = self.label_font.render(name, True, BLACK)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
 
         # Tracé coloré CASE PAR CASE : départ jaune clair, arrivée jaune vif,
@@ -1009,7 +1023,7 @@ class FlammeRougeGame:
                 px, py, tx, ty = path_point_at(pts, s)
                 sx, sy = ox + px * scale, oy + py * scale
                 nx, ny = -ty, tx
-                pygame.draw.line(self.screen, (120, 125, 135),
+                pygame.draw.line(self.screen, TEXT_DIM,
                                  (sx + nx * 7, sy + ny * 7), (sx - nx * 7, sy - ny * 7), 1)
         # lettres des tuiles (a, b, c...) au milieu de chaque tuile
         for s_mid, letter in marks:
@@ -1018,7 +1032,7 @@ class FlammeRougeGame:
             px, py, tx, ty = path_point_at(pts, s_mid)
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
-            lbl = self.small_font.render(letter, True, (170, 175, 185))
+            lbl = self.small_font.render(letter, True, TEXT_DIM)
             self.screen.blit(lbl, (sx + nx * 10 - 3, sy + ny * 10 - 5))
 
         # Profil d'altitude de l'étape / du parcours perso (code si fourni)
@@ -1048,9 +1062,9 @@ class FlammeRougeGame:
     def _draw_profile(self, name, rect):
         """Dessine le profil d'altitude de l'étape dans son sous-panneau."""
         alt = self._stage_profile(name)
-        pygame.draw.rect(self.screen, (38, 42, 50), rect, border_radius=6)
+        pygame.draw.rect(self.screen, PANEL, rect, border_radius=6)
         lbl = self.small_font.render(f"Profil  (alt. {min(alt)} .. {max(alt)})",
-                                     True, (150, 155, 165))
+                                     True, TEXT_DIM)
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
@@ -1094,7 +1108,7 @@ class FlammeRougeGame:
             except Exception:
                 pass
         hint = self.small_font.render("carte du jeu : assets/stages/<etape>.jpg",
-                                      True, (110, 115, 125))
+                                      True, TEXT_DIM)
         self.screen.blit(hint, (rect.x + 6, rect.y + rect.h // 2 - 6))
 
     # ------------------------------------------------------------------
@@ -1374,11 +1388,11 @@ class FlammeRougeGame:
 
     def _draw_editor(self, mouse):
         """Écran de l'éditeur de piste : palette + code + aperçu + profil."""
-        title = self.title_font.render("Éditeur de piste", True, WHITE)
+        title = self.title_font.render("Éditeur de piste", True, BLACK)
         self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
         hint = self.label_font.render(
             "Clique une tuile (ou tape a-u, MAJ = face montagne) · RETOUR = jouer · Échap = retour",
-            True, (150, 155, 165))
+            True, TEXT_DIM)
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
 
         # code en cours + message (sauvegarde/chargement)
@@ -1387,11 +1401,11 @@ class FlammeRougeGame:
         if self.editor_naming:
             # champ de saisie du nom de parcours
             box = pygame.Rect(20 + code_surf.get_width() + 20, TOP_H + 60, 320, 30)
-            pygame.draw.rect(self.screen, (24, 28, 34), box, border_radius=6)
+            pygame.draw.rect(self.screen, PANEL_ALT, box, border_radius=6)
             pygame.draw.rect(self.screen, (240, 210, 60), box, width=2, border_radius=6)
-            label = self.label_font.render("Nom du parcours : ", True, (150, 155, 165))
+            label = self.label_font.render("Nom du parcours : ", True, TEXT_DIM)
             self.screen.blit(label, (box.x, box.y - 20))
-            name_surf = self.font.render(self.editor_name + ("|" if pygame.time.get_ticks() // 500 % 2 else ""), True, WHITE)
+            name_surf = self.font.render(self.editor_name + ("|" if pygame.time.get_ticks() // 500 % 2 else ""), True, BLACK)
             self.screen.blit(name_surf, (box.x + 8, box.y + 6))
         elif self.editor_message:
             msg = self.label_font.render(self.editor_message, True, (120, 220, 140))
@@ -1399,7 +1413,7 @@ class FlammeRougeGame:
 
         # noms des catégories au-dessus de chaque groupe
         for text, x, y in self._editor_palette_labels():
-            surf = self.label_font.render(text, True, (150, 155, 165))
+            surf = self.label_font.render(text, True, TEXT_DIM)
             self.screen.blit(surf, (x, y))
 
         # palette des 42 tuiles : des BOUTS DE PISTE cliquables (forme réelle),
@@ -1407,11 +1421,11 @@ class FlammeRougeGame:
         locked = bool(self.editor_code) and self.editor_code[-1].lower() == 'u'
         for ch, rect in self._editor_palette_rects():
             hovered = rect.collidepoint(mouse) and not (locked and ch.lower() != 'u')
-            fill = (60, 66, 78)  # même fond pour toutes les tuiles (majuscules comprises)
+            fill = PANEL_ALT  # même fond pour toutes les tuiles (majuscules comprises)
             if hovered:
                 fill = tuple(min(255, c + 35) for c in fill)
             pygame.draw.rect(self.screen, fill, rect, border_radius=6)
-            pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=6)
+            pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=6)
             self._draw_mini_tile(ch, rect.centerx - 10, rect.centery, 1.0, 0.0,
                                  size=rect.h - 14)
             txt = self.small_font.render(ch, True, (200, 205, 215))
@@ -1427,7 +1441,7 @@ class FlammeRougeGame:
         has_finish = self._editor_has_finish()
         for key, (label, rect) in self._editor_action_rects().items():
             disabled = key in ("jouer", "sauver") and not has_finish
-            color = (46, 125, 50) if key == "jouer" else (70, 80, 95)
+            color = (46, 125, 50) if key == "jouer" else ROW_SEL
             self._draw_ui_button(rect, label, color, mouse, enabled=not disabled)
 
         # preview de la tuile survolée (panneau dédié, en haut à droite)
@@ -1472,9 +1486,9 @@ class FlammeRougeGame:
         survolée (lettre, forme, nb de cases par type, largeur, face)."""
         from game.game import build_tile
         tile = build_tile(ch)
-        pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
-        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
-        big = self.big_font.render(ch, True, WHITE)
+        pygame.draw.rect(self.screen, PANEL, rect, border_radius=8)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=8)
+        big = self.big_font.render(ch, True, BLACK)
         self.screen.blit(big, (rect.x + 12, rect.y + 10))
         if tile.turn is not None:
             deg = round(math.degrees(tile.turn[0]))
@@ -1505,9 +1519,9 @@ class FlammeRougeGame:
         from game.track import path_point_at, compute_track_path, CellGeographyType, CellRunType
         track = self._editor_track()
         pts = compute_track_path(track, 1.0)
-        pygame.draw.rect(self.screen, (45, 50, 58), rect, border_radius=8)
-        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
-        title = self.label_font.render("Aperçu", True, WHITE)
+        pygame.draw.rect(self.screen, PANEL, rect, border_radius=8)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=8)
+        title = self.label_font.render("Aperçu", True, BLACK)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
         trect = self._preview_track_rect(rect)
         xs = [p[0] for p in pts]
@@ -1539,7 +1553,7 @@ class FlammeRougeGame:
         for ch, tile in zip(self.editor_code, track.tiles):
             px, py, tx, ty = path_point_at(pts, s + tile.length / 2)
             nx, ny = -ty, tx
-            lbl = self.small_font.render(ch, True, (170, 175, 185))
+            lbl = self.small_font.render(ch, True, TEXT_DIM)
             self.screen.blit(lbl, (ox + px * scale + nx * 10 - 3, oy + py * scale + ny * 10 - 5))
             s += tile.length
         # profil sous le tracé
@@ -1590,7 +1604,7 @@ class FlammeRougeGame:
             pygame.draw.lines(self.screen, c, False, seg, max(3, int(width)))
         for k in range(1, tile.length):
             p = tr(path_point_at(pts, k)[:2])
-            pygame.draw.circle(self.screen, WHITE, (int(p[0]), int(p[1])), 1)
+            pygame.draw.circle(self.screen, BORDER, (int(p[0]), int(p[1])), 1)
 
     def _draw_mini_tile(self, ch, sx, sy, tx, ty, size=36):
         """Dessine la tuile `ch` en miniature, centrée en (sx, sy) et orientée
@@ -1622,20 +1636,25 @@ class FlammeRougeGame:
 
     def _draw_profile_array(self, alt, rect):
         """Profil d'altitude par segment : montée = orange doux, descente =
-        bleu doux, plat = gris. Mots « départ » / « arrivée » sous le profil
-        et ligne d'arrivée (pointillés jaunes) à droite."""
-        pygame.draw.rect(self.screen, (38, 42, 50), rect, border_radius=6)
+        bleu doux, plat = gris. 1 case = 1 km : échelle en dessous avec
+        distance totale et D+ dans le titre, mots « départ » / « arrivée »
+        aux extrémités et petit drapeau damier sur la ligne d'arrivée."""
+        n = max(len(alt) - 1, 1)  # nombre de cases = kilomètres
+        dplus = sum(max(0, alt[i + 1] - alt[i]) for i in range(n))
+        pygame.draw.rect(self.screen, PANEL, rect, border_radius=6)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=6)
         lbl = self.small_font.render(f"Profil  (alt. {min(alt)} .. {max(alt)})",
-                                     True, (150, 155, 165))
+                                     True, TEXT_DIM)
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
+        stats = self.small_font.render(f"{n} km · D+ {dplus}", True, TEXT_DIM)
+        self.screen.blit(stats, (rect.right - 18 - stats.get_width(), rect.y + 3))
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
-        inner = pygame.Rect(rect.x + 6, rect.y + 16, rect.w - 12, rect.h - 36)
-        n = max(len(alt) - 1, 1)
+        inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
         pts = [(inner.x + inner.w * i / n,
                 inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
-        soft_fill = {1: (255, 205, 150), -1: (160, 195, 255), 0: (70, 76, 88)}
-        seg_line = {1: (235, 145, 50), -1: (80, 120, 235), 0: (170, 175, 185)}
+        soft_fill = {1: (255, 205, 150), -1: (160, 195, 255), 0: (214, 219, 227)}
+        seg_line = {1: (235, 145, 50), -1: (80, 120, 235), 0: TEXT_DIM}
         for i in range(n):
             d = alt[i + 1] - alt[i]
             key = 1 if d > 0 else -1 if d < 0 else 0
@@ -1643,18 +1662,38 @@ class FlammeRougeGame:
                     (pts[i + 1][0], inner.bottom), (pts[i][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
             pygame.draw.line(self.screen, seg_line[key], pts[i], pts[i + 1], 2)
-        # ligne d'arrivée : pointillés jaunes verticaux à droite du profil
+        # ligne d'arrivée : mât en pointillés jaunes + petit drapeau damier
         fx = pts[-1][0]
         for yy in range(inner.y, inner.bottom, 6):
             pygame.draw.line(self.screen, (240, 210, 60),
                              (fx, yy), (fx, min(yy + 3, inner.bottom)), 2)
-        # mots « départ » / « arrivée » sous le profil, aux bons endroits
-        base_y = inner.bottom + 3
-        dep = self.small_font.render("départ", True, (255, 236, 130))
+        fy = max(rect.y + 2, inner.y - 11)  # sommet du drapeau
+        pygame.draw.line(self.screen, (120, 120, 120), (fx, fy), (fx, inner.y + 2), 2)
+        fw, fh = 14, 9
+        for i in range(3):
+            for j in range(2):
+                c = BLACK if (i + j) % 2 == 0 else WHITE
+                pygame.draw.rect(self.screen, c,
+                                 (fx + 2 + i * (fw // 3), fy + j * (fh // 2),
+                                  fw // 3, fh // 2))
+        # échelle de distance sous le profil : 1 case = 1 km
+        sy = inner.bottom + 6
+        pygame.draw.line(self.screen, TEXT_DIM, (pts[0][0], sy), (fx, sy), 1)
+        for km in range(0, n + 1, 10):
+            tx = pts[0][0] + (fx - pts[0][0]) * km / n
+            pygame.draw.line(self.screen, TEXT_DIM, (tx, sy - 4), (tx, sy), 1)
+        # libellés sous l'échelle : « départ » à gauche, « arrivée » à droite,
+        # kilomètres au milieu (tous les 20 km pour rester lisible)
+        base_y = sy + 4
+        dep = self.small_font.render("départ", True, (190, 150, 30))
         self.screen.blit(dep, (max(inner.x, pts[0][0]), base_y))
-        arr = self.small_font.render("arrivée", True, (240, 210, 60))
-        ax = min(pts[-1][0] - arr.get_width(), inner.right - arr.get_width())
+        arr = self.small_font.render("arrivée", True, (160, 130, 10))
+        ax = min(fx - arr.get_width() - 4, inner.right - arr.get_width())
         self.screen.blit(arr, (max(inner.x, ax), base_y))
+        for km in range(20, n, 20):
+            tx = pts[0][0] + (fx - pts[0][0]) * km / n
+            ksurf = self.small_font.render(str(km), True, TEXT_DIM)
+            self.screen.blit(ksurf, (tx - ksurf.get_width() // 2, base_y))
 
     def _draw_menu(self):
         """Menu de sélection (affiché quand self.game is None)."""
@@ -1665,19 +1704,19 @@ class FlammeRougeGame:
         if self.menu_step == "editor":
             self._draw_editor(mouse)
             return
-        title = self.title_font.render("Choisis ton étape", True, WHITE)
+        title = self.title_font.render("Choisis ton étape", True, BLACK)
         self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
-        hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, (150, 155, 165))
+        hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, TEXT_DIM)
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
 
         # barre de recherche (filtre les parcours perso)
         srect = self._menu_search_rect()
-        pygame.draw.rect(self.screen, (24, 28, 34) if self.menu_search_active else (45, 50, 58),
+        pygame.draw.rect(self.screen, PANEL_ALT if self.menu_search_active else PANEL,
                          srect, border_radius=8)
-        pygame.draw.rect(self.screen, (235, 60, 60) if self.menu_search_active else (90, 95, 105),
+        pygame.draw.rect(self.screen, (235, 60, 60) if self.menu_search_active else BORDER,
                          srect, width=2 if self.menu_search_active else 1, border_radius=8)
         stext = self.menu_search if self.menu_search else "Rechercher un parcours perso…"
-        surf = self.label_font.render(stext, True, WHITE if self.menu_search else (120, 125, 135))
+        surf = self.label_font.render(stext, True, BLACK if self.menu_search else TEXT_DIM)
         self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
 
         entries = self._menu_entries()
@@ -1687,13 +1726,13 @@ class FlammeRougeGame:
             if kind == "editor":
                 continue  # dessinée à part, toujours visible en bas
             if kind == "header":
-                hdr = self.label_font.render(name, True, (150, 155, 165))
+                hdr = self.label_font.render(name, True, TEXT_DIM)
                 self.screen.blit(hdr, (rect.x + 4, rect.y + 4))
                 continue
             selected = (i == self.menu_index)
             hovered = rect.collidepoint(mouse)
-            fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
-            border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
+            fill = ROW_SEL if (selected or hovered) else PANEL
+            border = (235, 60, 60) if (selected or hovered) else BORDER
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
                              border_radius=8)
@@ -1701,11 +1740,11 @@ class FlammeRougeGame:
                 # bouton avec roue crantée pour créer un circuit
                 self._draw_gear((rect.x + 34, rect.centery), 15,
                                 (240, 210, 60) if (selected or hovered) else (200, 205, 215))
-                name_surf = self.phase_font.render(name, True, WHITE)
+                name_surf = self.phase_font.render(name, True, BLACK)
                 self.screen.blit(name_surf, (rect.x + 60, rect.centery - 11))
             else:
                 # entrée compacte : juste le nom, centré verticalement, sans détails
-                name_surf = self.label_font.render(name, True, WHITE)
+                name_surf = self.label_font.render(name, True, BLACK)
                 self.screen.blit(name_surf, (rect.x + 16,
                                              rect.centery - name_surf.get_height() // 2))
 
@@ -1715,21 +1754,21 @@ class FlammeRougeGame:
             if kind == "editor":
                 selected = (entries.index((name, desc, code, rect, kind)) == self.menu_index)
                 hovered = rect.collidepoint(pygame.mouse.get_pos())
-                fill = (86, 96, 116) if (selected or hovered) else (60, 66, 78)
+                fill = ROW_SEL if (selected or hovered) else PANEL_ALT
                 border = (240, 210, 60) if (selected or hovered) else (110, 116, 128)
                 pygame.draw.rect(self.screen, fill, rect, border_radius=10)
                 pygame.draw.rect(self.screen, border, rect, width=2, border_radius=10)
                 # roue crantée + texte centré et un peu plus gros
                 self._draw_gear((rect.x + 44, rect.centery), 18,
                                 (240, 210, 60) if (selected or hovered) else (220, 225, 235))
-                name_surf = self.phase_font.render(name, True, WHITE)
+                name_surf = self.phase_font.render(name, True, BLACK)
                 self.screen.blit(name_surf, name_surf.get_rect(
                     center=(rect.x + 44 + 26 + (rect.right - rect.x - 70) // 2,
                             rect.centery)))
         # barre de scroll verticale à gauche de la liste (si contenu > zone)
         track, thumb = self._menu_scrollbar_rects()
         if thumb is not None:
-            pygame.draw.rect(self.screen, (40, 44, 52), track, border_radius=5)
+            pygame.draw.rect(self.screen, BORDER, track, border_radius=5)
             hovered = thumb.collidepoint(pygame.mouse.get_pos())
             pygame.draw.rect(self.screen, (150, 158, 170) if hovered else (110, 118, 130),
                              thumb, border_radius=5)
@@ -1749,25 +1788,25 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, color, (x0, y0),
                              (cx + (r + 4) * math.cos(a), cy + (r + 4) * math.sin(a)), 4)
         pygame.draw.circle(self.screen, color, (cx, cy), r, 3)
-        pygame.draw.circle(self.screen, (45, 50, 58), (cx, cy), max(2, r // 3))
+        pygame.draw.circle(self.screen, PANEL, (cx, cy), max(2, r // 3))
 
     def _draw_players_menu(self, mouse):
         """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
         title = self.title_font.render(f"{self._pending_stage} — combien de joueurs ?",
-                                       True, WHITE)
+                                       True, BLACK)
         self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
         hint = self.label_font.render("Clic ou flèches gauche/droite + ENTRÉE (Échap = retour)",
-                                      True, (150, 155, 165))
+                                      True, TEXT_DIM)
         self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
         for count, rect in self._player_count_rects():
             selected = (count == self.player_count)
             hovered = rect.collidepoint(mouse)
-            fill = (70, 80, 95) if (selected or hovered) else (45, 50, 58)
-            border = (235, 60, 60) if (selected or hovered) else (90, 95, 105)
+            fill = ROW_SEL if (selected or hovered) else PANEL
+            border = (235, 60, 60) if (selected or hovered) else BORDER
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
             pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
                              border_radius=8)
-            n_surf = self.big_font.render(str(count), True, WHITE)
+            n_surf = self.big_font.render(str(count), True, BLACK)
             self.screen.blit(n_surf, (rect.centerx - n_surf.get_width() // 2,
                                       rect.centery - n_surf.get_height() // 2))
         if self.width >= 1100 and self._pending_stage:
@@ -2114,7 +2153,7 @@ class FlammeRougeGame:
             cur = self.game.current_placement()
             if cur:
                 player, _runner = cur
-                color = PLAYER_COLORS.get(player.color, WHITE)
+                color = PLAYER_COLORS.get(player.color, BLACK)
                 limit = track.start_line_x()
                 for x in range(limit):
                     px, py, tx, ty = self._cell_anchor(x)
@@ -2228,7 +2267,8 @@ class FlammeRougeGame:
 
     def _draw_header(self):
         """Bandeau de titre : fanion, nom du jeu, étape et tour en cours."""
-        pygame.draw.rect(self.screen, (28, 32, 38), (0, 0, self.width, HEADER_H))
+        pygame.draw.rect(self.screen, HEADER_BG, (0, 0, self.width, HEADER_H))
+        pygame.draw.line(self.screen, BORDER, (0, HEADER_H - 1), (self.width, HEADER_H - 1), 1)
 
         # Fanion rouge (le "flamme rouge" qui donne son nom au jeu)
         pygame.draw.rect(self.screen, (200, 200, 200), (18, 12, 3, 38))
@@ -2236,7 +2276,7 @@ class FlammeRougeGame:
                            ((21, 12), (48, 20), (21, 28)))
 
         # Titre bicolore
-        flamme = self.title_font.render("FLAMME ", True, WHITE)
+        flamme = self.title_font.render("FLAMME ", True, BLACK)
         rouge = self.title_font.render("ROUGE", True, (235, 60, 60))
         ty = (HEADER_H - max(flamme.get_height(), rouge.get_height())) // 2
         self.screen.blit(flamme, (58, ty))
@@ -2246,7 +2286,7 @@ class FlammeRougeGame:
         if self.game is not None:
             stage_name = STAGE_NAMES.get(self.game.stage, self.game.stage)
             info = self.label_font.render(
-                f"{stage_name} · Tour {self.game.turn_count}", True, (175, 180, 190))
+                f"{stage_name} · Tour {self.game.turn_count}", True, TEXT_DIM)
             self.screen.blit(info, (58 + flamme.get_width() + rouge.get_width() + 18,
                                     (HEADER_H - info.get_height()) // 2))
             # contrôles en une ligne au milieu du bandeau (tronquée avant les boutons)
@@ -2254,12 +2294,12 @@ class FlammeRougeGame:
                         f"+/- zoom x{self.zoom:.2f} · flèches/clic gauche pan")
             cx = 58 + flamme.get_width() + rouge.get_width() + 18 + info.get_width() + 24
             max_w = self._camera_button_rects()["peloton"].x - 16 - cx
-            csurf = self.small_font.render(controls, True, (140, 146, 156))
+            csurf = self.small_font.render(controls, True, TEXT_DIM)
             if csurf.get_width() > max_w > 0:
                 # tronque le texte pour ne jamais toucher les boutons
                 while controls and self.small_font.render(controls + "…", True, (0, 0, 0)).get_width() > max_w:
                     controls = controls[:-1]
-                csurf = self.small_font.render(controls + "…", True, (140, 146, 156))
+                csurf = self.small_font.render(controls + "…", True, TEXT_DIM)
             self.screen.blit(csurf, (cx, (HEADER_H - csurf.get_height()) // 2))
             # bouton podium à droite en fin de partie (les boutons caméra sont
             # dans le cadre du parcours, en haut à droite)
@@ -2309,9 +2349,72 @@ class FlammeRougeGame:
             self.screen.blit(surf, (rect.right - 10 - surf.get_width(),
                                     rect.y + 6 + i * 16))
 
+    def _group_names(self):
+        """Une entrée par pack, de l'avant vers l'arrière : le premier est la
+        « tête de course », le plus gros le « peloton », le dernier la
+        « lanterne rouge », les autres « groupe <cycliste connu> ».
+        Retourne [(label, [runners], case du coureur le plus avancé), ...]."""
+        groups = list(reversed(self.game.track.get_groups()))  # avant -> arrière
+        if not groups:
+            return []
+        biggest = max(range(len(groups)), key=lambda i: len(groups[i]))
+        out = []
+        ci = 0
+        for i, g in enumerate(groups):
+            if len(groups) == 1:
+                label = "Peloton"
+            elif i == 0:
+                label = "Tête de course"
+            elif i == biggest:
+                label = "Peloton"
+            elif i == len(groups) - 1:
+                label = "Lanterne rouge"
+            else:
+                label = f"Groupe {CYCLISTES_CONNUS[ci % len(CYCLISTES_CONNUS)]}"
+                ci += 1
+            out.append((label, g, max(r.x for r in g)))
+        return out
+
+    def _draw_groups_panel(self):
+        """Panneau en haut à gauche du cadre du parcours : une ligne par groupe."""
+        if self.game is None:
+            return
+        names = self._group_names()
+        if not names:
+            return
+        frame = self._frame_rect()
+        line_h = 17
+        rows = []
+        for label, group, lead_x in names:
+            ids = " ".join(self._short_id(r) for r in group)
+            rows.append((label, ids, f"case {lead_x}"))
+        w = 200
+        for label, ids, x in rows:
+            lw = self.label_font.render(label, True, BLACK).get_width()
+            iw = self.small_font.render(ids, True, TEXT_DIM).get_width()
+            xw = self.small_font.render(x, True, TEXT_DIM).get_width()
+            w = max(w, 10 + lw + 8 + iw + 8 + xw + 10)
+        w = min(w, frame.w - 20)
+        h = 24 + line_h * len(rows) + 6
+        rect = pygame.Rect(frame.x + 10, frame.y + 10, w, h)
+        pygame.draw.rect(self.screen, PANEL, rect, border_radius=8)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=8)
+        title = self.label_font.render("Groupes", True, BLACK)
+        self.screen.blit(title, (rect.x + 10, rect.y + 5))
+        y = rect.y + 24
+        for label, ids, x in rows:
+            lt = self.label_font.render(label, True, BLACK)
+            self.screen.blit(lt, (rect.x + 10, y))
+            it = self.small_font.render(ids, True, TEXT_DIM)
+            self.screen.blit(it, (rect.x + 10 + lt.get_width() + 8, y + 2))
+            xt = self.small_font.render(x, True, TEXT_DIM)
+            self.screen.blit(xt, (rect.right - 10 - xt.get_width(), y + 2))
+            y += line_h
+
     def _draw_ui(self):
         self._draw_header()
         self._draw_phase_band()
+        self._draw_groups_panel()
 
         info_x = self._left_w() + 16  # (les compteurs/infos sont dans le bandeau de phase)
         # Barre du bas : panneau de cartes du joueur en cours (en bas à gauche)
@@ -2345,9 +2448,9 @@ class FlammeRougeGame:
     def _draw_frame_buttons(self, mouse):
         """Boutons caméra à côté de la légende (bas droite du cadre) :
         Tête de course (loupe), Peloton (groupe), Vue d'ensemble (dezoom)."""
-        labels = {"tete": ("Tête de course", (70, 80, 95), not self.game.game_over, "loupe"),
-                  "peloton": ("Peloton", (70, 80, 95), not self.game.game_over, "groupe"),
-                  "ensemble": ("Vue d'ensemble", (70, 80, 95), True, "rect")}
+        labels = {"tete": ("Tête de course", ROW_SEL, not self.game.game_over, "loupe"),
+                  "peloton": ("Peloton", ROW_SEL, not self.game.game_over, "groupe"),
+                  "ensemble": ("Vue d'ensemble", ROW_SEL, True, "rect")}
         for key, rect in self._frame_button_rects().items():
             label, color, enabled, icon = labels[key]
             self._draw_ui_button(rect, label, color, mouse, enabled, icon,
@@ -2398,7 +2501,7 @@ class FlammeRougeGame:
         """Écran de fin de course : podium des 3 premiers coureurs."""
         game = self.game
         overlay = pygame.Rect(self.width // 2 - 270, self.height // 2 - 230, 540, 420)
-        pygame.draw.rect(self.screen, (24, 28, 34), overlay, border_radius=12)
+        pygame.draw.rect(self.screen, PANEL_ALT, overlay, border_radius=12)
         pygame.draw.rect(self.screen, (240, 210, 60), overlay, width=2, border_radius=12)
         title = self.title_font.render("VICTOIRE", True, (240, 210, 60))
         self.screen.blit(title, title.get_rect(center=(overlay.centerx, overlay.y + 34)))
@@ -2410,7 +2513,7 @@ class FlammeRougeGame:
         for i, entry in enumerate(rank):
             x = overlay.centerx + offsets[i] * 130 - 55
             h = heights[i]
-            pygame.draw.rect(self.screen, (60, 66, 78), (x, base_y - h, 110, h),
+            pygame.draw.rect(self.screen, PANEL_ALT, (x, base_y - h, 110, h),
                              border_radius=6)
             num = self.big_font.render(str(i + 1), True, WHITE)
             self.screen.blit(num, num.get_rect(center=(x + 55, base_y - h + 26)))
@@ -2427,7 +2530,7 @@ class FlammeRougeGame:
                                  (240, 210, 60))
             self.screen.blit(w, w.get_rect(center=(overlay.centerx, overlay.bottom - 30)))
         hint = self.label_font.render("TAB : voir le circuit final   ·   R : recommencer   ·   Échap : menu",
-                                      True, (150, 155, 165))
+                                      True, TEXT_DIM)
         self.screen.blit(hint, hint.get_rect(center=(overlay.centerx, overlay.bottom + 16)))
 
     def _history_lines(self):
@@ -2441,44 +2544,44 @@ class FlammeRougeGame:
             for r in p.get_runners():
                 kind = "Sprinteur" if r.type.name == "SPRINTER" else "Rouleur"
                 names[r.id] = (f"{kind} {r.id.split('_')[-1]}",
-                               PLAYER_COLORS.get(p.color, (200, 205, 215)))
+                               PLAYER_COLORS.get(p.color, TEXT_DIM))
         lines = []
         for entry in self.game.history:
             if lines:
                 lines.append(("", None, False))  # ligne vide entre les tours
-            lines.append((f"TOUR {entry['turn']}", (240, 210, 60), True))
+            lines.append((f"TOUR {entry['turn']}", (180, 140, 20), True))
             if entry["cards"]:
-                lines.append(("Énergie", (200, 205, 215), True))
+                lines.append(("Énergie", TEXT_DIM, True))
                 for color, rid, val in entry["cards"]:
                     name, team = names.get(rid, (rid, PLAYER_COLORS.get(
-                        color, (200, 205, 215))))
+                        color, TEXT_DIM)))
                     # la carte est face cachée : on n'affiche pas sa valeur
                     lines.append((f"  {name} pose une carte face cachée", team, False))
             if entry["moves"]:
-                lines.append(("Mouvement", (200, 205, 215), True))
+                lines.append(("Mouvement", TEXT_DIM, True))
                 for rid, color, fx, tx, val, eff, reason in entry["moves"]:
                     name, team = names.get(rid, (rid, PLAYER_COLORS.get(
-                        color, (180, 220, 180))))
+                        color, (60, 140, 70))))
                     txt = f"  {name} avance de {tx - fx} case(s) : de {fx} à {tx}"
                     if reason:
                         txt += f" ({reason})"
                     lines.append((txt, team, False))
             if entry["slips"]:
-                lines.append(("Aspiration", (200, 205, 215), True))
+                lines.append(("Aspiration", TEXT_DIM, True))
                 for slip in entry["slips"]:
-                    who = ", ".join(names.get(rid, (rid, WHITE))[0]
+                    who = ", ".join(names.get(rid, (rid, BLACK))[0]
                                     for rid, fx, tx in slip)
                     desc = ", ".join(f"{fx}->{tx}" for rid, fx, tx in slip)
                     lines.append((f"  {who} glisse d'1 case ({desc})",
-                                  (255, 200, 120), False))
+                                  (200, 110, 0), False))
         return lines
 
     def _draw_log_panel(self):
         """Petit écran à droite du panneau de cartes : ce qui se passe
         (dernières lignes de l'historique), toujours visible."""
         rect = self._log_panel_rect()
-        pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=8)
-        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=8)
+        pygame.draw.rect(self.screen, PANEL_ALT, rect, border_radius=8)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=8)
         lines = self._history_lines()
         line_h = 15
         max_lines = (rect.bottom - rect.y - 10) // line_h
@@ -2506,7 +2609,7 @@ class FlammeRougeGame:
         # indicateur de scroll (sans le mot « molette »)
         if max_scroll > 0:
             hint = self.small_font.render(f"▲ {self.log_scroll}/{max_scroll}",
-                                          True, (110, 115, 125))
+                                          True, TEXT_DIM)
             self.screen.blit(hint, (rect.right - 10 - hint.get_width(), rect.y + 6))
 
     def _log_line_at(self, pos):
@@ -2537,9 +2640,9 @@ class FlammeRougeGame:
         """Overlay historique complet (touche J) : toutes les lignes."""
         rect = pygame.Rect(self.width - 370, TOP_H + 8, 358,
                            self.height - TOP_H - 60)
-        pygame.draw.rect(self.screen, (24, 28, 34), rect, border_radius=10)
-        pygame.draw.rect(self.screen, (90, 95, 105), rect, width=1, border_radius=10)
-        title = self.phase_font.render("Historique des coups", True, WHITE)
+        pygame.draw.rect(self.screen, PANEL_ALT, rect, border_radius=10)
+        pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=10)
+        title = self.phase_font.render("Historique des coups", True, BLACK)
         self.screen.blit(title, (rect.x + 12, rect.y + 10))
         y = rect.y + 40
         line_h = 17
@@ -2575,7 +2678,7 @@ class FlammeRougeGame:
         for i, r in enumerate(unplaced):
             cx = bx + tx * (i * 26)
             cy = by + ty * (i * 26)
-            color = PLAYER_COLORS.get(r.color, WHITE)
+            color = PLAYER_COLORS.get(r.color, BLACK)
             pygame.draw.circle(self.screen, color, (int(cx), int(cy)), 9)
             pygame.draw.circle(self.screen, BLACK, (int(cx), int(cy)), 9, 1)
             lbl = self.small_font.render("S" if r.type.name == "SPRINTER" else "R",
@@ -2597,12 +2700,12 @@ class FlammeRougeGame:
             hovered = tab.collidepoint(mouse)
             color = PLAYER_COLORS.get(player.color, BLACK)
             fill = color if active else ((tuple(min(255, c + 40) for c in color))
-                                         if hovered else (60, 66, 78))
+                                         if hovered else PANEL_ALT)
             pygame.draw.rect(self.screen, fill, tab, border_radius=5)
-            pygame.draw.rect(self.screen, BLACK if active else (90, 95, 105), tab,
+            pygame.draw.rect(self.screen, BLACK if active else BORDER, tab,
                              width=1, border_radius=5)
             t = self.small_font.render(player.color[:4], True,
-                                       BLACK if active else WHITE)
+                                       BLACK if active else TEXT_DIM)
             self.screen.blit(t, t.get_rect(center=tab.center))
         for player, panel, rows in self._hand_layout():
             color = PLAYER_COLORS.get(player.color, BLACK)
