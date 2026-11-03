@@ -884,14 +884,13 @@ class FlammeRougeGame:
         la fenêtre (0 si fenêtre étroite, liste centrée alors)."""
         if self.width < 1100:
             return 0
-        return self.width - self._menu_list_w() - 52
+        return self.width - self._menu_list_w() - 60
 
     def _menu_search_rect(self):
-        """Barre de recherche (filtre les parcours perso par nom/code)."""
-        preview_w = self._menu_preview_w()
-        w = self._menu_list_w()
-        x = 20 if preview_w else (self.width - w) // 2
-        return pygame.Rect(x, TOP_H + 44, w, 28)
+        """Barre de recherche (filtre les parcours perso par nom/code),
+        dans le cadre de sélection, à droite de la scrollbar."""
+        frame = self._menu_frame_rect()
+        return pygame.Rect(frame.x + 20, TOP_H + 44, frame.w - 28, 28)
 
     def _menu_list_area(self):
         """Zone visible (scrollable) de la liste des entrées."""
@@ -899,9 +898,12 @@ class FlammeRougeGame:
         return pygame.Rect(0, top, self.width, self.height - 40 - top)
 
     def _menu_frame_rect(self):
-        """Cadre de la zone de sélection à gauche du menu (~1/4 de la fenêtre)."""
-        srect = self._menu_search_rect()
-        return pygame.Rect(srect.x - 8, TOP_H + 36, srect.w + 16,
+        """Cadre de la zone de sélection à gauche du menu (~1/4 de la fenêtre).
+        La scrollbar tient dans la marge gauche du cadre (x+4), le contenu
+        (recherche + liste) commence à x+20."""
+        w = self._menu_list_w()
+        x = 12 if self.width >= 1100 else (self.width - w) // 2 - 8
+        return pygame.Rect(x, TOP_H + 36, w + 28,
                            self.height - 32 - (TOP_H + 36))
 
     def _next_button_rect(self):
@@ -909,11 +911,11 @@ class FlammeRougeGame:
         return pygame.Rect(self.width - 244, self.height - 68, 228, 54)
 
     def _menu_scrollbar_rects(self):
-        """Barre de scroll verticale DANS le cadre de sélection (bord droit
-        intérieur) : (track, thumb)."""
+        """Barre de scroll verticale à GAUCHE mais DANS le cadre de sélection
+        (marge gauche du cadre) : (track, thumb)."""
         area = self._menu_list_area()
         frame = self._menu_frame_rect()
-        track = pygame.Rect(frame.right - 14, area.y, 10, area.h)
+        track = pygame.Rect(frame.x + 4, area.y, 10, area.h)
         max_scroll = getattr(self, "_menu_max_scroll", 0)
         if max_scroll <= 0:
             return track, None
@@ -930,9 +932,9 @@ class FlammeRougeGame:
          ("Créer un circuit", éditeur)].
         Chaque entrée = (nom, description, code, rect, kind)."""
         from game.game import available_stages, list_saved_tracks
-        preview_w = self._menu_preview_w()
-        w = self._menu_list_w()
-        x = 20 if preview_w else (self.width - w) // 2
+        frame = self._menu_frame_rect()
+        w = frame.w - 28
+        x = frame.x + 20
         base = available_stages()
         perso = list_saved_tracks(self.saves_dir)
         q = self.menu_search.strip().lower()
