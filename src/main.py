@@ -916,7 +916,10 @@ class FlammeRougeGame:
         (marge gauche du cadre) : (track, thumb)."""
         area = self._menu_list_area()
         frame = self._menu_frame_rect()
-        track = pygame.Rect(frame.x + 4, area.y, 10, area.h)
+        # clampée dans le cadre : ne dépasse ni en haut ni en bas
+        top = max(area.y, frame.y + 4)
+        bottom = min(area.bottom, frame.bottom - 4)
+        track = pygame.Rect(frame.x + 4, top, 10, max(10, bottom - top))
         max_scroll = getattr(self, "_menu_max_scroll", 0)
         if max_scroll <= 0:
             return track, None
@@ -1785,12 +1788,13 @@ class FlammeRougeGame:
                 if cat is None:
                     continue
                 mx, my = jpts[i]
-                top = max(rect.y + 17, my - 18)
+                top = max(rect.y + 16, my - 26)  # fanion plus haut
                 pygame.draw.line(self.screen, (120, 120, 120), (mx, my), (mx, top), 2)
                 pygame.draw.polygon(self.screen, (215, 45, 45),
-                                    ((mx, top), (mx + 14, top + 3.5), (mx, top + 7)))
-                clbl = self.label_font.render(cat, True, (215, 45, 45))
-                self.screen.blit(clbl, (mx + 16, top - 2))
+                                    ((mx, top), (mx + 18, top + 4.5), (mx, top + 9)))
+                # catégorie du col bien visible à côté du fanion
+                clbl = self.phase_font.render(cat, True, (215, 45, 45))
+                self.screen.blit(clbl, (mx + 20, top - 2))
         # ligne d'arrivée : mât en pointillés jaunes sur toute la hauteur du
         # profil + drapeau damier hissé tout en haut du panneau
         fx = pts[-1][0]
@@ -2076,6 +2080,7 @@ class FlammeRougeGame:
                 # (même animation d'enfoncement que les autres boutons)
                 self._pressed_button = "next"
                 self._menu_validate(entries[self.menu_index])
+                self._pressed_button = None  # revient à l'état initial après le clic
                 return
             if self._menu_search_rect().collidepoint(event.pos):
                 self.menu_search_active = True  # focus barre de recherche
@@ -2114,6 +2119,7 @@ class FlammeRougeGame:
             if self._next_button_rect().collidepoint(event.pos):
                 self._pressed_button = "next"  # animation d'enfoncement au clic
                 self._select_stage(self._pending_stage)  # gros bouton rouge JOUER
+                self._pressed_button = None  # revient à l'état initial après le clic
                 return
             for count, rect in self._player_count_rects():
                 if rect.collidepoint(event.pos):
