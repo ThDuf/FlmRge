@@ -1049,6 +1049,9 @@ class FlammeRougeGame:
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
                     seg.append((ox + px * scale, oy + py * scale))
                 pygame.draw.lines(self.screen, seg_color, False, seg, road_w)
+                # jonctions rondes : évite les encoches dans les virages
+                for pt in seg:
+                    pygame.draw.circle(self.screen, seg_color, pt, road_w // 2)
 
         # Un trait par CASE (pas par tuile) : petite ligne claire à chaque
         # jonction de case, en travers de la route
@@ -1075,7 +1078,8 @@ class FlammeRougeGame:
                              (sx - nx * half, sy - ny * half), 3)
 
         # Ligne d'arrivée sur le tracé (comme sur le profil) : pointillés jaunes
-        # en travers de la route + petit drapeau damier juste après
+        # en travers de la route + petit drapeau damier PERPENDICULAIRE à la
+        # piste (mât le long de la normale, pavillon le long de la tangente)
         ex, ey, etx, ety = path_point_at(pts, s_end)
         sx, sy = ox + ex * scale, oy + ey * scale
         nx, ny = -ety, etx
@@ -1085,12 +1089,19 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, (240, 210, 60),
                              (sx + nx * a, sy + ny * a), (sx + nx * b, sy + ny * b), 2)
             a = b + 3
-        fx, fy = sx + etx * (road_w + 4), sy + ety * (road_w + 4)
-        pygame.draw.line(self.screen, (120, 120, 120), (sx, sy), (fx, fy), 2)
+        ph = road_w / 2 + 8          # hauteur du mât (perpendiculaire)
+        fw, fh = 12, 8               # pavillon : le long de la tangente
+        exx, eyy = sx + nx * ph, sy + ny * ph   # sommet du mât
+        pygame.draw.line(self.screen, (120, 120, 120), (sx, sy), (exx, eyy), 2)
+        ux, uy = etx * fw / 3, ety * fw / 3     # pas le long de la tangente
+        vx, vy = -nx * fh / 2, -ny * fh / 2     # pas le long du mât (retour)
         for i in range(3):
             for j in range(2):
                 c = BLACK if (i + j) % 2 == 0 else WHITE
-                pygame.draw.rect(self.screen, c, (fx + 1 + i * 4, fy - 10 + j * 5, 4, 5))
+                x0, y0 = exx + ux * i + vx * j, eyy + uy * i + vy * j
+                quad = [(x0, y0), (x0 + ux, y0 + uy),
+                        (x0 + ux + vx, y0 + uy + vy), (x0 + vx, y0 + vy)]
+                pygame.draw.polygon(self.screen, c, quad)
 
         # Profil d'altitude de l'étape / du parcours perso (code si fourni),
         # en grand : il occupe tout l'espace restant sous le tracé
