@@ -1080,17 +1080,18 @@ class FlammeRougeGame:
                       all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(start, end + 1)]
             pygame.draw.polygon(self.screen, seg_color, left + right[::-1])
 
-        # Un trait par CASE (pas par tuile) : petite ligne claire à chaque
-        # jonction de case, en travers de la route
+        # Un trait par CASE (pas par tuile) : FINE ligne claire à chaque
+        # jonction de case, exactement sur la largeur de la route (1 px)
         _marks, total = self._preview_tile_marks(name, code=code)
-        half = road_w / 2 + 3
+        half = road_w / 2 + 3          # pour les lignes de départ/arrivée
+        tick_half = road_w / 2         # les séparateurs de cases restent fins
         for s in range(1, int(total)):
             px, py, tx, ty = path_point_at(pts, float(s))
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
             pygame.draw.line(self.screen, (225, 229, 235),
-                             (sx + nx * half, sy + ny * half),
-                             (sx - nx * half, sy - ny * half), 1)
+                             (sx + nx * tick_half, sy + ny * tick_half),
+                             (sx - nx * tick_half, sy - ny * tick_half), 1)
 
         # Départ noté à la LIGNE de départ, arrivée à la LIGNE d'arrivée :
         # lignes en travers de la route à ces positions + mots « départ » /
