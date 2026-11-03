@@ -20,6 +20,7 @@ CELL_MAX = 60
 HEADER_H = 60       # bandeau de titre (toute la largeur)
 PHASE_H = 44        # bandeau de phase (toute la largeur)
 TOP_H = HEADER_H + PHASE_H + 8  # début de la zone de jeu sous les bandeaux
+MENU_TOP = HEADER_H + 64         # début du contenu des écrans de menu (juste sous le bandeau titre)
 INFO_H = 100        # hauteur du bloc infos (compteur, action, prochain)
 
 CARD_W = 44        # taille des cartes en main
@@ -890,7 +891,7 @@ class FlammeRougeGame:
         """Barre de recherche (filtre les parcours perso par nom/code),
         dans le cadre de sélection, à droite de la scrollbar."""
         frame = self._menu_frame_rect()
-        return pygame.Rect(frame.x + 20, TOP_H + 44, frame.w - 28, 28)
+        return pygame.Rect(frame.x + 20, MENU_TOP + 8, frame.w - 28, 28)
 
     def _menu_list_area(self):
         """Zone visible (scrollable) de la liste des entrées."""
@@ -903,8 +904,8 @@ class FlammeRougeGame:
         (recherche + liste) commence à x+20."""
         w = self._menu_list_w()
         x = 12 if self.width >= 1100 else (self.width - w) // 2 - 8
-        return pygame.Rect(x, TOP_H + 36, w + 28,
-                           self.height - 32 - (TOP_H + 36))
+        return pygame.Rect(x, MENU_TOP, w + 28,
+                           self.height - 12 - MENU_TOP)  # prend toute la place en bas
 
     def _next_button_rect(self):
         """Gros bouton rouge en bas à droite pour passer à l'écran suivant."""
@@ -983,8 +984,8 @@ class FlammeRougeGame:
         tracé de l'étape + profil d'altitude. Sa taille suit la fenêtre,
         en laissant la place au gros bouton rouge en bas à droite."""
         pw = self._menu_preview_w() or 330
-        return pygame.Rect(self.width - pw - 16, TOP_H + 40, pw,
-                           self.height - TOP_H - 48 - 76)
+        return pygame.Rect(self.width - pw - 16, MENU_TOP, pw,
+                           self.height - MENU_TOP - 12 - 76)  # toute la hauteur (moins le bouton rouge)
 
     def _preview_track_rect(self, rect):
         """Sous-zone du tracé dans le panneau de preview (le profil fait
@@ -1833,10 +1834,10 @@ class FlammeRougeGame:
         if self.menu_step == "editor":
             self._draw_editor(mouse)
             return
-        title = self.title_font.render("Choisis ton étape", True, BLACK)
-        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 14))
-        hint = self.label_font.render("Clic ou flèches + ENTRÉE", True, TEXT_DIM)
-        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 52))
+        title = self.title_font.render("Choix de l'étape", True, BLACK)
+        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 8))
+        hint = self.label_font.render("Clic pour sélectionner · flèches + ENTRÉE", True, TEXT_DIM)
+        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 38))
 
         # la sélection (recherche + liste) est dans un CADRE à gauche (~1/4 de
         # la fenêtre), le reste de la largeur est pour la preview à droite
