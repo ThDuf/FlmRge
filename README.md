@@ -9,10 +9,12 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 **Flamme Rouge** est un jeu de course cycliste tactique où chaque joueur contrôle une équipe de deux coureurs : un **rouleur** et un **sprinteur**. Le but est d'être le premier à franchir la ligne d'arrivée avec l'un de ses coureurs.
 
 ### Règles principales
-- Chaque tour se divise en **3 phases** : Énergie, Mouvement, Terminale.
+- Avant le 1ᵉʳ tour, **phase de placement** : les coureurs sont placés derrière la ligne de départ, au plus proche de la ligne (manuellement ou aléatoirement).
+- Chaque tour se divise en **4 phases** : Énergie, Mouvement, Aspiration, Terminale.
 - **Phase d'Énergie** : Les joueurs piochent 4 cartes et en jouent une face cachée pour chaque coureur.
-- **Phase de Mouvement** : Les cartes sont révélées et les coureurs avancent.
-- **Phase Terminale** : Application de l'**aspiration** et de la **fatigue**.
+- **Phase de Mouvement** : Les cartes sont révélées et les coureurs avancent (pas à pas, un clic par mouvement).
+- **Phase d'Aspiration** : Application de l'**aspiration** (pack par pack).
+- **Phase Terminale** : Application de la **fatigue**.
 
 ### Mécaniques spéciales
 - **Aspiration** : Si exactement une case vide (2 files) sépare deux packs, le pack arrière avance d'une case et fusionne ; le pack fusionné est revérifié immédiatement (aspirations en cascade possibles). Les coureurs gardent leur file.
@@ -53,42 +55,46 @@ Recréation numérique du jeu de société **Flamme Rouge** en Python avec Pygam
 
 ## 🎮 Contrôles
 
-| Touche | Action |
+| Touche / souris | Action |
 |--------|--------|
-| **Souris** | Sélectionner une carte pour la jouer (surbrillance au survol) |
-| **ENTRÉE / Bouton** | Avancer d'une étape : lancer le mouvement, puis **un coureur à la fois**, puis l'aspiration **pack par pack** |
-| **H** | Masquer/Afficher les panneaux de cartes |
-| **D** | Afficher/Masquer les cartes restantes |
-| **R** | Recommencer la partie |
+| **Clic gauche** | Sélectionner une carte pour la jouer (surbrillance au survol) ; **drag sur le parcours** = déplacer la caméra |
+| **Clic droit (drag)** | Déplacer aussi la caméra |
+| **Molette** | Zoom sur le parcours (au-dessus du log : fait défiler l'historique) |
+| **ENTRÉE / Bouton d'action** | Avancer d'une étape : lancer le mouvement, puis **un coureur à la fois**, puis l'aspiration **pack par pack** |
+| **+ / -** | Zoom avant / arrière |
+| **Flèches** | Panoramique de la caméra |
+| **H** | Masquer/Afficher les cartes des joueurs |
+| **D** | Afficher/Masquer les decks restants |
+| **J** | Overlay de l'historique complet |
+| **Ctrl+A / Ctrl+C** (dans le log) | Tout sélectionner / copier le texte sélectionné |
+| **TAB** (partie terminée) | Basculer podium ↔ état final du circuit |
+| **R** | Recommencer l'étape en cours |
+| **Échap** | Retour au menu de sélection |
 
-**Disposition de l'écran** : un **bandeau de titre** (fanion rouge, FLAMME ROUGE, étape/tour, contrôles, boutons caméra « Voir le peloton » / « Vue d'ensemble ») et un **bandeau de phase** coloré (compteurs et infos à droite) surplombent la fenêtre. **Tout le reste est le parcours** dans son cadre (tracé réel des tuiles, zoom +/- ou molette, panoramique flèches ou clic droit, tracé clippé dans le cadre). **En haut à droite dans le cadre**, pile de boutons : « Vue d'ensemble », « Zoom peloton », « Placement aléatoire » et « Tour aléatoire » (violets). **En bas à gauche**, la barre du bas : le panneau de cartes d'**un joueur à la fois** (onglets de joueur au-dessus, avance auto au joueur suivant), à sa droite le grand écran **« Ce qui se passe »** (**scrollable à la molette**, J = overlay complet), puis le bouton d'action. Légende en bas du cadre : **bande jaune « DÉPART », damier « ARRIVÉE », rouge = montée, bleu = descente**, ligne blanche = files A/B. Fenêtre **redimensionnable** (min 900x600).
+**Disposition de l'écran** : un **bandeau de titre** (fanion rouge, FLAMME ROUGE, étape et tour en cours) et un **bandeau de phase** coloré avec la description de la phase en cours surplombent la fenêtre. **Tout le reste au-dessus de la barre du bas est le parcours** dans son cadre (tracé réel des tuiles, zoom molette ou +/-, panoramique flèches ou drag souris, tracé clippé dans le cadre). **En bas du cadre**, la **légende sur fond blanc** (Départ jaune clair, Arrivée jaune vif, Montée rouge, Descente bleu) avec à sa droite les boutons caméra **« Tête de course »**, **« Peloton »** et **« Vue d'ensemble »**. **Barre du bas** : à gauche le panneau des cartes d'**un joueur à la fois** (onglets de joueur au-dessus), au centre le **log / historique des coups** (texte sélectionnable Ctrl+A/Ctrl+C, scrollable à la molette, overlay avec J), à droite le **bouton d'action** et le bouton violet **« Tour aléatoire »**. Fenêtre **redimensionnable** (min 900x600).
 
 ---
 
 ## 📁 Structure du projet
 
 ```
-flamme_rouge/
-├── assets/                  # Ressources graphiques et sonores
-│   ├── sprites/            # Images des coureurs, cartes, etc.
-│   └── tracks/             # Tuiles de piste
-│
+FlmRge/
+├── assets/
+│   └── stages/             # Images des vraies cartes d'étape (optionnel : assets/stages/<nom de l'étape>.jpg)
+├── saves/                  # Parcours personnalisés sauvegardés en JSON (éditeur de piste)
 ├── src/
 │   ├── __init__.py
-│   ├── main.py             # Point d'entrée (boucle principale)
+│   ├── main.py             # Point d'entrée : menu, éditeur de piste, partie, podium
 │   ├── game/
 │   │   ├── __init__.py
 │   │   ├── card.py         # Cartes Énergie/Fatigue
 │   │   ├── runner.py       # Coureurs (Rouleur/Sprinteur)
-│   │   ├── player.py       # Joueurs
-│   │   ├── track.py        # Piste et tuiles
-│   │   └── game.py         # Moteur du jeu (règles, tours)
-│   │
-│   └── ui/
-│       ├── __init__.py
-│       └── scenes/         # Scènes du jeu (menu, jeu, fin)
-│
-├── tests/                  # Tests unitaires
+│   │   ├── player.py       # Joueurs et leurs decks
+│   │   ├── track.py        # Piste, cellules, tuiles (géographie case par case)
+│   │   └── game.py         # Moteur du jeu (tours, règles, étapes officielles, sauvegarde JSON)
+│   └── ui/                 # Réservé (scènes)
+├── tests/                  # Tests unitaires (unittest)
+├── requirements.txt
 └── README.md
 ```
 
@@ -98,12 +104,14 @@ flamme_rouge/
 
 ### Lancer les tests
 ```bash
-python -m pytest tests/
+python -m unittest discover -s tests
 ```
 
-### Ajouter une nouvelle piste
-1. Modifier la méthode `_build_track` dans `src/game/game.py`.
-2. Ajouter une nouvelle option dans le menu principal (à implémenter).
+### Ajouter une nouvelle étape
+1. Ajouter son code de tuiles (lettres) dans `OFFICIAL_STAGES` dans `src/game/game.py` — la piste est construite par `_build_track` / `build_track_from_code`.
+2. (Optionnel) Déposer l'image de la vraie carte du jeu dans `assets/stages/<nom de l'étape>.jpg` : elle s'affiche à côté de la preview au menu.
+
+Un parcours personnalisé se crée directement dans l'**éditeur de piste** (menu) et se sauvegarde en JSON dans `saves/` (`save_track_json` / `load_track_json` / `list_saved_tracks`).
 
 ### Personnaliser les decks
 - Modifier la méthode `_generate_energy_deck` dans `src/game/game.py` pour ajuster la distribution des cartes.
@@ -112,7 +120,9 @@ python -m pytest tests/
 
 ## 🎨 Assets
 
-Les assets (images, sons) ne sont pas inclus dans ce dépôt pour des raisons de droits d'auteur. Vous pouvez :
+Le seul dossier d'assets du dépôt est `assets/stages/` : images optionnelles des vraies cartes d'étape (affichées à côté de la preview au menu si vous déposez `<nom de l'étape>.jpg`).
+
+Les autres assets (images, sons) ne sont pas inclus dans ce dépôt pour des raisons de droits d'auteur. Vous pouvez :
 - **Créer vos propres assets** (recommandé pour un projet personnel).
 - **Utiliser des assets libres de droits** (ex: [Kenney.nl](https://kenney.nl/)).
 - **Ajouter des placeholders** pour tester le jeu.
@@ -165,7 +175,7 @@ Pour toute question ou suggestion, ouvrez une **Issue** sur GitHub ou contactez-
 
 ## 🗺️ Étapes disponibles
 
-Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours), **avec prévisualisation du tracé** de l'étape survolée à droite (grandes fenêtres). Les **6 étapes officielles de la boîte de base** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
+Menu de sélection au lancement : choix de l'étape (clic ou flèches + ENTRÉE ; `Échap` y retourne en pleine partie, `R` relance l'étape en cours) **avec prévisualisation du tracé** de l'étape survolée à droite (grande fenêtre, profil d'altitude et image de la carte si disponible), puis choix du **nombre de joueurs (2 à 4)**. La liste est scrollable, filtrable via une barre de recherche, et organisée en catégories : circuits du jeu de base, circuits perso (`saves/*.json`), plus le bouton « Créer un circuit » (éditeur de piste) toujours visible en bas. Les **6 étapes officielles de la boîte de base** sont codées par les lettres de leurs 21 tuiles (correspondance officielle : `a`=départ, `u`=arrivée, droites `b c d f l m n`, virages légers `h k q r s t`, virages serrés `e g i j o p`, majuscule = face montagne) :
 
 | Étape | Code | Profil |
 |-------|------|--------|
@@ -176,30 +186,31 @@ Menu de sélection au lancement (clic ou flèches + ENTRÉE ; `Échap` y retourn
 | La Classicissima | `A eb Q R N H P cgik D F s L ojmtu` | vallonné |
 | Col du Ballon | `AnLHgceqtrMBoipjDFkSu` | montagne (Vosges) |
 
-> **Modèle de tuile** : chaque tuile = `(virage, largeur, cases)` dans `src/game/game.py` (`TILE_DEFS`, `MOUNTAIN_DEFS` pour les faces majuscules). `virage` = (angle en radians, sens +1/-1), `None` = droite ; `largeur` = nombre de files (2 en base) ; `cases` = alphabet `CELL_CHARS` de `src/game/track.py` (initiales anglaises : `f`=flat, `u`=uphill, `d`=downhill, `s`=ligne de départ, `e`=ligne d'arrivée) — ex. `a` = `"sssssf"` (6 cases, ligne sur les 5 premières), `B` = `"ddddff"` (descente sur les 4 premières cases seulement). Une tuile majuscule est la tuile **retournée** : virage en miroir (ex. `H` tourne à droite, `h` à gauche) et géographie case par case (`CellGeographyType` : FLAT/UPHILL/DOWNHILL) ; la ligne de course vit sur la case (`CellRunType` : NONE/START/END). Longueurs officielles : départ 6, arrivée 6 (`u` = `"feeeee"`, ligne sur les 5 dernières), droites 6, virages 2 → étapes officielles = 78 cases. Angles des virages officiels : 45° (léger) / 90° (serré). Dans la prévisualisation du menu (panneau de droite), le tracé est coloré **case par case** : départ jaune clair, arrivée jaune vif (deux jaunes différents), montées en rouge vif, descentes en bleu vif, avec la lettre de chaque tuile. Dans l'**éditeur de piste**, chaque tuile du tracé est remplacée par une **mini-preview** (forme droite/virage, cases séparées, nombre de cases « ×N »). Le panneau affiche aussi le **profil d'altitude** de l'étape (montée +1/case, descente -1/case) et, si tu déposes une photo de la vraie carte dans `assets/stages/<nom de l'étape>.jpg`, l'**image de la carte du jeu** à côté de la preview.
+> **Modèle de tuile** : chaque tuile = `(virage, largeur, cases)` dans `src/game/game.py` (`TILE_DEFS`, `MOUNTAIN_DEFS` pour les faces majuscules). `virage` = (angle en radians, sens +1/-1), `None` = droite ; `largeur` = nombre de files (2 en base) ; `cases` = alphabet `CELL_CHARS` de `src/game/track.py` (initiales anglaises : `f`=flat, `u`=uphill, `d`=downhill, `s`=ligne de départ, `e`=ligne d'arrivée) — ex. `a` = `"sssssf"` (6 cases, ligne sur les 5 premières), `B` = `"ddddff"` (descente sur les 4 premières cases seulement). Une tuile majuscule est la **face montagne** de la tuile : géographie case par case (`CellGeographyType` : FLAT/UPHILL/DOWNHILL) et virage propre relevé sur la tuile physique (pas forcément le miroir de la face plate — voir `MOUNTAIN_DEFS`) ; la ligne de course vit sur la case (`CellRunType` : NONE/START/END). Longueurs officielles : départ 6, arrivée 6 (`u` = `"feeeee"`, ligne sur les 5 dernières), droites 6, virages 2 → étapes officielles = 78 cases. Angles des virages officiels : 45° (léger) / 90° (serré). Dans la prévisualisation du menu (panneau de droite), le tracé est coloré **case par case** : départ jaune clair, arrivée jaune vif (deux jaunes différents), montées en rouge vif, descentes en bleu vif, avec la lettre de chaque tuile. Dans l'**éditeur de piste**, la palette de sélection montre chaque tuile sous forme de **mini-preview cliquable** (bout de piste : forme droite/virage, cases colorées rouge/bleu selon la géographie) tandis que l'**aperçu global à droite** affiche le tracé avec la **lettre** de chaque tuile. Le panneau affiche aussi le **profil d'altitude** de l'étape (montée +1/case, descente -1/case) et, si tu déposes une photo de la vraie carte dans `assets/stages/<nom de l'étape>.jpg`, l'**image de la carte du jeu** à côté de la preview.
 
-> Les 21 faces majuscules sont définies **explicitement** dans `MOUNTAIN_DEFS` (relevées une par une sur les tuiles physiques : cases case par case + virage propre — qui n'est pas toujours le miroir de la face plate, ex. `K` tourne à gauche comme la face montagne imprimée, `H` à droite alors que `h` va à gauche). Sens des virages minuscule relevés sur la carte imprimée Corso Paseo.
+> Les 21 faces majuscules sont définies **explicitement** dans `MOUNTAIN_DEFS` (relevées une par une sur les tuiles physiques : cases case par case + virage propre — qui n'est pas toujours le miroir de la face plate, ex. `K` tourne à gauche comme la face montagne imprimée, `H` à droite alors que `h` va à gauche). Sens des virages minuscules relevés sur la carte imprimée Corso Paseo.
 
 ## 🎯 Roadmap
 
 - [x] **Moteur de jeu de base** (logique des tours, cartes, coureurs)
 - [x] **Phase de placement au départ** : chaque joueur place ses 2 coureurs un par un derrière la ligne DÉPART (clic sur une case, cases surlignées) ; placement aléatoire via le bouton d'action en phase de placement (`tests/test_placement.py`)
 - [x] **Bouton « Tour aléatoire »** : en un clic, placement auto si besoin + une carte au hasard par coureur + mouvement/aspiration/fatigue d'un coup (pratique pour tester)
-- [x] **Écran des logs « Ce qui se passe »** dans la barre du bas : historique des coups par tour (TOUR X, cartes face cachée, mouvements, aspirations), couleurs d'équipe, phases en gras, scrollable à la molette, texte sélectionnable (Ctrl+C), overlay complet avec **J**
+- [x] **Écran des logs / historique des coups** dans la barre du bas : historique par tour (TOUR X, cartes face cachée, mouvements « de y→z », aspirations), couleurs d'équipe, phases en gras, nouvelles lignes qui poussent les anciennes vers le haut, scrollable à la molette, texte sélectionnable (Ctrl+A / Ctrl+C), overlay complet avec **J**
 - [x] **Fin de course** : fin du tour où un coureur franchit la ligne d'arrivée (la course ne continue pas après), vainqueur = le plus loin au-delà de la ligne, égalité → file A de droite (`Game._check_win_condition`)
 - [x] **Écran de victoire avec podium** des 3 premiers coureurs (classement `Game.ranking()` : position puis file A)
 - [x] **Interface Pygame minimale** (affichage de la piste et des coureurs)
 - [x] **Implémentation complète de l'aspiration** (packs arrière→avant, fusion + revérification, pas-à-pas animé — vérifiée par `tests/test_aspiration.py`)
 - [x] **Implémentation complète de la fatigue** (chaque coureur avec une CASE vide devant reçoit une carte, pas seulement le leader — vérifiée par les tests)
 - [x] **Montées/descentes** (plafond 5 / minimum 5, pas d'aspiration en montée — vérifiées par `tests/test_mountains.py`)
-- [x] **Nombre de joueurs au départ** : demandé au menu de lancement (2 à 4 joueurs, boutons ou flèches + ENTRÉE), passé au moteur qui crée les joueurs/coureurs en conséquence
-- [ ] **Amélioration de l'UI** (boutons, animations)
-- [ ] **Animations des déplacements des coureurs** : animer les coureurs case par case lors des phases de mouvement, d'aspiration et de fatigue (glissade fluide le long du circuit, sans téléportation)
+- [x] **Multijoueur local 2-4 joueurs sur un même écran** (hotseat) : nombre de joueurs demandé au lancement (2 à 4, boutons ou flèches + ENTRÉE), passé au moteur qui crée les joueurs/coureurs en conséquence ; onglets de joueur dans la barre du bas
+- [x] **Interface revue** : menu avec catégories (circuits de base / persos) + recherche + preview du parcours, éditeur de piste, écran de jeu avec cadre parcours dédié, légende sur fond blanc et boutons caméra, boutons avec effet d'enfoncement
+- [x] **Zoom / panoramique caméra** sur le circuit (molette, +/-, flèches, drag clic gauche ou droit) + boutons **Tête de course** / **Peloton** / **Vue d'ensemble**
+- [x] **Déplacements pas à pas** : la séquence de mouvement demande un clic (ou ENTRÉE) à chaque mouvement pour bien voir ce qui se passe
+- [ ] **Animations fluides des déplacements** : glisser les coureurs case par case lors des phases de mouvement, d'aspiration et de fatigue (sans téléportation)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)
-- [ ] **Mode multijoueur local** (2-4 joueurs sur un écran)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
 - [x] **Étapes officielles** : les 6 étapes de la boîte de base codées en lettres de tuiles (Avenue Corso Paseo, Firenze-Milano, Ronde van Wevelgem, La Haut Montagne, La Classicissima, Col du Ballon) + **choix au menu** avec preview, profil et image de carte (`tests/test_stages.py`)
-- [x] **Éditeur de piste** : entrée « Éditeur de piste » au menu — palette des 42 tuiles (21 faces plates a-u + 21 faces montagne A-U, clic ou clavier, MAJ = montagne), code affiché, aperçu du tracé + profil en direct, boutons Retirer/Effacer/JOUER (départ `a` et arrivée `u` auto-ajoutés), partie jouable sur le code perso via `Game(custom_code=...)` (`tests/test_placement.py::TestTrackEditor`). **Sauvegarde JSON** des parcours : boutons Sauver/Charger, fichiers dans `saves/*.json` (`save_track_json`/`load_track_json`/`list_saved_tracks`)
+- [x] **Éditeur de piste** : entrée « Créer un circuit » au menu — palette des 42 tuiles (21 faces plates a-u + 21 faces montagne A-U) en mini-previews cliquables, regroupées par catégorie (droites, virages 90°, virages 45°, départ/arrivée), aperçu global du tracé (lettres des tuiles) + profil d'altitude en direct, description de la tuile survolée, boutons Retirer/Effacer ; départ `a` pré-ajouté, la tuile d'arrivée se place en dernier (les autres sont alors grisées) et les boutons JOUER/Sauvegarder sont grisés tant qu'il n'y a pas d'arrivée. Partie jouable sur le code perso via `Game(custom_code=...)` (`tests/test_placement.py::TestTrackEditor`). **Sauvegarde JSON** des parcours sous un nom choisi, fichiers dans `saves/*.json` (`save_track_json`/`load_track_json`/`list_saved_tracks`), rechargeables depuis le menu (catégorie « Circuits perso »)
 - [ ] **Extensions** : possibilité d'ajouter des extensions (ex. Peloton : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement)
 - [ ] **Système de sauvegarde/reprise**
 
