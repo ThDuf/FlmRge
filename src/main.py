@@ -1789,12 +1789,17 @@ class FlammeRougeGame:
                     continue
                 mx, my = jpts[i]
                 top = max(rect.y + 16, my - 26)  # fanion plus haut
-                pygame.draw.line(self.screen, (120, 120, 120), (mx, my), (mx, top), 2)
-                pygame.draw.polygon(self.screen, (215, 45, 45),
-                                    ((mx, top), (mx + 18, top + 4.5), (mx, top + 9)))
-                # catégorie du col bien visible à côté du fanion
-                clbl = self.phase_font.render(cat, True, (215, 45, 45))
-                self.screen.blit(clbl, (mx + 20, top - 2))
+                # mât
+                pygame.draw.line(self.screen, (90, 90, 90), (mx, my), (mx, top), 2)
+                # drapeau rouge avec la catégorie écrite DESSUS (blanc sur rouge)
+                fw, fh = 26, 13
+                pygame.draw.rect(self.screen, (215, 45, 45),
+                                 (mx + 1, top, fw, fh), border_radius=2)
+                pygame.draw.rect(self.screen, (150, 25, 25),
+                                 (mx + 1, top, fw, fh), width=1, border_radius=2)
+                clbl = self.small_font.render(cat, True, WHITE)
+                self.screen.blit(clbl, (mx + 1 + (fw - clbl.get_width()) // 2,
+                                        top + (fh - clbl.get_height()) // 2))
         # ligne d'arrivée : mât en pointillés jaunes sur toute la hauteur du
         # profil + drapeau damier hissé tout en haut du panneau
         fx = pts[-1][0]
