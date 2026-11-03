@@ -145,7 +145,6 @@ class FlammeRougeGame:
         self.player_count = 2  # nombre de joueurs choisi au menu (2-4)
         self.game = Game(stage=stage, player_count=self.player_count) if stage else None
         self.menu_index = 1          # à l'arrivée, sélection sur le 1er parcours (index 0 = en-tête)
-        self.menu_preview_index = 1  # la preview ne change qu'au clic/validation
         self.menu_step = "stage"  # "stage" -> "players" / "editor"
         self._pending_stage = None
         self.menu_scroll = 0        # scroll de la liste du menu
@@ -899,10 +898,22 @@ class FlammeRougeGame:
         top = self._menu_search_rect().bottom + 8
         return pygame.Rect(0, top, self.width, self.height - 40 - top)
 
+    def _menu_frame_rect(self):
+        """Cadre de la zone de sélection à gauche du menu (~1/4 de la fenêtre)."""
+        srect = self._menu_search_rect()
+        return pygame.Rect(srect.x - 8, TOP_H + 36, srect.w + 16,
+                           self.height - 32 - (TOP_H + 36))
+
+    def _next_button_rect(self):
+        """Gros bouton rouge en bas à droite pour passer à l'écran suivant."""
+        return pygame.Rect(self.width - 244, self.height - 68, 228, 54)
+
     def _menu_scrollbar_rects(self):
-        """Barre de scroll verticale à gauche de la liste : (track, thumb)."""
+        """Barre de scroll verticale DANS le cadre de sélection (bord droit
+        intérieur) : (track, thumb)."""
         area = self._menu_list_area()
-        track = pygame.Rect(area.x + 3, area.y, 10, area.h)
+        frame = self._menu_frame_rect()
+        track = pygame.Rect(frame.right - 14, area.y, 10, area.h)
         max_scroll = getattr(self, "_menu_max_scroll", 0)
         if max_scroll <= 0:
             return track, None
@@ -967,14 +978,16 @@ class FlammeRougeGame:
 
     def _preview_rect(self):
         """Panneau de prévisualisation (colonne de droite du menu) :
-        tracé de l'étape + profil d'altitude. Sa taille suit la fenêtre."""
+        tracé de l'étape + profil d'altitude. Sa taille suit la fenêtre,
+        en laissant la place au gros bouton rouge en bas à droite."""
         pw = self._menu_preview_w() or 330
         return pygame.Rect(self.width - pw - 16, TOP_H + 40, pw,
-                           self.height - TOP_H - 48)
+                           self.height - TOP_H - 48 - 76)
 
     def _preview_track_rect(self, rect):
-        """Sous-zone du tracé dans le panneau de preview."""
-        h = max(120, rect.h - 208)
+        """Sous-zone du tracé dans le panneau de preview (le profil fait
+        au plus 120 px en dessous)."""
+        h = max(120, rect.h - 178)
         return pygame.Rect(rect.x + 10, rect.y + 34, rect.w - 20, h)
 
     def _preview_profile_rect(self, rect):
@@ -988,7 +1001,7 @@ class FlammeRougeGame:
         tr = self._preview_track_rect(rect)
         top = tr.bottom + 8
         return pygame.Rect(rect.x + 10, top, rect.w - 20,
-                           min(150, max(84, rect.bottom - 8 - top)))
+                           min(120, max(84, rect.bottom - 8 - top)))
 
     def _stage_preview_points(self, name, code=None):
         """Polyligne (unités de cases) du tracé d'une étape ou d'un code perso."""
@@ -1723,11 +1736,12 @@ class FlammeRougeGame:
         dplus = sum(max(0, alt[i + 1] - alt[i]) for i in range(n))
         pygame.draw.rect(self.screen, PANEL, rect, border_radius=6)
         pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=6)
-        lbl = self.small_font.render(f"Profil  (alt. {min(alt)} .. {max(alt)})",
-                                     True, TEXT_DIM)
+        # en haut à gauche, à côté de « Profil » : longueur en km et D+ en m
+        # (1 case montante = 100 m de dénivelé)
+        lbl = self.small_font.render(
+            f"Profil — {n} km · D+ {dplus * 100} m  (alt. {min(alt)} .. {max(alt)})",
+            True, TEXT_DIM)
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
-        stats = self.small_font.render(f"{n} km · D+ {dplus}", True, TEXT_DIM)
-        self.screen.blit(stats, (rect.right - 44 - stats.get_width(), rect.y + 3))
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
         inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
@@ -1768,12 +1782,12 @@ class FlammeRougeGame:
                 if cat is None:
                     continue
                 mx, my = jpts[i]
-                top = max(rect.y + 15, my - 13)
+                top = max(rect.y + 17, my - 18)
                 pygame.draw.line(self.screen, (120, 120, 120), (mx, my), (mx, top), 2)
                 pygame.draw.polygon(self.screen, (215, 45, 45),
-                                    ((mx, top), (mx + 10, top + 2.5), (mx, top + 5)))
-                clbl = self.small_font.render(cat, True, (215, 45, 45))
-                self.screen.blit(clbl, (mx + 12, top - 2))
+                                    ((mx, top), (mx + 14, top + 3.5), (mx, top + 7)))
+                clbl = self.label_font.render(cat, True, (215, 45, 45))
+                self.screen.blit(clbl, (mx + 16, top - 2))
         # ligne d'arrivée : mât en pointillés jaunes sur toute la hauteur du
         # profil + drapeau damier hissé tout en haut du panneau
         fx = pts[-1][0]
@@ -1825,8 +1839,7 @@ class FlammeRougeGame:
         # la sélection (recherche + liste) est dans un CADRE à gauche (~1/4 de
         # la fenêtre), le reste de la largeur est pour la preview à droite
         srect = self._menu_search_rect()
-        frame = pygame.Rect(srect.x - 8, TOP_H + 36, srect.w + 16,
-                            self.height - 32 - (TOP_H + 36))
+        frame = self._menu_frame_rect()
         pygame.draw.rect(self.screen, PANEL, frame, border_radius=10)
         pygame.draw.rect(self.screen, BORDER, frame, width=1, border_radius=10)
 
@@ -1898,11 +1911,14 @@ class FlammeRougeGame:
             hovered = thumb.collidepoint(pygame.mouse.get_pos())
             pygame.draw.rect(self.screen, (150, 158, 170) if hovered else (110, 118, 130),
                              thumb, border_radius=5)
-        # Prévisualisation du tracé : ne change qu'au CLIC (menu_preview_index)
-        if self.width >= 1100 and entries and 0 <= self.menu_preview_index < len(entries):
-            name, _d, code, _r, kind = entries[self.menu_preview_index]
+        # Prévisualisation du tracé de l'entrée SÉLECTIONNÉE (clic = sélectionner)
+        if self.width >= 1100 and entries and 0 <= self.menu_index < len(entries):
+            name, _d, code, _r, kind = entries[self.menu_index]
             if kind in ("base", "perso"):
                 self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
+        # Gros bouton rouge en bas à droite : passer à l'écran suivant
+        self._draw_ui_button(self._next_button_rect(), "SUIVANT →", (200, 45, 45),
+                             mouse, pressed=(self._pressed_button == "next"))
 
     def _draw_gear(self, center, r, color):
         """Dessine une roue crantée (engrenage) en `center`."""
@@ -1917,10 +1933,8 @@ class FlammeRougeGame:
         pygame.draw.circle(self.screen, PANEL, (cx, cy), max(2, r // 3))
 
     def _players_frame_rect(self):
-        """Même cadre à gauche que l'écran de sélection d'étape (~1/4 largeur)."""
-        srect = self._menu_search_rect()
-        return pygame.Rect(srect.x - 8, TOP_H + 36, srect.w + 16,
-                           self.height - 32 - (TOP_H + 36))
+        """Même cadre à gauche que l'écran de sélection d'étape."""
+        return self._menu_frame_rect()
 
     def _draw_players_menu(self, mouse):
         """Étape 2 du menu : choix du nombre de joueurs (2-4), DANS le cadre
@@ -1938,15 +1952,20 @@ class FlammeRougeGame:
         for count, rect in self._player_count_rects():
             selected = (count == self.player_count)
             hovered = rect.collidepoint(mouse)
-            fill = ROW_SEL if (selected or hovered) else PANEL
-            border = (235, 60, 60) if (selected or hovered) else BORDER
+            # même design que la sélection de parcours : fond blanc, grisé au
+            # survol, jamais entouré, trait rouge à gauche si sélectionné
+            fill = ROW_SEL if hovered else PANEL
             pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-            pygame.draw.rect(self.screen, border, rect, width=2 if (selected or hovered) else 1,
-                             border_radius=8)
+            if selected:
+                pygame.draw.rect(self.screen, (235, 60, 60),
+                                 (rect.x, rect.y + 2, 4, rect.h - 4))
             n_surf = self.big_font.render(f"{count} joueurs", True, BLACK)
             self.screen.blit(n_surf, n_surf.get_rect(center=rect.center))
         if self.width >= 1100 and self._pending_stage:
             self._draw_menu_preview(self._pending_stage, self._preview_rect())
+        # Gros bouton rouge en bas à droite : JOUER (démarrer la partie)
+        self._draw_ui_button(self._next_button_rect(), "JOUER", (200, 45, 45),
+                             mouse, pressed=(self._pressed_button == "next"))
 
     def _player_count_rects(self):
         """Boutons 2/3/4 joueurs, empilés DANS le cadre de gauche du menu."""
@@ -2048,23 +2067,22 @@ class FlammeRougeGame:
         for i, (_name, _desc, _code, rect, kind) in enumerate(entries):
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
-        if hovered is not None:
-            self.menu_index = hovered  # la sélection suit la souris...
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._next_button_rect().collidepoint(event.pos):
+                # gros bouton rouge = passer à l'écran suivant
+                self._menu_validate(entries[self.menu_index])
+                return
             if self._menu_search_rect().collidepoint(event.pos):
                 self.menu_search_active = True  # focus barre de recherche
                 return
             if hovered is not None:
-                # ...mais la PREVIEW ne change qu'au clic
-                self.menu_preview_index = hovered
-                self._menu_validate(entries[hovered])
+                self.menu_index = hovered  # le clic ne fait QUE sélectionner
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
             elif event.key == pygame.K_DOWN:
                 self.menu_index = (self.menu_index + 1) % len(entries)
             elif event.key == pygame.K_RETURN:
-                self.menu_preview_index = self.menu_index  # ENTRÉE = clic
                 self._menu_validate(entries[self.menu_index])
             elif event.key == pygame.K_PAGEUP:
                 self.menu_scroll = max(0, self.menu_scroll - 200)
@@ -2088,10 +2106,12 @@ class FlammeRougeGame:
         """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
         counts = [2, 3, 4]
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._next_button_rect().collidepoint(event.pos):
+                self._select_stage(self._pending_stage)  # gros bouton rouge JOUER
+                return
             for count, rect in self._player_count_rects():
                 if rect.collidepoint(event.pos):
-                    self.player_count = count
-                    self._select_stage(self._pending_stage)
+                    self.player_count = count  # le clic ne fait QUE sélectionner
                     return
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_LEFT:
@@ -2104,7 +2124,6 @@ class FlammeRougeGame:
                 self.menu_step = "stage"
                 # retour à l'écran de sélection : sélection sur le 1er parcours
                 self.menu_index = 1
-                self.menu_preview_index = 1
 
     def _placement_click(self, pos):
         """Phase de placement : clic sur une case derrière la ligne DÉPART."""

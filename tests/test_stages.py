@@ -289,7 +289,7 @@ class TestStageMenu(unittest.TestCase):
         # Échap revient au choix d'étape
         ui2._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE))
         self.assertEqual(ui2.menu_step, "stage")
-        # clic sur le bouton "4"
+        # clic sur le bouton "4" = sélection seule (pas de démarrage)
         ui3 = main.FlammeRougeGame()
         ui3.menu_step = "players"
         ui3._pending_stage = "Avenue Corso Paseo"
@@ -297,6 +297,11 @@ class TestStageMenu(unittest.TestCase):
         ui3._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                            pos=rect.center))
         self.assertEqual(ui3.player_count, 4)
+        self.assertIsNone(ui3.game)  # le clic ne fait que sélectionner
+        # le gros bouton rouge JOUER en bas à droite démarre la partie
+        nb = ui3._next_button_rect()
+        ui3._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                           pos=nb.center))
         self.assertIsNotNone(ui3.game)
         self.assertEqual(len(ui3.game.players), 4)
 
@@ -360,7 +365,7 @@ class TestStageMenu(unittest.TestCase):
             sizes.append((rect.w, rect.h))
             prof = ui._menu_profile_rect(rect)
             self.assertGreaterEqual(prof.h, 84)
-            self.assertLessEqual(prof.h, 150)  # hauteur réduite, plafonnée
+            self.assertLessEqual(prof.h, 120)  # hauteur réduite, plafonnée
         self.assertTrue(sizes[0][0] < sizes[1][0] < sizes[2][0], sizes)
         self.assertTrue(sizes[0][1] < sizes[1][1] < sizes[2][1], sizes)
 
@@ -417,11 +422,11 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.assertEqual(entries[0][4], "header")
         self.assertEqual(self.ui.menu_index, 1)
         self.assertEqual(entries[1][4], "base")
-        self.assertEqual(self.ui.menu_preview_index, 1)
 
-    def test_hover_highlights_but_preview_only_on_click(self):
-        """Le survol déplace la sélection (highlight) sans changer la preview ;
-        seul le clic met à jour la preview."""
+    def test_hover_highlights_click_selects_next_button_navigates(self):
+        """Le survol ne change que le highlight ; le clic ne fait QUE
+        sélectionner (pas de navigation) ; le gros bouton rouge en bas à
+        droite passe à l'écran suivant."""
         pygame = self.pygame
         ui = self.ui
         entries = ui._menu_entries()
@@ -431,13 +436,17 @@ class TestMenuSelectionRules(unittest.TestCase):
         pygame.mouse.get_pos = lambda: rect.center  # headless : set_pos ne marche pas
         try:
             ui._menu_event(pygame.event.Event(pygame.MOUSEMOTION, pos=rect.center))
-            self.assertEqual(ui.menu_index, target)      # sélection survolée
-            self.assertEqual(ui.menu_preview_index, 1)    # preview inchangée
+            self.assertEqual(ui.menu_index, 1)            # survol = highlight seul
+            self.assertEqual(ui.menu_step, "stage")
             ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center))
+            self.assertEqual(ui.menu_index, target)       # clic = sélectionner
+            self.assertEqual(ui.menu_step, "stage")       # mais PAS naviguer
+            nb = ui._next_button_rect()
+            self.assertGreaterEqual(nb.x, ui.width - 260)  # bien en bas à droite
+            ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
         finally:
             pygame.mouse.get_pos = orig_get_pos
-        self.assertEqual(ui.menu_preview_index, target)   # clic -> preview
-        self.assertEqual(ui.menu_step, "players")
+        self.assertEqual(ui.menu_step, "players")        # bouton rouge = suivant
         self.assertEqual(ui._pending_stage, entries[target][0])
 
 

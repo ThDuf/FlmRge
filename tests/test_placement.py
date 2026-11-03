@@ -1081,7 +1081,9 @@ class TestCircuitZoom(unittest.TestCase):
         ui._draw_menu()
         track, thumb = ui._menu_scrollbar_rects()
         self.assertIsNotNone(thumb, "pas de scrollbar alors que la liste déborde")
-        self.assertLessEqual(track.x, 16)          # bien à gauche
+        frame = ui._menu_frame_rect()
+        self.assertGreaterEqual(track.x, frame.x)        # DANS le cadre
+        self.assertLessEqual(track.right, frame.right)   # bord droit intérieur
         self.assertGreater(ui._menu_max_scroll, 0)
         # drag du thumb vers le bas -> scroll augmente
         s0 = ui.menu_scroll
