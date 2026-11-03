@@ -70,8 +70,10 @@ ROW_SEL = (226, 232, 240)       # entrée/bouton sélectionné ou survolé
 TEXT_DIM = (95, 102, 114)       # texte secondaire sur fond clair
 ACCENT = (200, 45, 45)          # rouge principal (boutons SUIVANT/JOUER, accents)
 ACCENT_SOFT = (60, 170, 150)    # teal doux, complémentaire du rouge (Créer un circuit)
+INK = (33, 37, 45)              # texte principal (titres, valeurs)
 CARD_R = 12                     # rayon des grandes cartes/panneaux
 BTN_R = 10                      # rayon des boutons
+CHIP_R = 999                    # rayon des petites pastilles (plein arrondi)
 
 
 def _mix(c1, c2, t):
@@ -452,7 +454,8 @@ class FlammeRougeGame:
         pygame.draw.rect(s, (30, 35, 45, 30), (4, 6, rect.w, rect.h),
                          border_radius=BTN_R)
         self.screen.blit(s, (rect.x - 4, rect.y - 2))
-        pygame.draw.rect(self.screen, fill, rect, border_radius=BTN_R)
+        # corps en dégradé vertical (haut éclairci -> base), look moderne
+        self._grad_fill(rect, tuple(min(255, c + 22) for c in fill), fill, BTN_R)
         dark = tuple(max(0, c - 45) for c in fill)
         light = tuple(min(255, c + 25) for c in fill)
         if pressed and enabled:
@@ -2423,6 +2426,11 @@ class FlammeRougeGame:
             cy = py + ny * off
 
             color = PLAYER_COLORS.get(player.color, BLACK)
+            # ombre douce + anneau blanc + pastille couleur : look moderne
+            pygame.draw.ellipse(self.screen, (208, 213, 222),
+                                (int(cx) - radius, int(cy) + radius - 3,
+                                 radius * 2, 6))
+            pygame.draw.circle(self.screen, WHITE, (int(cx), int(cy)), radius + 2)
             pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)
 
             # Initiale du type de coureur, bien centrée DANS le cercle
@@ -2478,34 +2486,51 @@ class FlammeRougeGame:
             return ("ASPIRATION", "Calcul des glissements de packs...", (230, 126, 0))
         return ("PHASE TERMINALE", "Fatigue puis nouveau tour", (110, 110, 110))
 
-    def _draw_header(self):
-        """Bandeau de titre : fanion, nom du jeu, étape et tour en cours."""
-        pygame.draw.rect(self.screen, HEADER_BG, (0, 0, self.width, HEADER_H))
-        pygame.draw.line(self.screen, BORDER, (0, HEADER_H - 1), (self.width, HEADER_H - 1), 1)
+    def _grad_fill(self, rect, c_top, c_bot, radius=BTN_R):
+        """Remplissage en dégradé vertical (haut -> bas) dans un rect arrondi."""
+        for i in range(rect.h):
+            t = i / max(1, rect.h - 1)
+            c = _mix(c_top, c_bot, t)
+            pygame.draw.line(self.screen, c, (rect.x, rect.y + i), (rect.right, rect.y + i))
 
-        # Fanion rouge (le "flamme rouge" qui donne son nom au jeu)
-        pygame.draw.rect(self.screen, (200, 200, 200), (18, 12, 3, 38))
-        pygame.draw.polygon(self.screen, (215, 45, 45),
-                           ((21, 12), (48, 20), (21, 28)))
+    def _draw_header(self):
+        """Bandeau de titre moderne : pastille logo, titre, pastille étape/tour."""
+        pygame.draw.rect(self.screen, HEADER_BG, (0, 0, self.width, HEADER_H))
+        # ombre douce sous le bandeau
+        s = pygame.Surface((self.width, 8), pygame.SRCALPHA)
+        for i in range(8):
+            a = int(30 * (1 - i / 8))
+            pygame.draw.line(s, (30, 35, 45, a), (0, i), (self.width, i))
+        self.screen.blit(s, (0, HEADER_H))
+
+        # Pastille logo : carré arrondi rouge avec fanion blanc
+        chip = pygame.Rect(16, 10, 40, 40)
+        pygame.draw.rect(self.screen, ACCENT, chip, border_radius=11)
+        pygame.draw.polygon(self.screen, WHITE,
+                            ((chip.x + 10, chip.y + 9), (chip.x + 30, chip.y + 16),
+                             (chip.x + 10, chip.y + 23)))
 
         # Titre bicolore
-        flamme = self.title_font.render("FLAMME ", True, BLACK)
-        rouge = self.title_font.render("ROUGE", True, (235, 60, 60))
+        flamme = self.title_font.render("FLAMME ", True, INK)
+        rouge = self.title_font.render("ROUGE", True, ACCENT)
         ty = (HEADER_H - max(flamme.get_height(), rouge.get_height())) // 2
-        self.screen.blit(flamme, (58, ty))
-        self.screen.blit(rouge, (58 + flamme.get_width(), ty))
+        self.screen.blit(flamme, (66, ty))
+        self.screen.blit(rouge, (66 + flamme.get_width(), ty))
 
-        # Étape et tour, juste après le titre (uniquement en partie)
+        # Étape et tour en pastille (chip), juste après le titre (en partie)
         if self.game is not None:
             stage_name = STAGE_NAMES.get(self.game.stage, self.game.stage)
             info = self.label_font.render(
-                f"{stage_name} · Tour {self.game.turn_count}", True, TEXT_DIM)
-            self.screen.blit(info, (58 + flamme.get_width() + rouge.get_width() + 18,
-                                    (HEADER_H - info.get_height()) // 2))
+                f"{stage_name} · Tour {self.game.turn_count}", True, INK)
+            ix = 66 + flamme.get_width() + rouge.get_width() + 18
+            chip = pygame.Rect(ix, (HEADER_H - 30) // 2, info.get_width() + 24, 30)
+            pygame.draw.rect(self.screen, PANEL_ALT, chip, border_radius=CHIP_R)
+            pygame.draw.rect(self.screen, BORDER, chip, width=1, border_radius=CHIP_R)
+            self.screen.blit(info, (chip.x + 12, chip.centery - info.get_height() // 2))
             # contrôles en une ligne au milieu du bandeau (tronquée avant les boutons)
             controls = (f"H mains · D decks · J histo · R restart · "
                         f"+/- zoom x{self.zoom:.2f} · flèches/clic gauche pan")
-            cx = 58 + flamme.get_width() + rouge.get_width() + 18 + info.get_width() + 24
+            cx = chip.right + 16
             max_w = self._camera_button_rects()["peloton"].x - 16 - cx
             csurf = self.small_font.render(controls, True, TEXT_DIM)
             if csurf.get_width() > max_w > 0:
@@ -2693,29 +2718,23 @@ class FlammeRougeGame:
         if self.show_history:
             self._draw_history()
 
-        # Légende des couleurs du circuit (bas du cadre) sur fond blanc,
-        # pour ne rien superposer ; les boutons caméra sont à sa droite
-        legend_y = self._bar_rect().y - 24  # légende en bas du cadre du parcours
+        # Légende des couleurs du circuit (bas du cadre) en PASTILLES (chips) :
+        # chaque item = pill arrondi avec pastille couleur + libellé
+        legend_y = self._bar_rect().y - 26  # légende en bas du cadre du parcours
         legend_x = self._left_w() + 20
         items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
                  (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente")]
-        # fond blanc derrière la légende
-        total_w = 0
-        for _sw, label in items:
-            total_w += 18 + self.label_font.render(label, True, (0, 0, 0)).get_width() + 14
-        frame = self._frame_rect()
-        pygame.draw.rect(self.screen, WHITE,
-                         (frame.x + 4, legend_y - 5, total_w + 14, 24), border_radius=6)
-        pygame.draw.rect(self.screen, (160, 166, 176),
-                         (frame.x + 4, legend_y - 5, total_w + 14, 24), width=1,
-                         border_radius=6)
         for swatch, label in items:
-            pygame.draw.rect(self.screen, swatch, (legend_x, legend_y, 14, 14), border_radius=3)
-            pygame.draw.rect(self.screen, BLACK, (legend_x, legend_y, 14, 14),
-                             width=1, border_radius=3)
-            text_surf = self.label_font.render(label, True, BLACK)
-            self.screen.blit(text_surf, (legend_x + 18, legend_y - 2))
-            legend_x += 18 + text_surf.get_width() + 14
+            text_surf = self.small_font.render(label, True, INK)
+            chip = pygame.Rect(legend_x, legend_y, 14 + 8 + text_surf.get_width() + 12, 22)
+            pygame.draw.rect(self.screen, PANEL_ALT, chip, border_radius=CHIP_R)
+            pygame.draw.rect(self.screen, BORDER, chip, width=1, border_radius=CHIP_R)
+            pygame.draw.circle(self.screen, swatch,
+                               (chip.x + 12, chip.centery), 6)
+            pygame.draw.circle(self.screen, BORDER,
+                               (chip.x + 12, chip.centery), 6, 1)
+            self.screen.blit(text_surf, (chip.x + 24, chip.centery - text_surf.get_height() // 2))
+            legend_x += chip.w + 8
 
         # Écran de victoire : overlay podium (le bouton est dans le bandeau de titre)
         # (TAB ou le bouton basculent avec l'état final du circuit)
@@ -2735,13 +2754,20 @@ class FlammeRougeGame:
         heights = [130, 95, 70]     # 1er, 2e, 3e
         offsets = [0, -1, 1]        # 1er au CENTRE, 2e à gauche, 3e à droite
         base_y = overlay.bottom - 46
+        medals = [(240, 210, 60), (192, 198, 208), (205, 127, 50)]  # or/argent/bronze
         for i, entry in enumerate(rank):
             x = overlay.centerx + offsets[i] * 130 - 55
             h = heights[i]
-            pygame.draw.rect(self.screen, PANEL_ALT, (x, base_y - h, 110, h),
-                             border_radius=10)
-            num = self.big_font.render(str(i + 1), True, WHITE)
-            self.screen.blit(num, num.get_rect(center=(x + 55, base_y - h + 26)))
+            # barre en dégradé + médaille au-dessus
+            self._grad_fill(pygame.Rect(x, base_y - h, 110, h),
+                            _mix(medals[i], WHITE, 0.35), medals[i], 10)
+            pygame.draw.rect(self.screen, _mix(medals[i], BLACK, 0.25),
+                             (x, base_y - h, 110, h), width=1, border_radius=10)
+            pygame.draw.circle(self.screen, medals[i], (x + 55, base_y - h - 20), 16)
+            pygame.draw.circle(self.screen, _mix(medals[i], BLACK, 0.25),
+                               (x + 55, base_y - h - 20), 16, 2)
+            num = self.big_font.render(str(i + 1), True, INK)
+            self.screen.blit(num, num.get_rect(center=(x + 55, base_y - h - 20)))
             player, runner = entry
             color = PLAYER_COLORS.get(player.color, WHITE)
             kind = "S" if runner.type.name == "SPRINTER" else "R"
@@ -2917,18 +2943,30 @@ class FlammeRougeGame:
         Cartes cliquables qu'en phase d'énergie (cf. _handle_click).
         """
         mouse = pygame.mouse.get_pos()
-        # onglets des joueurs
-        for i, (player, tab) in enumerate(zip(self.game.players, self._player_tab_rects())):
+        # onglets des joueurs en contrôle segmenté : conteneur + pastille active
+        tabs = self._player_tab_rects()
+        if tabs:
+            cont = tabs[0]
+            for tb in tabs[1:]:
+                cont = cont.union(tb)
+            cont = cont.inflate(10, 8)
+            pygame.draw.rect(self.screen, PANEL_ALT, cont, border_radius=CHIP_R)
+            pygame.draw.rect(self.screen, BORDER, cont, width=1, border_radius=CHIP_R)
+        for i, (player, tab) in enumerate(zip(self.game.players, tabs)):
             active = (i == self.current_player_idx)
             hovered = tab.collidepoint(mouse)
             color = PLAYER_COLORS.get(player.color, BLACK)
-            fill = color if active else ((tuple(min(255, c + 40) for c in color))
-                                         if hovered else PANEL_ALT)
-            pygame.draw.rect(self.screen, fill, tab, border_radius=8)
-            pygame.draw.rect(self.screen, BLACK if active else BORDER, tab,
-                             width=1, border_radius=8)
-            t = self.small_font.render(player.color[:4], True,
-                                       BLACK if active else TEXT_DIM)
+            if active:
+                fill = color
+                txt = WHITE
+            elif hovered:
+                fill = _mix(color, WHITE, 0.75)
+                txt = INK
+            else:
+                fill = PANEL_ALT
+                txt = TEXT_DIM
+            pygame.draw.rect(self.screen, fill, tab, border_radius=CHIP_R)
+            t = self.small_font.render(player.color[:4], True, txt)
             self.screen.blit(t, t.get_rect(center=tab.center))
         for player, panel, rows in self._hand_layout():
             color = PLAYER_COLORS.get(player.color, BLACK)
