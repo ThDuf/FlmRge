@@ -1033,10 +1033,8 @@ class FlammeRougeGame:
         for tile in track.tiles:
             for cell in tile.cells:
                 s0 = float(cell.x)
-                if cell.run == CellRunType.START:
-                    seg_color = (255, 236, 130)  # départ : jaune clair
-                elif cell.run == CellRunType.END:
-                    seg_color = (240, 210, 60)   # arrivée : jaune vif (différent)
+                if cell.run in (CellRunType.START, CellRunType.END):
+                    seg_color = (48, 52, 60)     # départ/arrivée en noir (comme le plat) : identifiés par leurs lignes
                 elif cell.geography == CellGeographyType.UPHILL:
                     seg_color = (235, 145, 50)   # montée : orange (comme le profil)
                 elif cell.geography == CellGeographyType.DOWNHILL:
@@ -1066,16 +1064,22 @@ class FlammeRougeGame:
                              (sx - nx * half, sy - ny * half), 1)
 
         # Départ noté à la LIGNE de départ, arrivée à la LIGNE d'arrivée :
-        # lignes en travers de la route à ces positions
+        # lignes en travers de la route à ces positions + mots « départ » /
+        # « arrivée » à côté (départ côté +n, arrivée côté -n, loin du drapeau)
         s_start = float(track.start_line_x())
         s_end = float(track.end_line_x())
-        for s_line, col in ((s_start, (255, 236, 130)), (s_end, (240, 210, 60))):
+        for s_line, col, word, side in ((s_start, (255, 236, 130), "départ", 1),
+                                        (s_end, (240, 210, 60), "arrivée", -1)):
             px, py, tx, ty = path_point_at(pts, s_line)
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
             pygame.draw.line(self.screen, col,
                              (sx + nx * half, sy + ny * half),
                              (sx - nx * half, sy - ny * half), 3)
+            lbl = self.small_font.render(word, True, (40, 44, 52))
+            lx = sx + nx * (half + 8) * side - lbl.get_width() // 2
+            ly = sy + ny * (half + 8) * side - lbl.get_height() // 2
+            self.screen.blit(lbl, (lx, ly))
 
         # Ligne d'arrivée sur le tracé (comme sur le profil) : pointillés jaunes
         # en travers de la route + petit drapeau damier PERPENDICULAIRE à la
