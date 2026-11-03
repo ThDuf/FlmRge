@@ -20,7 +20,7 @@ CELL_MAX = 60
 HEADER_H = 60       # bandeau de titre (toute la largeur)
 PHASE_H = 44        # bandeau de phase (toute la largeur)
 TOP_H = HEADER_H + PHASE_H + 8  # début de la zone de jeu sous les bandeaux
-MENU_TOP = HEADER_H + 64         # début du contenu des écrans de menu (juste sous le bandeau titre)
+MENU_TOP = HEADER_H + 48         # début du contenu des écrans de menu (juste sous le titre)
 INFO_H = 100        # hauteur du bloc infos (compteur, action, prochain)
 
 CARD_W = 44        # taille des cartes en main
@@ -1840,8 +1840,6 @@ class FlammeRougeGame:
             return
         title = self.title_font.render("Choix de l'étape", True, BLACK)
         self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 8))
-        hint = self.label_font.render("Clic pour sélectionner · flèches + ENTRÉE", True, TEXT_DIM)
-        self.screen.blit(hint, ((self.width - hint.get_width()) // 2, HEADER_H + 38))
 
         # la sélection (recherche + liste) est dans un CADRE à gauche (~1/4 de
         # la fenêtre), le reste de la largeur est pour la preview à droite
