@@ -1002,12 +1002,11 @@ class FlammeRougeGame:
         return pygame.Rect(rect.x + 10, tr.bottom + 8, rect.w - 20, 84)
 
     def _menu_profile_rect(self, rect):
-        """Profil du menu : hauteur réduite (plafonnée à 100 px) sous le tracé,
-        avec un espace de 34 px au-dessus pour les mâts des fanions de col."""
+        """Profil du menu : hauteur réduite (plafonnée à 120 px) sous le tracé."""
         tr = self._preview_track_rect(rect)
-        top = tr.bottom + 34
+        top = tr.bottom + 8
         return pygame.Rect(rect.x + 10, top, rect.w - 20,
-                           min(100, max(84, rect.bottom - 8 - top)))
+                           min(120, max(84, rect.bottom - 8 - top)))
 
     def _stage_preview_points(self, name, code=None):
         """Polyligne (unités de cases) du tracé d'une étape ou d'un code perso."""
@@ -1750,7 +1749,8 @@ class FlammeRougeGame:
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
-        inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
+        # marge haute de 40 px DANS le panneau pour les mâts des fanions de col
+        inner = pygame.Rect(rect.x + 6, rect.y + 40, rect.w - 12, rect.h - 40 - 34)
         pts = [(inner.x + inner.w * i / n,
                 inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
         # profil très légèrement accidenté comme un vrai : petits aléas en
@@ -1788,9 +1788,9 @@ class FlammeRougeGame:
                 if cat is None:
                     continue
                 mx, my = jpts[i]
-                # mât TOUJOURS visible, même si le col est déjà haut : il monte
-                # dans l'espace laissé au-dessus du panneau profil (rect.y - 24)
-                top = rect.y - 24
+                # mât TOUJOURS visible et DANS le panneau profil (marge haute de
+                # 40 px réservée), même si le col est déjà tout en haut
+                top = rect.y + 4
                 pygame.draw.line(self.screen, (90, 90, 90), (mx, my), (mx, top), 2)
                 # drapeau rouge avec la catégorie écrite DESSUS (blanc sur rouge)
                 fw, fh = 26, 13

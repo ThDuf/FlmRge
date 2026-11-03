@@ -365,7 +365,7 @@ class TestStageMenu(unittest.TestCase):
             sizes.append((rect.w, rect.h))
             prof = ui._menu_profile_rect(rect)
             self.assertGreaterEqual(prof.h, 84)
-            self.assertLessEqual(prof.h, 100)  # hauteur réduite, plafonnée
+            self.assertLessEqual(prof.h, 120)  # hauteur réduite, plafonnée
         self.assertTrue(sizes[0][0] < sizes[1][0] < sizes[2][0], sizes)
         self.assertTrue(sizes[0][1] < sizes[1][1] < sizes[2][1], sizes)
 

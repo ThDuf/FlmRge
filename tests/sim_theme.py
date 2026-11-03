@@ -175,11 +175,20 @@ def main_():
     pr3 = ui3._menu_profile_rect(ui3._preview_rect())
     red = 0
     for x in range(pr3.x, pr3.right):
-        for y in range(max(0, pr3.y - 40), pr3.bottom):  # mâts/drapeaux au-dessus du panneau aussi
+        for y in range(pr3.y, pr3.bottom):  # les fanions doivent rester DANS le profil
             if px(ui3.screen, (x, y)) == (215, 45, 45):
                 red += 1
     print("fanion rouge (215,45,45) px:", red, "(La Haut Montagne, D+=19 -> HC)")
     assert red > 10, "fanion rouge de catégorie absent du profil"
+    # les fanions ne doivent PAS dépasser du panneau profil (pas hors du profil)
+    trect3 = ui3._preview_track_rect(ui3._preview_rect())
+    red_out = 0
+    for x in range(pr3.x, pr3.right):
+        for y in range(trect3.bottom, pr3.y):
+            if px(ui3.screen, (x, y)) == (215, 45, 45):
+                red_out += 1
+    print("fanions hors du panneau profil:", red_out)
+    assert red_out == 0, "des fanions dépassent du panneau profil"
 
     # --- Éditeur : les lettres des tuiles sont toujours dessinées ---
     ui2.menu_step = 'editor'
