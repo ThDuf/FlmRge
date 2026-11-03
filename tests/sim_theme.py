@@ -104,6 +104,47 @@ def main_():
     print(f"preview tracé Haut Montagne: orange={orange}, bleu={blue}")
     assert orange > 100 and blue > 100, "montée/descente pas aux couleurs du profil"
 
+    # --- Containment des couleurs : de part et d'autre de chaque frontière
+    # de case, la couleur au centre de la route est celle de la bonne case ---
+    from game.game import build_stage_track
+    from game.track import CellGeographyType, CellRunType, path_point_at
+    name = "La Haut Montagne"
+    track = build_stage_track(name)
+    pts = ui2._stage_preview_points(name)
+    rect = ui2._preview_rect()
+    trect = ui2._preview_track_rect(rect)
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+    bb_w = max(xs) - min(xs); bb_h = max(ys) - min(ys)
+    scale = min((trect.w - 16) / bb_w, (trect.h - 16) / bb_h)
+    ox = trect.x + (trect.w - bb_w * scale) / 2 - min(xs) * scale
+    oy = trect.y + (trect.h - bb_h * scale) / 2 - min(ys) * scale
+    def cell_color(cell):
+        if cell.run in (CellRunType.START, CellRunType.END):
+            return (48, 52, 60)
+        if cell.geography == CellGeographyType.UPHILL:
+            return (235, 145, 50)
+        if cell.geography == CellGeographyType.DOWNHILL:
+            return (80, 120, 235)
+        return (48, 52, 60)
+    def pix_at(s):
+        qx, qy, _tx, _ty = path_point_at(pts, s)
+        return ui2.screen.get_at((int(ox + qx * scale), int(oy + qy * scale)))[:3]
+    checked = 0
+    cells = [c for t in track.tiles for c in t.cells]
+    for i in range(1, len(cells)):
+        c_prev, c_cur = cells[i - 1], cells[i]
+        if cell_color(c_prev) == cell_color(c_cur):
+            continue  # pas de changement de couleur à cette frontière
+        s = float(cells[i].x)
+        before = pix_at(s - 0.3)
+        after = pix_at(s + 0.3)
+        exp_b, exp_a = cell_color(c_prev), cell_color(c_cur)
+        ok_b = all(abs(before[k] - exp_b[k]) <= 12 for k in range(3))
+        ok_a = all(abs(after[k] - exp_a[k]) <= 12 for k in range(3))
+        assert ok_b and ok_a, f"franchise case {i}: avant={before} (attendu {exp_b}), après={after} (attendu {exp_a})"
+        checked += 1
+    print(f"containment couleurs: {checked} frontières testées, OK")
+
     # --- Profil accidenté + fanion rouge de catégorie au sommet ---
     ui3 = main.FlammeRougeGame()
     ui3.width, ui3.height = 1200, 800

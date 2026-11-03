@@ -1035,29 +1035,50 @@ class FlammeRougeGame:
         from game.game import build_stage_track, build_track_from_code
         from game.track import CellGeographyType, CellRunType
         track = build_track_from_code(code) if code else build_stage_track(name)
+        # Polyligne complète du tracé (4 sous-points par case) avec normales
+        # BISSEctrices communes à toutes les cases : la jonction entre deux
+        # cases est une arête en onglet partagée exactement par les deux
+        # polygones -> bords parfaitement droits ET couleurs strictement
+        # contenues dans leur case (aucun débordement).
+        steps = 4
+        all_pts = []     # points écran du tracé complet
+        cell_spans = []  # (index début, index fin, couleur) par case
         for tile in track.tiles:
             for cell in tile.cells:
                 s0 = float(cell.x)
                 if cell.run in (CellRunType.START, CellRunType.END):
-                    seg_color = (48, 52, 60)     # départ/arrivée en noir (comme le plat) : identifiés par leurs lignes
+                    seg_color = (48, 52, 60)     # départ/arrivée en noir : identifiés par leurs lignes
                 elif cell.geography == CellGeographyType.UPHILL:
                     seg_color = (235, 145, 50)   # montée : orange (comme le profil)
                 elif cell.geography == CellGeographyType.DOWNHILL:
                     seg_color = (80, 120, 235)   # descente : bleu (comme le profil)
                 else:
                     seg_color = (48, 52, 60)     # plat : gris très foncé
-                steps = 3
-                seg = []
+                start = len(all_pts)
                 for k in range(steps + 1):
+                    if k == 0 and all_pts:
+                        continue  # point déjà posé par la case précédente
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
-                    seg.append((ox + px * scale, oy + py * scale))
-                pygame.draw.lines(self.screen, seg_color, False, seg, road_w)
-                # jonctions rondes à chaque point -> bords bien droits et lisses.
-                # Les cases sont tracées dans l'ordre : la case suivante
-                # recouvre le débord de la précédente, donc chaque couleur
-                # reste dans sa case (le trait de case les sépare).
-                for pt in seg:
-                    pygame.draw.circle(self.screen, seg_color, pt, road_w // 2)
+                    all_pts.append((ox + px * scale, oy + py * scale))
+                cell_spans.append((start, len(all_pts) - 1, seg_color))
+        normals = []
+        for i, pt in enumerate(all_pts):
+            if i == 0:
+                dx, dy = all_pts[1][0] - pt[0], all_pts[1][1] - pt[1]
+            elif i == len(all_pts) - 1:
+                dx, dy = pt[0] - all_pts[i - 1][0], pt[1] - all_pts[i - 1][1]
+            else:
+                dx, dy = all_pts[i + 1][0] - all_pts[i - 1][0], all_pts[i + 1][1] - all_pts[i - 1][1]
+            norm = math.hypot(dx, dy) or 1.0
+            normals.append((-dy / norm, dx / norm))
+        # Chaque case = bandeau polygonal (offset exact +/- road_w/2 le long
+        # des normales partagées) : bords parfaitement droits.
+        for start, end, seg_color in cell_spans:
+            left = [(all_pts[i][0] + normals[i][0] * road_w / 2,
+                     all_pts[i][1] + normals[i][1] * road_w / 2) for i in range(start, end + 1)]
+            right = [(all_pts[i][0] - normals[i][0] * road_w / 2,
+                      all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(start, end + 1)]
+            pygame.draw.polygon(self.screen, seg_color, left + right[::-1])
 
         # Un trait par CASE (pas par tuile) : petite ligne claire à chaque
         # jonction de case, en travers de la route
