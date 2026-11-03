@@ -138,6 +138,7 @@ class FlammeRougeGame:
         self.aspiration_step = 0
         self.aspiration_total = 0
         self.aspiration_movements = []
+        self.animations = []  # animations fluides en cours (déplacements des coureurs)
         self.last_action = None  # (texte, couleur) de la dernière action effectuée
 
     def _short_id(self, runner) -> str:
@@ -327,6 +328,7 @@ class FlammeRougeGame:
         from_x, from_y = runner.x, runner.y
         self.game.apply_movement_step(move)
         to_x, to_y = runner.x, runner.y
+        self._push_animation(runner.id, from_x, from_y, to_x, to_y)
 
         # Bandeau : ce qui vient de se passer
         if to_x == from_x:
@@ -538,13 +540,40 @@ class FlammeRougeGame:
         # reset de l'affichage pas-à-pas
         self.showing_movement = False
         self.showing_aspiration = False
+        self.animations = []
         self.movement_step = self.movement_total = 0
         self.aspiration_step = self.aspiration_total = 0
         self.played_display_index = {r.id: 0 for p in game.players for r in p.get_runners()}
         self.last_action = (f"Tour {game.turn_count} joué en aléatoire", (126, 87, 194))
 
+    # ------------------------------------------------------------------
+    # Animations fluides des déplacements (glissade le long du circuit)
+    # ------------------------------------------------------------------
+
+    def _push_animation(self, rid, from_x, from_lane, to_x, to_lane):
+        """Enregistre une animation de glissade d'un coureur d'une case à
+        l'autre. Durée proportionnelle à la distance parcourue."""
+        if (from_x, from_lane) == (to_x, to_lane):
+            return  # bloqué : pas de déplacement, rien à animer
+        dist = abs(to_x - from_x)
+        dur = min(0.85, 0.22 + 0.055 * dist)  # secondes
+        self.animations.append({"rid": rid, "from_x": from_x, "from_lane": from_lane,
+                                "to_x": to_x, "to_lane": to_lane,
+                                "t0": pygame.time.get_ticks(), "dur": int(dur * 1000)})
+
+    def _animations_active(self) -> bool:
+        now = pygame.time.get_ticks()
+        return any(now < a["t0"] + a["dur"] for a in self.animations)
+
+    def _prune_animations(self):
+        now = pygame.time.get_ticks()
+        self.animations = [a for a in self.animations if now < a["t0"] + a["dur"] + 50]
+
     def _advance_step(self):
-        """Avance d'une étape (bouton ou ENTRÉE) selon l'état courant."""
+        """Avance d'une étape (bouton ou ENTRÉE) selon l'état courant.
+        Bloqué tant qu'une animation de déplacement est en cours."""
+        if self._animations_active():
+            return
         if self.game.current_phase == Phase.PLACEMENT:
             self.game.auto_place_riders()  # option "placement au hasard"
         elif self.game.current_phase == Phase.ENERGY and self.game.all_players_ready():
@@ -591,6 +620,8 @@ class FlammeRougeGame:
         if not self.aspiration_movements:
             return True
         step = self.aspiration_movements.pop(0)
+        for r, fx, fl, tx, tl in step:  # positions AVANT application
+            self._push_animation(r.id, fx, fl, tx, tl)
         self.game.apply_slipstream_step(step)
         desc = ", ".join(f"{self._short_id(r)} {fx}\u2192{tx}"
                          for r, fx, _fl, tx, _tl in step)
@@ -656,6 +687,7 @@ class FlammeRougeGame:
                 self._draw_unplaced_runners()  # réserve aussi clippée dans le cadre
                 self.screen.set_clip(None)
                 self._draw_ui()
+            self._prune_animations()
             pygame.display.flip()
             self.clock.tick(60)
 
@@ -1763,6 +1795,7 @@ class FlammeRougeGame:
         self.aspiration_step = 0
         self.aspiration_total = 0
         self.aspiration_movements = []
+        self.animations = []
         self.played_display_index = {}
         self.last_action = None
         self.current_player_idx = 0
@@ -2106,13 +2139,31 @@ class FlammeRougeGame:
 
         players_by_runner = {r.id: p for p in self.game.players
                              for r in p.get_runners()}
+        now = pygame.time.get_ticks()
+        anims = {}
+        for a in self.animations:  # la dernière animation par coureur gagne
+            if now < a["t0"] + a["dur"]:
+                anims[a["rid"]] = a
         for x, lane, runner in self.game.track.get_all_runners():
             player = players_by_runner[runner.id]
-            px, py, tx, ty = self._cell_anchor(x)
+            a = anims.get(runner.id)
+            if a:
+                # glissade fluide le long du tracé : interpolation de
+                # l'abscisse curviligne + de la file, easing ease-out
+                t = min(1.0, (now - a["t0"]) / a["dur"])
+                e = 1 - (1 - t) ** 3
+                s0 = (a["from_x"] + 0.5) * geo["cell"]
+                s1 = (a["to_x"] + 0.5) * geo["cell"]
+                px, py, tx, ty = self._path_at(geo, s0 + (s1 - s0) * e)
+                off0 = lane_off if a["from_lane"] == 0 else -lane_off
+                off1 = lane_off if a["to_lane"] == 0 else -lane_off
+                off = off0 + (off1 - off0) * e
+            else:
+                px, py, tx, ty = self._cell_anchor(x)
+                off = lane_off if lane == 0 else -lane_off  # file A = droite
             nx, ny = -ty, tx
-            sign = 1 if lane == 0 else -1  # file A = droite du sens de marche
-            cx = px + nx * lane_off * sign
-            cy = py + ny * lane_off * sign
+            cx = px + nx * off
+            cy = py + ny * off
 
             color = PLAYER_COLORS.get(player.color, BLACK)
             pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)

@@ -28,6 +28,14 @@ def sum_positions(ui):
     return sum(r.x for _x, _y, r in ui.game.track.get_all_runners())
 
 
+def finish_animations(ui):
+    """Termine instantanément les animations en cours (get_ticks est gelé
+    à 0 en headless : on force t0 très négatif pour finir l'animation)."""
+    for a in ui.animations:
+        a["t0"] = -(10 ** 9)
+    ui._prune_animations()
+
+
 class TestUiFlow(unittest.TestCase):
     def setUp(self):
         self.ui = main.FlammeRougeGame(stage="La Haut Montagne")
@@ -126,6 +134,7 @@ class TestUiFlow(unittest.TestCase):
             self.assertTrue(ui._try_button_click(center))
             clicks += 1
             self.assertLess(clicks, 100)
+            finish_animations(ui)  # les clics sont bloqués pendant l'animation
             assert_board_consistent(self, ui)
         self.assertEqual(clicks, 4)
 
@@ -137,6 +146,7 @@ class TestUiFlow(unittest.TestCase):
             ui._try_button_click(center)
             clicks += 1
             self.assertLess(clicks, 100)
+            finish_animations(ui)
             assert_board_consistent(self, ui)
         # soit la partie est finie, soit on est revenu en phase d'énergie
         self.assertTrue(game.game_over or game.current_phase == Phase.ENERGY)

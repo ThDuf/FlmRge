@@ -206,7 +206,7 @@ Menu de sélection au lancement : choix de l'étape (clic ou flèches + ENTRÉE 
 - [x] **Interface revue** : menu avec catégories (circuits de base / persos) + recherche + preview du parcours, éditeur de piste, écran de jeu avec cadre parcours dédié, légende sur fond blanc et boutons caméra, boutons avec effet d'enfoncement
 - [x] **Zoom / panoramique caméra** sur le circuit (molette, +/-, flèches, drag clic gauche ou droit) + boutons **Tête de course** / **Peloton** / **Vue d'ensemble**
 - [x] **Déplacements pas à pas** : la séquence de mouvement demande un clic (ou ENTRÉE) à chaque mouvement pour bien voir ce qui se passe
-- [ ] **Animations fluides des déplacements** : glisser les coureurs case par case lors des phases de mouvement, d'aspiration et de fatigue (sans téléportation)
+- [x] **Animations fluides des déplacements** : les coureurs glissent le long du tracé (interpolation de l'abscisse curviligne + de la file, easing ease-out, durée proportionnelle à la distance) lors des mouvements et de l'aspiration ; les clics sont bloqués pendant l'animation (`tests/test_animation.py`, `tests/sim_animation.py`)
 - [ ] **Ajout des sprites** (remplacer les cercles par des images)
 - [ ] **Mode multijoueur en ligne** (via WebSocket)
 - [x] **Étapes officielles** : les 6 étapes de la boîte de base codées en lettres de tuiles (Avenue Corso Paseo, Firenze-Milano, Ronde van Wevelgem, La Haut Montagne, La Classicissima, Col du Ballon) + **choix au menu** avec preview, profil et image de carte (`tests/test_stages.py`)
