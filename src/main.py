@@ -1116,6 +1116,8 @@ class FlammeRougeGame:
             right = [(all_pts[i][0] - normals[i][0] * road_w / 2,
                       all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(start, end + 1)]
             pygame.draw.polygon(self.screen, seg_color, left + right[::-1])
+        # ligne continue et très fine au MILIEU de la route (séparation des 2 files)
+        pygame.draw.lines(self.screen, (235, 238, 242), False, all_pts, 1)
 
         # Un trait par CASE (pas par tuile) : FINE ligne claire à chaque
         # jonction de case, exactement sur la largeur de la route (1 px)

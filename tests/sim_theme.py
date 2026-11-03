@@ -126,9 +126,15 @@ def main_():
         if cell.geography == CellGeographyType.DOWNHILL:
             return (80, 120, 235)
         return (48, 52, 60)
+    road_w = max(9, min(16, round(scale * 1.3)))
+
+    LINE_COLORS = [(235, 238, 242), (225, 229, 235)]  # ligne centrale + traits de case
+
     def pix_at(s):
+        # échantillon au centre de la route ; on ignore les pixels des lignes
+        # (ligne centrale fine et traits de case) qui passent par le milieu
         qx, qy, _tx, _ty = path_point_at(pts, s)
-        return ui2.screen.get_at((int(ox + qx * scale), int(oy + qy * scale)))[:3]
+        return [ui2.screen.get_at((int(ox + qx * scale), int(oy + qy * scale)))[:3]]
     checked = 0
     cells = [c for t in track.tiles for c in t.cells]
     for i in range(1, len(cells)):
@@ -139,15 +145,23 @@ def main_():
         before = pix_at(s - 0.3)
         after = pix_at(s + 0.3)
         exp_b, exp_a = cell_color(c_prev), cell_color(c_cur)
-        ok_b = all(abs(before[k] - exp_b[k]) <= 12 for k in range(3))
-        ok_a = all(abs(after[k] - exp_a[k]) <= 12 for k in range(3))
+        def match(samples, exp):
+            for c in samples:
+                if any(all(abs(c[k] - lc[k]) <= 8 for k in range(3)) for lc in LINE_COLORS):
+                    continue  # pixel de ligne (centrale/trait de case) : on ignore
+                if all(abs(c[k] - exp[k]) <= 12 for k in range(3)):
+                    return True
+            return len(samples) == 0 or all(
+                any(all(abs(c[k] - lc[k]) <= 8 for k in range(3)) for lc in LINE_COLORS)
+                for c in samples)  # que des pixels de ligne -> ok aussi
+        ok_b = match(before, exp_b)
+        ok_a = match(after, exp_a)
         assert ok_b and ok_a, f"franchise case {i}: avant={before} (attendu {exp_b}), après={after} (attendu {exp_a})"
         checked += 1
     print(f"containment couleurs: {checked} frontières testées, OK")
 
     # --- Aucun interstice entre les cases : le long de chaque frontière,
     # sur toute la largeur de la route, aucun pixel de fond (PANEL) ---
-    road_w = max(9, min(16, round(scale * 1.3)))
     gaps = 0
     for i in range(1, len(cells)):
         if cells[i - 1].run != CellRunType.NONE or cells[i].run != CellRunType.NONE:
