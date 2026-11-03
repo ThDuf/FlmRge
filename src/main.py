@@ -86,20 +86,32 @@ CYCLISTES_CONNUS = ["Pogačar", "Vingegaard", "Evenepoel", "Van der Poel", "Rogl
                     "Bartali", "Van Aert", "Nibali", "Fignon"]
 
 
-def col_category(dplus: int):
-    """Catégorie d'un col selon le D+ (unités de profil : 1 case montante = +1) :
-    HC pour les très grands, 1 pour les grands, 4 pour les petits."""
-    if dplus <= 0:
+def col_category(climb_len: int):
+    """Catégorie d'un col selon la LONGUEUR de la montée qui précède le
+    sommet (en cases/km) : HC pour les très longues, 1 pour les longues,
+    4 pour les petites."""
+    if climb_len <= 0:
         return None  # plat : pas de col à catégoriser
-    if dplus >= 18:
+    if climb_len >= 10:
         return "HC"
-    if dplus >= 14:
+    if climb_len >= 7:
         return "1"
-    if dplus >= 10:
+    if climb_len >= 5:
         return "2"
-    if dplus >= 6:
+    if climb_len >= 3:
         return "3"
     return "4"
+
+
+def climb_length_before_summit(alt) -> int:
+    """Longueur (en cases) de la montée continue qui précède le sommet."""
+    imax = max(range(len(alt)), key=lambda i: alt[i])
+    length = 0
+    i = imax
+    while i > 0 and alt[i] > alt[i - 1]:
+        length += 1
+        i -= 1
+    return length
 
 
 class FlammeRougeGame:
@@ -1662,13 +1674,18 @@ class FlammeRougeGame:
         inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
         pts = [(inner.x + inner.w * i / n,
                 inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
-        # profil un peu accidenté comme un vrai : jitter vertical déterministe
-        # (dépend de l'index, pour ne pas clignoter à chaque frame)
-        amp = max(1.5, inner.h * 0.07)
+        # profil très légèrement accidenté comme un vrai : petits aléas
+        # aléatoires (seedés par index -> pas de clignotement) uniquement
+        # ENTRE les cols, c'est-à-dire sur les portions plates
+        import random as _random
+        amp = max(0.6, inner.h * 0.02)
         jpts = list(pts)
         for i in range(1, n):
-            jit = (((i * 37) % 11) - 5) / 5 * amp
-            jpts[i] = (pts[i][0], pts[i][1] + jit)
+            flat_before = alt[i] == alt[i - 1]
+            flat_after = alt[i] == alt[i + 1] if i < n else True
+            if flat_before or flat_after:
+                jit = _random.Random(1000 + i).uniform(-amp, amp)
+                jpts[i] = (pts[i][0], pts[i][1] + jit)
         soft_fill = {1: (255, 205, 150), -1: (160, 195, 255), 0: (214, 219, 227)}
         seg_line = {1: (235, 145, 50), -1: (80, 120, 235), 0: TEXT_DIM}
         for i in range(n):
@@ -1678,8 +1695,9 @@ class FlammeRougeGame:
                     (jpts[i + 1][0], inner.bottom), (jpts[i][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
             pygame.draw.line(self.screen, seg_line[key], jpts[i], jpts[i + 1], 2)
-        # petit fanion rouge au sommet avec la catégorie du col (selon le D+)
-        cat = col_category(dplus)
+        # petit fanion rouge au sommet : catégorie selon la longueur de la
+        # montée qui précède le col
+        cat = col_category(climb_length_before_summit(alt))
         if cat is not None and n > 0:
             imax = max(range(len(alt)), key=lambda i: alt[i])
             mx, my = jpts[imax]

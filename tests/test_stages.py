@@ -376,15 +376,27 @@ class TestStageMenu(unittest.TestCase):
         self.assertEqual(ui.game.track.length, 78)
 
     def test_col_category_thresholds(self):
-        """Catégorie du col selon le D+ : 4 petits, 1 grands, HC très grands."""
-        from main import col_category
+        """Catégorie du col selon la LONGUEUR de la montée avant le sommet :
+        4 petites, 1 longues, HC très longues."""
+        from main import col_category, climb_length_before_summit
         self.assertIsNone(col_category(0))    # plat : pas de fanion
-        self.assertEqual(col_category(3), "4")
-        self.assertEqual(col_category(7), "3")
-        self.assertEqual(col_category(11), "2")
-        self.assertEqual(col_category(15), "1")
-        self.assertEqual(col_category(19), "HC")
+        self.assertEqual(col_category(2), "4")
+        self.assertEqual(col_category(3), "3")
+        self.assertEqual(col_category(5), "2")
+        self.assertEqual(col_category(7), "1")
+        self.assertEqual(col_category(12), "HC")
         self.assertEqual(col_category(30), "HC")
+        # longueur de la montée continue avant le sommet
+        self.assertEqual(climb_length_before_summit([0, 0, 1, 2, 3, 3, 2, 1]), 3)
+        self.assertEqual(climb_length_before_summit([0, 0, 0]), 0)
+        # calibrage sur les vraies étapes (D+ lu sur le profil)
+        ui = main.FlammeRougeGame()
+        self.assertEqual(col_category(climb_length_before_summit(
+            ui._stage_profile("La Haut Montagne"))), "HC")   # 12 cases
+        self.assertEqual(col_category(climb_length_before_summit(
+            ui._stage_profile("Firenze - Milano"))), "1")    # 7 cases
+        self.assertIsNone(col_category(climb_length_before_summit(
+            ui._stage_profile("Avenue Corso Paseo"))))       # plat
 
 
 if __name__ == '__main__':
