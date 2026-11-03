@@ -145,6 +145,26 @@ def main_():
         checked += 1
     print(f"containment couleurs: {checked} frontières testées, OK")
 
+    # --- Aucun interstice entre les cases : le long de chaque frontière,
+    # sur toute la largeur de la route, aucun pixel de fond (PANEL) ---
+    road_w = max(9, min(16, round(scale * 1.3)))
+    gaps = 0
+    for i in range(1, len(cells)):
+        if cells[i - 1].run != CellRunType.NONE or cells[i].run != CellRunType.NONE:
+            continue  # le damier d'arrivée contient du blanc : hors test
+        s = float(cells[i].x)
+        qx, qy, tx, ty = path_point_at(pts, s)
+        sx, sy = ox + qx * scale, oy + qy * scale
+        nx, ny = -ty, tx
+        # on échantillonne strictement À L'INTÉRIEUR de la route (les 2 px de
+        # bord peuvent être du fond à cause de l'arrondi des polygones)
+        for t in [x / 8 for x in range(-int((road_w / 2 - 1.5) * 8), int((road_w / 2 - 1.5) * 8) + 1)]:
+            c = ui2.screen.get_at((int(sx + nx * t), int(sy + ny * t)))[:3]
+            if c == (255, 255, 255):
+                gaps += 1
+    print(f"interstices (pixels de fond sur les frontières): {gaps}")
+    assert gaps == 0, "des cases ne prennent pas tout l'espace (trous entre cases)"
+
     # --- Profil accidenté + fanion rouge de catégorie au sommet ---
     ui3 = main.FlammeRougeGame()
     ui3.width, ui3.height = 1200, 800

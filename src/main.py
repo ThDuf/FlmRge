@@ -1054,10 +1054,13 @@ class FlammeRougeGame:
                     seg_color = (80, 120, 235)   # descente : bleu (comme le profil)
                 else:
                     seg_color = (48, 52, 60)     # plat : gris très foncé
-                start = len(all_pts)
+                # la case reprend le DERNIER point posé (frontière partagée avec
+                # la case précédente) : les polygones se touchent exactement,
+                # aucun interstice entre les cases
+                start = len(all_pts) - 1 if all_pts else 0
                 for k in range(steps + 1):
                     if k == 0 and all_pts:
-                        continue  # point déjà posé par la case précédente
+                        continue  # point frontière déjà posé par la case précédente
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
                     all_pts.append((ox + px * scale, oy + py * scale))
                 cell_spans.append((start, len(all_pts) - 1, seg_color))
@@ -1071,6 +1074,13 @@ class FlammeRougeGame:
                 dx, dy = all_pts[i + 1][0] - all_pts[i - 1][0], all_pts[i + 1][1] - all_pts[i - 1][1]
             norm = math.hypot(dx, dy) or 1.0
             normals.append((-dy / norm, dx / norm))
+        # Fond de la route en entier (même géométrie) : bouche les éventuels
+        # interstices de rasterisation entre polygones de cases adjacentes
+        full_left = [(all_pts[i][0] + normals[i][0] * road_w / 2,
+                      all_pts[i][1] + normals[i][1] * road_w / 2) for i in range(len(all_pts))]
+        full_right = [(all_pts[i][0] - normals[i][0] * road_w / 2,
+                       all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(len(all_pts))]
+        pygame.draw.polygon(self.screen, (48, 52, 60), full_left + full_right[::-1])
         # Chaque case = bandeau polygonal (offset exact +/- road_w/2 le long
         # des normales partagées) : bords parfaitement droits.
         for start, end, seg_color in cell_spans:
