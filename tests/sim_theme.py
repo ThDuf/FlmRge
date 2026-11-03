@@ -175,7 +175,7 @@ def main_():
     pr3 = ui3._menu_profile_rect(ui3._preview_rect())
     red = 0
     for x in range(pr3.x, pr3.right):
-        for y in range(pr3.y, pr3.bottom):
+        for y in range(max(0, pr3.y - 40), pr3.bottom):  # mâts/drapeaux au-dessus du panneau aussi
             if px(ui3.screen, (x, y)) == (215, 45, 45):
                 red += 1
     print("fanion rouge (215,45,45) px:", red, "(La Haut Montagne, D+=19 -> HC)")
