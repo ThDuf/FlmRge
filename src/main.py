@@ -1584,20 +1584,40 @@ class FlammeRougeGame:
         self._draw_tile_shape(pts, tile, tr, size * 0.22)
 
     def _draw_profile_array(self, alt, rect):
-        """Variante de _draw_profile prenant directement le tableau d'altitudes."""
+        """Profil d'altitude par segment : montée = orange doux, descente =
+        bleu doux, plat = gris. Mots « départ » / « arrivée » sous le profil
+        et ligne d'arrivée (pointillés jaunes) à droite."""
         pygame.draw.rect(self.screen, (38, 42, 50), rect, border_radius=6)
         lbl = self.small_font.render(f"Profil  (alt. {min(alt)} .. {max(alt)})",
                                      True, (150, 155, 165))
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
-        inner = pygame.Rect(rect.x + 6, rect.y + 16, rect.w - 12, rect.h - 22)
-        n = len(alt) - 1
+        inner = pygame.Rect(rect.x + 6, rect.y + 16, rect.w - 12, rect.h - 36)
+        n = max(len(alt) - 1, 1)
         pts = [(inner.x + inner.w * i / n,
                 inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
-        pygame.draw.polygon(self.screen, (96, 140, 90),
-                            pts + [(pts[-1][0], inner.bottom), (pts[0][0], inner.bottom)])
-        pygame.draw.lines(self.screen, (180, 220, 180), False, pts, 2)
+        soft_fill = {1: (255, 205, 150), -1: (160, 195, 255), 0: (70, 76, 88)}
+        seg_line = {1: (235, 145, 50), -1: (80, 120, 235), 0: (170, 175, 185)}
+        for i in range(n):
+            d = alt[i + 1] - alt[i]
+            key = 1 if d > 0 else -1 if d < 0 else 0
+            quad = [pts[i], pts[i + 1],
+                    (pts[i + 1][0], inner.bottom), (pts[i][0], inner.bottom)]
+            pygame.draw.polygon(self.screen, soft_fill[key], quad)
+            pygame.draw.line(self.screen, seg_line[key], pts[i], pts[i + 1], 2)
+        # ligne d'arrivée : pointillés jaunes verticaux à droite du profil
+        fx = pts[-1][0]
+        for yy in range(inner.y, inner.bottom, 6):
+            pygame.draw.line(self.screen, (240, 210, 60),
+                             (fx, yy), (fx, min(yy + 3, inner.bottom)), 2)
+        # mots « départ » / « arrivée » sous le profil, aux bons endroits
+        base_y = inner.bottom + 3
+        dep = self.small_font.render("départ", True, (255, 236, 130))
+        self.screen.blit(dep, (max(inner.x, pts[0][0]), base_y))
+        arr = self.small_font.render("arrivée", True, (240, 210, 60))
+        ax = min(pts[-1][0] - arr.get_width(), inner.right - arr.get_width())
+        self.screen.blit(arr, (max(inner.x, ax), base_y))
 
     def _draw_menu(self):
         """Menu de sélection (affiché quand self.game is None)."""
