@@ -2072,6 +2072,8 @@ class FlammeRougeGame:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self._next_button_rect().collidepoint(event.pos):
                 # gros bouton rouge = passer à l'écran suivant
+                # (même animation d'enfoncement que les autres boutons)
+                self._pressed_button = "next"
                 self._menu_validate(entries[self.menu_index])
                 return
             if self._menu_search_rect().collidepoint(event.pos):
@@ -2109,6 +2111,7 @@ class FlammeRougeGame:
         counts = [2, 3, 4]
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self._next_button_rect().collidepoint(event.pos):
+                self._pressed_button = "next"  # animation d'enfoncement au clic
                 self._select_stage(self._pending_stage)  # gros bouton rouge JOUER
                 return
             for count, rect in self._player_count_rects():
