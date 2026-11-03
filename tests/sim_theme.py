@@ -88,6 +88,22 @@ def main_():
     assert yellow > 30, "ligne d'arrivée absente du tracé"
     assert black > 8, "drapeau damier absent du tracé"
 
+    # --- Profil accidenté + fanion rouge de catégorie au sommet ---
+    ui3 = main.FlammeRougeGame()
+    ui3.width, ui3.height = 1200, 800
+    ui3.screen = pygame.display.set_mode((1200, 800))
+    ui3.menu_index = names.index("La Haut Montagne") + 1
+    ui3.screen.fill(main.BG)
+    ui3._draw_menu()
+    pr3 = ui3._menu_profile_rect(ui3._preview_rect())
+    red = 0
+    for x in range(pr3.x, pr3.right):
+        for y in range(pr3.y, pr3.bottom):
+            if px(ui3.screen, (x, y)) == (215, 45, 45):
+                red += 1
+    print("fanion rouge (215,45,45) px:", red, "(La Haut Montagne, D+=19 -> HC)")
+    assert red > 10, "fanion rouge de catégorie absent du profil"
+
     # --- Éditeur : les lettres des tuiles sont toujours dessinées ---
     ui2.menu_step = 'editor'
     ui2.editor_code = 'abKcdEfghijklmnopqrstu'

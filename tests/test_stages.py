@@ -375,6 +375,17 @@ class TestStageMenu(unittest.TestCase):
         self.assertEqual(ui.game.stage, "Avenue Corso Paseo")
         self.assertEqual(ui.game.track.length, 78)
 
+    def test_col_category_thresholds(self):
+        """Catégorie du col selon le D+ : 4 petits, 1 grands, HC très grands."""
+        from main import col_category
+        self.assertIsNone(col_category(0))    # plat : pas de fanion
+        self.assertEqual(col_category(3), "4")
+        self.assertEqual(col_category(7), "3")
+        self.assertEqual(col_category(11), "2")
+        self.assertEqual(col_category(15), "1")
+        self.assertEqual(col_category(19), "HC")
+        self.assertEqual(col_category(30), "HC")
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -86,6 +86,22 @@ CYCLISTES_CONNUS = ["Pogačar", "Vingegaard", "Evenepoel", "Van der Poel", "Rogl
                     "Bartali", "Van Aert", "Nibali", "Fignon"]
 
 
+def col_category(dplus: int):
+    """Catégorie d'un col selon le D+ (unités de profil : 1 case montante = +1) :
+    HC pour les très grands, 1 pour les grands, 4 pour les petits."""
+    if dplus <= 0:
+        return None  # plat : pas de col à catégoriser
+    if dplus >= 18:
+        return "HC"
+    if dplus >= 14:
+        return "1"
+    if dplus >= 10:
+        return "2"
+    if dplus >= 6:
+        return "3"
+    return "4"
+
+
 class FlammeRougeGame:
     """Interface Pygame : colonne de cartes à gauche, circuit serpentin à droite.
 
@@ -1639,15 +1655,33 @@ class FlammeRougeGame:
         inner = pygame.Rect(rect.x + 6, rect.y + 18, rect.w - 12, rect.h - 18 - 34)
         pts = [(inner.x + inner.w * i / n,
                 inner.bottom - (a - lo) / span * inner.h) for i, a in enumerate(alt)]
+        # profil un peu accidenté comme un vrai : jitter vertical déterministe
+        # (dépend de l'index, pour ne pas clignoter à chaque frame)
+        amp = max(1.5, inner.h * 0.07)
+        jpts = list(pts)
+        for i in range(1, n):
+            jit = (((i * 37) % 11) - 5) / 5 * amp
+            jpts[i] = (pts[i][0], pts[i][1] + jit)
         soft_fill = {1: (255, 205, 150), -1: (160, 195, 255), 0: (214, 219, 227)}
         seg_line = {1: (235, 145, 50), -1: (80, 120, 235), 0: TEXT_DIM}
         for i in range(n):
             d = alt[i + 1] - alt[i]
             key = 1 if d > 0 else -1 if d < 0 else 0
-            quad = [pts[i], pts[i + 1],
-                    (pts[i + 1][0], inner.bottom), (pts[i][0], inner.bottom)]
+            quad = [jpts[i], jpts[i + 1],
+                    (jpts[i + 1][0], inner.bottom), (jpts[i][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
-            pygame.draw.line(self.screen, seg_line[key], pts[i], pts[i + 1], 2)
+            pygame.draw.line(self.screen, seg_line[key], jpts[i], jpts[i + 1], 2)
+        # petit fanion rouge au sommet avec la catégorie du col (selon le D+)
+        cat = col_category(dplus)
+        if cat is not None and n > 0:
+            imax = max(range(len(alt)), key=lambda i: alt[i])
+            mx, my = jpts[imax]
+            top = max(rect.y + 15, my - 16)
+            pygame.draw.line(self.screen, (120, 120, 120), (mx, my), (mx, top), 2)
+            pygame.draw.polygon(self.screen, (215, 45, 45),
+                                ((mx, top), (mx + 13, top + 3), (mx, top + 7)))
+            clbl = self.small_font.render(cat, True, (215, 45, 45))
+            self.screen.blit(clbl, (mx + 15, top - 2))
         # ligne d'arrivée : mât en pointillés jaunes sur toute la hauteur du
         # profil + drapeau damier hissé tout en haut du panneau
         fx = pts[-1][0]
