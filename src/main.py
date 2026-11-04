@@ -156,6 +156,7 @@ class FlammeRougeGame:
         self.font = pygame.font.SysFont("Arial", 20)
         self.big_font = pygame.font.SysFont("Arial", 30)
         self.title_font = pygame.font.SysFont("Arial", 30, bold=True)
+        self.display_font = pygame.font.SysFont("Arial", 42, bold=True)  # hero menu
         self.phase_font = pygame.font.SysFont("Arial", 20, bold=True)
         self.card_font = pygame.font.SysFont("Arial", 18)
         self.label_font = pygame.font.SysFont("Arial", 16)
@@ -772,6 +773,12 @@ class FlammeRougeGame:
                 self._draw_card(frame, (242, 244, 248), radius=CARD_R)
                 # le tracé ne s'affiche QUE dans le cadre du parcours
                 self.screen.set_clip(frame)
+                # ombre interne en haut du cadre (effet "table" enfoncée)
+                ins = pygame.Surface((frame.w, 12), pygame.SRCALPHA)
+                for i in range(12):
+                    pygame.draw.line(ins, (30, 35, 45, int(26 * (1 - i / 12))),
+                                     (0, i), (frame.w, i))
+                self.screen.blit(ins, (frame.x, frame.y))
                 self._draw_track()
                 self._draw_runners()
                 self._draw_unplaced_runners()  # réserve aussi clippée dans le cadre
@@ -1088,8 +1095,8 @@ class FlammeRougeGame:
         screen_pts = [(ox + px * scale, oy + py * scale) for px, py in pts]
 
         self._draw_card(rect, PANEL, radius=10)
-        title = self.label_font.render(name, True, BLACK)
-        self.screen.blit(title, (rect.x + 12, rect.y + 10))
+        title = self.phase_font.render(name, True, INK)
+        self.screen.blit(title, (rect.x + 12, rect.y + 8))
 
         # Tracé coloré CASE PAR CASE, route large : mêmes couleurs que le
         # profil (montée orange, descente bleu), plat en gris très foncé,
@@ -1892,8 +1899,11 @@ class FlammeRougeGame:
         if self.menu_step == "editor":
             self._draw_editor(mouse)
             return
-        title = self.title_font.render("Choix de l'étape", True, BLACK)
-        self.screen.blit(title, ((self.width - title.get_width()) // 2, HEADER_H + 8))
+        # Hero du menu : grand titre à gauche + sous-titre, alignés sur le cadre
+        title = self.display_font.render("Choix de l'étape", True, INK)
+        self.screen.blit(title, (20, HEADER_H + 2))
+        sub = self.label_font.render("Flamme Rouge — jeu de course cycliste", True, TEXT_DIM)
+        self.screen.blit(sub, (24 + title.get_width(), HEADER_H + 2 + title.get_height() - sub.get_height() - 4))
 
         # la sélection (recherche + liste) est dans un CADRE à gauche (~1/4 de
         # la fenêtre), le reste de la largeur est pour la preview à droite
@@ -1935,14 +1945,22 @@ class FlammeRougeGame:
                 self.screen.blit(name_surf, (rect.x + 60, rect.centery - 11))
             else:
                 # entrée de parcours : fond BLANC, grisé au survol, jamais
-                # entourée ; si sélectionnée, trait rouge à gauche
+                # entourée ; si sélectionnée, trait rouge à gauche ; pastille
+                # de type d'étape (plat = gris, vallonné = orange, montagne = rouge)
                 fill = ROW_SEL if hovered else PANEL
                 pygame.draw.rect(self.screen, fill, rect, border_radius=8)
                 if selected:
-                    pygame.draw.rect(self.screen, (235, 60, 60),
+                    pygame.draw.rect(self.screen, ACCENT,
                                      (rect.x, rect.y + 2, 4, rect.h - 4))
-                name_surf = self.label_font.render(name, True, BLACK)
-                self.screen.blit(name_surf, (rect.x + 16,
+                try:
+                    alt = self._stage_profile(name, code=code if kind == "perso" else None)
+                    dplus = sum(max(0, alt[i + 1] - alt[i]) for i in range(len(alt) - 1))
+                except Exception:
+                    dplus = -1  # code perso invalide : pastille neutre
+                dot = (150, 156, 168) if dplus <= 0 else (ACCENT if dplus >= 15 else (240, 150, 50))
+                pygame.draw.circle(self.screen, dot, (rect.x + 13, rect.centery), 5)
+                name_surf = self.label_font.render(name, True, INK)
+                self.screen.blit(name_surf, (rect.x + 26,
                                              rect.centery - name_surf.get_height() // 2))
 
         self.screen.set_clip(None)  # fin de la zone scrollable
@@ -2448,12 +2466,15 @@ class FlammeRougeGame:
             cy = py + ny * off
 
             color = PLAYER_COLORS.get(player.color, BLACK)
-            # ombre douce + anneau blanc + pastille couleur : look moderne
+            # ombre douce + anneau blanc + pastille glossy (reflet haut-gauche)
             pygame.draw.ellipse(self.screen, (208, 213, 222),
                                 (int(cx) - radius, int(cy) + radius - 3,
                                  radius * 2, 6))
             pygame.draw.circle(self.screen, WHITE, (int(cx), int(cy)), radius + 2)
             pygame.draw.circle(self.screen, color, (int(cx), int(cy)), radius)
+            pygame.draw.circle(self.screen, _mix(color, WHITE, 0.45),
+                               (int(cx) - radius // 3, int(cy) - radius // 3),
+                               max(2, radius // 2))
 
             # Initiale du type de coureur, bien centrée DANS le cercle
             type_text = "S" if runner.type.name == "SPRINTER" else "R"
@@ -2572,16 +2593,19 @@ class FlammeRougeGame:
         """Bandeau de phase : nom + description de la phase, coloré."""
         label, desc, color = self._phase_info()
         rect = pygame.Rect(0, HEADER_H + 4, self.width, PHASE_H)
-        # bandeau adouci : teinte claire de la couleur de phase + barre d'accent
-        pygame.draw.rect(self.screen, _mix(color, WHITE, 0.86), rect)
-        pygame.draw.rect(self.screen, color, (0, rect.y, 6, rect.h))
-        dark_txt = _mix(color, BLACK, 0.45)
-        name_surf = self.phase_font.render(label, True, dark_txt)
-        self.screen.blit(name_surf, (18, rect.y + (PHASE_H - name_surf.get_height()) // 2))
+        # pastille de phase FLOTTANTE et centrée (pas un bandeau plein largeur) :
+        # fond teinté, bordure couleur, pastille indicatrice, texte foncé
+        name_surf = self.phase_font.render(label, True, _mix(color, BLACK, 0.45))
         desc_surf = self.label_font.render(desc, True, (60, 66, 78))
-        self.screen.blit(desc_surf,
-                         (18 + name_surf.get_width() + 18,
-                          rect.y + (PHASE_H - desc_surf.get_height()) // 2))
+        pw = 14 + 10 + name_surf.get_width() + 18 + desc_surf.get_width() + 16
+        pw = min(pw, self.width - 240)  # laisser la place aux infos/bouton à droite
+        pill = pygame.Rect((self.width - pw) // 2, rect.y + 4, pw, PHASE_H - 8)
+        pygame.draw.rect(self.screen, _mix(color, WHITE, 0.86), pill, border_radius=CHIP_R)
+        pygame.draw.rect(self.screen, color, pill, width=1, border_radius=CHIP_R)
+        pygame.draw.circle(self.screen, color, (pill.x + 16, pill.centery), 6)
+        self.screen.blit(name_surf, (pill.x + 30, pill.centery - name_surf.get_height() // 2))
+        self.screen.blit(desc_surf, (pill.x + 30 + name_surf.get_width() + 18,
+                                     pill.centery - desc_surf.get_height() // 2))
 
         # À droite du bandeau de phase : compteur + action faite / prochaine étape
         right_lines = []
@@ -2766,8 +2790,12 @@ class FlammeRougeGame:
     def _draw_podium(self):
         """Écran de fin de course : podium des 3 premiers coureurs."""
         game = self.game
-        overlay = pygame.Rect(self.width // 2 - 270, self.height // 2 - 230, 540, 420)
-        self._draw_card(overlay, PANEL, radius=14)
+        # voile assombri sur toute la partie derrière le podium
+        veil = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        veil.fill((20, 24, 32, 110))
+        self.screen.blit(veil, (0, 0))
+        overlay = pygame.Rect(self.width // 2 - 290, self.height // 2 - 250, 580, 460)
+        self._draw_card(overlay, PANEL, radius=16)
         pygame.draw.rect(self.screen, (240, 210, 60), overlay, width=2, border_radius=14)
         title = self.title_font.render("VICTOIRE", True, (240, 210, 60))
         self.screen.blit(title, title.get_rect(center=(overlay.centerx, overlay.y + 34)))
@@ -3057,7 +3085,12 @@ class FlammeRougeGame:
                     pygame.draw.rect(self.screen, fill, rect, border_radius=R_SM)
                     pygame.draw.rect(self.screen, border, rect, width=width, border_radius=R_SM)
                     value_text = str(card.value) + ("F" if card.type == CardType.FATIGUE else "")
-                    val_surf = self.card_font.render(value_text, True, text_color)
+                    if card.type == CardType.FATIGUE:
+                        vcol = (180, 90, 0)
+                    else:
+                        # dégradé de couleur selon la valeur (2 = neutre, 8 = accent)
+                        vcol = _mix(TEXT_DIM, ACCENT, min(1.0, max(0.0, (card.value - 2) / 6)))
+                    val_surf = self.card_font.render(value_text, True, vcol if not is_played else text_color)
                     self.screen.blit(val_surf, val_surf.get_rect(center=rect.center))
                     # Survol + montagne : montrer le déplacement effectif avant de jouer
                     if hovered:
