@@ -60,20 +60,29 @@ PLAYER_COLORS = {
     "yellow": YELLOW,
 }
 
-# Thème clair
-BG = (238, 241, 246)            # fond général (menu)
+# ===================== DESIGN SYSTEM (thème clair « soft ») =====================
+# Palette
+BG_TOP = (242, 244, 249)        # fond en haut (dégradé)
+BG_BOT = (233, 236, 243)        # fond en bas (dégradé)
+BG = BG_TOP                      # fond de référence (menu)
 HEADER_BG = (255, 255, 255)     # bandeau de titre
-PANEL = (255, 255, 255)         # panneaux (preview, éditeur, log, cartes)
-PANEL_ALT = (245, 247, 250)     # sous-fonds (recherche, tuiles, onglets...)
-BORDER = (198, 204, 212)        # bordures de panneaux
-ROW_SEL = (226, 232, 240)       # entrée/bouton sélectionné ou survolé
-TEXT_DIM = (95, 102, 114)       # texte secondaire sur fond clair
-ACCENT = (200, 45, 45)          # rouge principal (boutons SUIVANT/JOUER, accents)
+PANEL = (255, 255, 255)         # surfaces (cartes, panneaux)
+PANEL_ALT = (245, 247, 250)     # sous-fonds (chips, onglets inactifs)
+BORDER = (198, 204, 212)        # bordures 1 px
+ROW_SEL = (226, 232, 240)       # survol
+INK = (33, 37, 45)              # texte principal
+TEXT_DIM = (95, 102, 114)       # texte secondaire
+ACCENT = (200, 45, 45)          # rouge principal (boutons SUIVANT/JOUER, logo)
 ACCENT_SOFT = (60, 170, 150)    # teal doux, complémentaire du rouge (Créer un circuit)
-INK = (33, 37, 45)              # texte principal (titres, valeurs)
-CARD_R = 12                     # rayon des grandes cartes/panneaux
-BTN_R = 10                      # rayon des boutons
-CHIP_R = 999                    # rayon des petites pastilles (plein arrondi)
+SHADOW_RGB = (30, 35, 45)       # couleur des ombres portées
+ROAD_SHADOW = (205, 211, 221)   # ombre sous la route
+# Échelle de rayons
+R_SM = 8                        # petites cartes
+CARD_R = 12                     # grandes cartes/panneaux
+BTN_R = 10                      # boutons
+CHIP_R = 999                    # pastilles (plein arrondi)
+# Grille d'espacement (multiple de 4/8)
+PAD = 8
 
 
 def _mix(c1, c2, t):
@@ -750,11 +759,14 @@ class FlammeRougeGame:
                     self._game_event(event)
 
             if self.game is None:
-                self.screen.fill(BG)
+                # fond en dégradé vertical très doux
+                self._grad_fill(pygame.Rect(0, 0, self.width, self.height),
+                                BG_TOP, BG_BOT, 0)
                 self._draw_header()
                 self._draw_menu()
             else:
-                self.screen.fill(WHITE)
+                self._grad_fill(pygame.Rect(0, 0, self.width, self.height),
+                                (255, 255, 255), (246, 247, 250), 0)
                 # cadre autour de la zone du parcours (tout le reste que la barre du bas)
                 frame = self._frame_rect()
                 self._draw_card(frame, (242, 244, 248), radius=CARD_R)
@@ -1131,7 +1143,10 @@ class FlammeRougeGame:
                       all_pts[i][1] + normals[i][1] * road_w / 2) for i in range(len(all_pts))]
         full_right = [(all_pts[i][0] - normals[i][0] * road_w / 2,
                        all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(len(all_pts))]
-        pygame.draw.polygon(self.screen, (48, 52, 60), full_left + full_right[::-1])
+        full_road = full_left + full_right[::-1]
+        # ombre douce sous la route
+        pygame.draw.polygon(self.screen, ROAD_SHADOW, [(x, y + 3) for x, y in full_road])
+        pygame.draw.polygon(self.screen, (48, 52, 60), full_road)
         # Chaque case = bandeau polygonal (offset exact +/- road_w/2 le long
         # des normales partagées) : bords parfaitement droits.
         for start, end, seg_color in cell_spans:
@@ -1552,9 +1567,14 @@ class FlammeRougeGame:
             hovered = rect.collidepoint(mouse) and not (locked and ch.lower() != 'u')
             fill = PANEL_ALT  # même fond pour toutes les tuiles (majuscules comprises)
             if hovered:
+                # lift au survol : ombre + fond éclairci + rayon plus doux
+                sh = pygame.Surface((rect.w + 6, rect.h + 8), pygame.SRCALPHA)
+                pygame.draw.rect(sh, (*SHADOW_RGB, 40), (3, 5, rect.w, rect.h),
+                                 border_radius=R_SM)
+                self.screen.blit(sh, (rect.x - 3, rect.y - 2))
                 fill = tuple(min(255, c + 35) for c in fill)
-            pygame.draw.rect(self.screen, fill, rect, border_radius=6)
-            pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=6)
+            pygame.draw.rect(self.screen, fill, rect, border_radius=R_SM)
+            pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=R_SM)
             self._draw_mini_tile(ch, rect.centerx - 10, rect.centery, 1.0, 0.0,
                                  size=rect.h - 14)
             txt = self.small_font.render(ch, True, (200, 205, 215))
@@ -2285,6 +2305,8 @@ class FlammeRougeGame:
         left_edge = [(x + ty * half, y - tx * half) for x, y, tx, ty in samples]
         right_edge = [(x - ty * half, y + tx * half) for x, y, tx, ty in samples]
         road = right_edge + left_edge[::-1]
+        # ombre douce sous la route (décalée de 3 px)
+        pygame.draw.polygon(self.screen, ROAD_SHADOW, [(x, y + 3) for x, y in road])
         pygame.draw.polygon(self.screen, LIGHT_GRAY, road)
         pygame.draw.polygon(self.screen, GRAY, road, width=2)
 
@@ -2832,9 +2854,15 @@ class FlammeRougeGame:
         (dernières lignes de l'historique), toujours visible."""
         rect = self._log_panel_rect()
         self._draw_card(rect, PANEL, radius=10)
+        # en-tête : pastille + titre + séparateur
+        pygame.draw.circle(self.screen, ACCENT, (rect.x + 15, rect.y + 15), 5)
+        hsurf = self.label_font.render("Historique", True, INK)
+        self.screen.blit(hsurf, (rect.x + 26, rect.y + 7))
+        pygame.draw.line(self.screen, BORDER,
+                         (rect.x + 10, rect.y + 30), (rect.right - 10, rect.y + 30), 1)
         lines = self._history_lines()
         line_h = 15
-        max_lines = (rect.bottom - rect.y - 10) // line_h
+        max_lines = (rect.bottom - rect.y - 38) // line_h  # -38 : en-tête réservé
         max_scroll = max(0, len(lines) - max_lines)
         self.log_scroll = max(0, min(max_scroll, self.log_scroll))
         # ancré en bas : les plus récentes en dernier (en bas), les nouvelles
@@ -3020,8 +3048,14 @@ class FlammeRougeGame:
                         border = BLACK
                         text_color = BLACK
                         width = 2
-                    pygame.draw.rect(self.screen, fill, rect, border_radius=8)
-                    pygame.draw.rect(self.screen, border, rect, width=width, border_radius=8)
+                    if hovered:
+                        # lift au survol : petite ombre sous la carte
+                        sh = pygame.Surface((rect.w + 6, rect.h + 8), pygame.SRCALPHA)
+                        pygame.draw.rect(sh, (*SHADOW_RGB, 40), (3, 5, rect.w, rect.h),
+                                         border_radius=R_SM)
+                        self.screen.blit(sh, (rect.x - 3, rect.y - 2))
+                    pygame.draw.rect(self.screen, fill, rect, border_radius=R_SM)
+                    pygame.draw.rect(self.screen, border, rect, width=width, border_radius=R_SM)
                     value_text = str(card.value) + ("F" if card.type == CardType.FATIGUE else "")
                     val_surf = self.card_font.render(value_text, True, text_color)
                     self.screen.blit(val_surf, val_surf.get_rect(center=rect.center))

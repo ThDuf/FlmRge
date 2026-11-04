@@ -101,6 +101,8 @@ FlmRge/
 
 ## 🛠️ Développement
 
+**Design system** : tous les styles visuels sont centralisés en haut de `src/main.py` (palette `BG_TOP/BG_BOT/PANEL/PANEL_ALT/BORDER/INK/TEXT_DIM/ACCENT/ACCENT_SOFT`, rayons `R_SM/CARD_R/BTN_R/CHIP_R`, espacement `PAD`, ombres `SHADOW_RGB`/`ROAD_SHADOW`). Helpers : `_draw_card` (panneau ombre portée), `_draw_ui_button` (bouton pill dégradé `_grad_fill` + enfoncement au clic), `_mix` (mélange de couleurs). Règle pour tout nouveau composant : ombre douce, rayon de l'échelle, 1 px de bordure, couleurs de la palette.
+
 ### Lancer les tests
 ```bash
 python -m unittest discover -s tests
