@@ -30,10 +30,10 @@ print("couleurs présentes dans le hero (3 joueurs):", found)
 assert all(v > 20 for v in found.values()), "il manque une couleur d'équipe dans le hero"
 print("R+S par couleur OK")
 # la scène du hero : ciel en haut + silhouelles sombres (vélos/coureurs) sur la route
-scene = pygame.Rect(hero.x, hero.y, hero.w, int(hero.h * 0.55))
+scene = pygame.Rect(hero.x, hero.y, hero.w, int(hero.h * 0.62))
 sky = ui.screen.get_at((scene.centerx, scene.y + 10))[:3]
 dark = sum(1 for x in range(scene.x, scene.right, 3)
-           for y in range(scene.bottom - 34, scene.bottom, 3)
+           for y in range(scene.bottom - 46, scene.bottom, 3)
            if sum(ui.screen.get_at((x, y))[:3]) < 250)
 print("ciel:", sky, "| pixels sombres (peloton/route):", dark)
 assert sum(sky) > 600, "pas de ciel clair dans la scène"

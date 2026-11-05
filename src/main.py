@@ -2123,7 +2123,7 @@ class FlammeRougeGame:
         self._draw_card(rect, PANEL, radius=CARD_R)
         # scène en haut du panneau : photo assets/peloton.jpg si déposée,
         # sinon la scène vectorielle dessinée en code
-        top_h = int(rect.h * 0.55)
+        top_h = int(rect.h * 0.62)  # la scène (peloton) prend plus de place
         scene = pygame.Rect(rect.x + 1, rect.y + 1, rect.w - 2, top_h)
         img = self._load_hero_image()
         if img is not None:
@@ -2151,46 +2151,45 @@ class FlammeRougeGame:
                                  (scene.x + 2 * scene.w // 3, scene.bottom - 46),
                                  (scene.right, scene.bottom - 70),
                                  (scene.right, scene.bottom), (scene.x, scene.bottom)])
-            road = pygame.Rect(scene.x, scene.bottom - 34, scene.w, 34)
+            road = pygame.Rect(scene.x, scene.bottom - 46, scene.w, 46)
             pygame.draw.rect(self.screen, (120, 126, 138), road)
             for x in range(road.x + 8, road.right - 8, 26):
                 pygame.draw.line(self.screen, (240, 242, 246), (x, road.centery),
                                  (x + 12, road.centery), 2)
-            for i in range(6):
-                s = 0.62 + 0.1 * (i % 3)
-                cx = scene.x + 40 + i * (scene.w - 90) / 5
-                self._draw_cyclist(cx, road.bottom - 12, s, _mix(INK, WHITE, 0.08 * (i % 3)))
+            # PELOTON : silhouettes noires + les 2 coureurs de chaque équipe
+            # (colorés, R/S) AU MILIEU du peloton. Taille selon le nb d'équipes :
+            # 2 équipes -> 4 coureurs d'équipe, 3 -> 6, 4 -> 8, plus des noirs.
+            colors = list(PLAYER_COLORS.values())
+            n_team = self.player_count * 2
+            n_total = max(8, n_team + 4)  # peloton assez dense
+            cols = math.ceil(n_total / 2)  # 2 rangées en quinconce
+            team_start = (n_total - n_team) // 2  # coureurs d'équipe au centre
+            for i in range(n_total):
+                row = i // cols            # 0 = rangée arrière (haut), 1 = avant
+                col = i % cols + (row % 2) * 0.5  # quinconce
+                s = 0.5 + 0.07 * ((i * 7) % 3)
+                cx = scene.x + 30 + col * (scene.w - 60) / max(1, cols - 0.5)
+                cy = road.bottom - 8 - row * (16 * s)
+                if team_start <= i < team_start + n_team:
+                    # coureur d'équipe : couleur + lettre R/S + anneau blanc
+                    tcol = colors[((i - team_start) // 2) % len(colors)]
+                    letter = "R" if (i - team_start) % 2 == 0 else "S"
+                    self._draw_cyclist(cx, cy, s, tcol)
+                    hx, hy = cx + 13 * s, cy - 26 * s  # tête
+                    pygame.draw.circle(self.screen, WHITE, (int(hx), int(hy)), int(4 * s) + 1)
+                    pygame.draw.circle(self.screen, tcol, (int(hx), int(hy)), int(4 * s))
+                    t = self.bold_font.render(letter, True, BLACK)
+                    self.screen.blit(t, t.get_rect(center=(int(hx), int(hy))))
+                else:
+                    self._draw_cyclist(cx, cy, s, _mix(INK, WHITE, 0.06 * (i % 3)))
         # gros chiffre + libellé par-dessus la scène
         big = self.display_font.render(str(self.player_count), True, INK)
         self.screen.blit(big, (rect.x + 24, rect.y + 18))
         lbl = self.phase_font.render("joueurs", True, ACCENT)
         self.screen.blit(lbl, (rect.x + 24 + big.get_width() + 12,
                                rect.y + 18 + big.get_height() - lbl.get_height() - 6))
-        cap = self.small_font.render("2 coureurs par joueur", True, TEXT_DIM)
+        cap = self.small_font.render("2 coureurs par joueur, dans le peloton", True, TEXT_DIM)
         self.screen.blit(cap, (rect.x + 26, rect.y + 18 + big.get_height() + 8))
-        # peloton : pour chaque couleur de joueur, UN rouleur (R) + UN sprinteur (S)
-        colors = list(PLAYER_COLORS.values())
-        tokens = []
-        for i in range(self.player_count):
-            col = colors[i % len(colors)]
-            tokens.append((col, "R"))
-            tokens.append((col, "S"))
-        r = 16
-        cols = min(len(tokens), 4)
-        rows = (len(tokens) + cols - 1) // cols
-        start_x = rect.centerx - (cols * (r * 2 + 10) - 10) // 2
-        start_y = rect.y + top_h + (rect.h - top_h) // 2 - (rows * (r * 2 + 8) - 8) // 2
-        for i, (col, letter) in enumerate(tokens):
-            cx = start_x + (i % cols) * (r * 2 + 10) + r
-            cy = start_y + (i // cols) * (r * 2 + 8) + r
-            pygame.draw.ellipse(self.screen, ROAD_SHADOW,
-                                (cx - r, cy + r - 3, r * 2, 6))
-            pygame.draw.circle(self.screen, WHITE, (cx, cy), r + 2)
-            pygame.draw.circle(self.screen, col, (cx, cy), r)
-            pygame.draw.circle(self.screen, _mix(col, WHITE, 0.45),
-                               (cx - r // 3, cy - r // 3), max(2, r // 2))
-            t = self.bold_font.render(letter, True, BLACK)
-            self.screen.blit(t, t.get_rect(center=(cx, cy)))
 
     def _player_count_rects(self):
         """Boutons 2/3/4 joueurs, empilés DANS le cadre de gauche du menu."""
