@@ -2669,9 +2669,12 @@ class FlammeRougeGame:
                     for lane, off in ((0, half * 0.5), (1, -half * 0.5)):
                         if self.game.can_place_at(x, lane):
                             cx, cy = px + nx * off, py + ny * off
+                            # rond de sélection toujours INFÉRIEUR à la case :
+                            # diamètre extérieur (2r+2) < cell, et r <= half*0.45
+                            # pour rester dans sa file (ne touche pas l'autre file)
+                            r = max(1, min(int((cell - 2) * 0.45), int(half * 0.45)))
                             pygame.draw.circle(self.screen, color,
-                                               (int(cx), int(cy)),
-                                               max(4, int(cell * 0.28)), 2)
+                                               (int(cx), int(cy)), r, 2)
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
@@ -2687,7 +2690,9 @@ class FlammeRougeGame:
         piste : ils sont affichés en réserve par _draw_unplaced_runners."""
         geo = self._track_geometry()
         lane_off = geo["lane_w"] / 2
-        radius = int(geo["lane_w"] * 0.55)
+        # rayon borné par la taille de la case : la pastille + son anneau blanc
+        # restent plus petites que la case (2*(radius+2) < cell)
+        radius = max(2, min(int(geo["lane_w"] * 0.55), int(geo["cell"] * 0.5) - 3))
 
         players_by_runner = {r.id: p for p in self.game.players
                              for r in p.get_runners()}
