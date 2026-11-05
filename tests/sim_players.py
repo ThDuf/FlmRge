@@ -17,7 +17,9 @@ print("écran joueurs (2/3/4) rendu OK")
 ui.player_count = 3
 ui.screen.fill(main.BG)
 ui._draw_menu()
-hero = pygame.Rect(ui._players_frame_rect().right + 16, 60, ui.width - 16 - (ui._players_frame_rect().right + 16), ui.height - 72)
+hero = pygame.Rect(ui._players_frame_rect().right + 16, main.MENU_TOP,
+                   ui.width - 16 - (ui._players_frame_rect().right + 16),
+                   ui.height - 12 - main.MENU_TOP)
 found = {c: 0 for c in [(255, 0, 0), (0, 0, 255), (0, 165, 0)]}
 for x in range(hero.x, hero.right, 2):
     for y in range(hero.y, hero.bottom, 2):
@@ -27,6 +29,15 @@ for x in range(hero.x, hero.right, 2):
 print("couleurs présentes dans le hero (3 joueurs):", found)
 assert all(v > 20 for v in found.values()), "il manque une couleur d'équipe dans le hero"
 print("R+S par couleur OK")
+# la scène du hero : ciel en haut + silhouelles sombres (vélos/coureurs) sur la route
+scene = pygame.Rect(hero.x, hero.y, hero.w, int(hero.h * 0.55))
+sky = ui.screen.get_at((scene.centerx, scene.y + 10))[:3]
+dark = sum(1 for x in range(scene.x, scene.right, 3)
+           for y in range(scene.bottom - 34, scene.bottom, 3)
+           if sum(ui.screen.get_at((x, y))[:3]) < 250)
+print("ciel:", sky, "| pixels sombres (peloton/route):", dark)
+assert sum(sky) > 600, "pas de ciel clair dans la scène"
+assert dark > 100, "pas de silhouettes de peloton dessinées"
 # avec une étape en attente (retour Échap) : preview affichée
 ui._pending_stage = "Avenue Corso Paseo"
 ui._draw_menu()

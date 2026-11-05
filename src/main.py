@@ -2078,23 +2078,71 @@ class FlammeRougeGame:
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
 
+    def _draw_cyclist(self, cx, cy, s, color):
+        """Silhouette de cycliste (vélo + coureur) en `color`, échelle `s`."""
+        w = max(2, int(2 * s))
+        r = 10 * s
+        # roues
+        pygame.draw.circle(self.screen, color, (int(cx - 14 * s), int(cy)), int(r), w)
+        pygame.draw.circle(self.screen, color, (int(cx + 14 * s), int(cy)), int(r), w)
+        # cadre
+        for (ax, ay), (bx, by) in (((-14, 0), (-2, -12)), ((-2, -12), (6, -12)),
+                                    ((6, -12), (14, 0)), ((-14, 0), (-8, -13)),
+                                    ((14, 0), (18, -14)), ((-8, -13), (-2, -12))):
+            pygame.draw.line(self.screen, color, (cx + ax * s, cy + ay * s),
+                             (cx + bx * s, cy + by * s), w)
+        # coureur : dos, bras, jambes, tête
+        hip = (cx - 6 * s, cy - 13 * s)
+        shoulder = (cx + 10 * s, cy - 22 * s)
+        head = (cx + 13 * s, cy - 26 * s)
+        pygame.draw.line(self.screen, color, hip, shoulder, w + 1)                       # dos
+        pygame.draw.line(self.screen, color, shoulder, (cx + 18 * s, cy - 14 * s), w)     # bras
+        pygame.draw.line(self.screen, color, hip, (cx + 2 * s, cy - 4 * s), w)            # cuisse
+        pygame.draw.line(self.screen, color, (cx + 2 * s, cy - 4 * s), (cx + 8 * s, cy), w)  # mollet
+        pygame.draw.circle(self.screen, color, (int(head[0]), int(head[1])), int(4 * s))  # tête
+
     def _draw_players_hero(self, rect):
-        """Panneau hero de l'écran joueurs (à droite) : dégradé doux, gros
-        chiffre du nombre de joueurs choisi, et peloton de jetons glossy
-        (2 coureurs par joueur), façon lobby de jeu de course."""
+        """Panneau hero de l'écran joueurs (à droite) : scène vectorielle d'un
+        peloton (ciel, soleil, collines, route, cyclistes), gros chiffre du
+        nombre de joueurs, et jetons R+S par couleur en dessous."""
         self._draw_card(rect, PANEL, radius=CARD_R)
-        # dégradé doux teinté accent sur la partie haute du panneau
+        # scène en haut du panneau
         top_h = int(rect.h * 0.55)
-        grad = pygame.Rect(rect.x + 1, rect.y + 1, rect.w - 2, top_h)
-        self._grad_fill(grad, _mix(ACCENT_SOFT, WHITE, 0.55), _mix(ACCENT_SOFT, WHITE, 0.85), CARD_R)
-        # gros chiffre
-        big = self.display_font.render(str(self.player_count), True, WHITE)
-        self.screen.blit(big, (rect.x + 28, rect.y + 24))
-        lbl = self.phase_font.render("joueurs", True, WHITE)
-        self.screen.blit(lbl, (rect.x + 28 + big.get_width() + 12,
-                               rect.y + 24 + big.get_height() - lbl.get_height() - 6))
-        cap = self.small_font.render("2 coureurs par joueur", True, _mix(WHITE, ACCENT_SOFT, 0.25))
-        self.screen.blit(cap, (rect.x + 30, rect.y + 24 + big.get_height() + 10))
+        scene = pygame.Rect(rect.x + 1, rect.y + 1, rect.w - 2, top_h)
+        self._grad_fill(scene, (214, 233, 248), (243, 249, 253), CARD_R)  # ciel
+        # soleil doux
+        pygame.draw.circle(self.screen, (255, 236, 170),
+                           (scene.right - 60, scene.y + 44), 22)
+        pygame.draw.circle(self.screen, (255, 244, 205),
+                           (scene.right - 60, scene.y + 44), 30)
+        # collines lointaines
+        pygame.draw.polygon(self.screen, (214, 232, 219),
+                            [(scene.x, scene.bottom - 40),
+                             (scene.x + scene.w // 3, scene.bottom - 78),
+                             (scene.x + 2 * scene.w // 3, scene.bottom - 46),
+                             (scene.right, scene.bottom - 70),
+                             (scene.right, scene.bottom), (scene.x, scene.bottom)])
+        # route
+        road = pygame.Rect(scene.x, scene.bottom - 34, scene.w, 34)
+        pygame.draw.rect(self.screen, (120, 126, 138), road)
+        for x in range(road.x + 8, road.right - 8, 26):
+            pygame.draw.line(self.screen, (240, 242, 246), (x, road.centery),
+                             (x + 12, road.centery), 2)
+        # peloton de silhouettes sur la route
+        n = 6
+        for i in range(n):
+            s = 0.62 + 0.1 * (i % 3)
+            cx = scene.x + 40 + i * (scene.w - 90) / (n - 1)
+            cy = road.bottom - 12
+            self._draw_cyclist(cx, cy, s, _mix(INK, WHITE, 0.08 * (i % 3)))
+        # gros chiffre + libellé par-dessus la scène
+        big = self.display_font.render(str(self.player_count), True, INK)
+        self.screen.blit(big, (rect.x + 24, rect.y + 18))
+        lbl = self.phase_font.render("joueurs", True, ACCENT)
+        self.screen.blit(lbl, (rect.x + 24 + big.get_width() + 12,
+                               rect.y + 18 + big.get_height() - lbl.get_height() - 6))
+        cap = self.small_font.render("2 coureurs par joueur", True, TEXT_DIM)
+        self.screen.blit(cap, (rect.x + 26, rect.y + 18 + big.get_height() + 8))
         # peloton : pour chaque couleur de joueur, UN rouleur (R) + UN sprinteur (S)
         colors = list(PLAYER_COLORS.values())
         tokens = []
