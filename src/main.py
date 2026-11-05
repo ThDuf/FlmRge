@@ -187,6 +187,7 @@ class FlammeRougeGame:
                                        '..', 'saves')
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self._profile_cache = {}  # nom d'étape -> profil d'altitude
+        self._weather_cache = {}  # nom/code -> [WeatherType présents] (badge météo de l'aperçu)
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
@@ -1274,7 +1275,8 @@ class FlammeRougeGame:
         # Profil d'altitude de l'étape / du parcours perso (code si fourni),
         # en grand : il occupe tout l'espace restant sous le tracé
         alt = self._stage_profile(name, code=code)
-        self._draw_profile_array(alt, self._menu_profile_rect(rect))
+        self._draw_profile_array(alt, self._menu_profile_rect(rect),
+                                 weather=self._preview_weather(name, code=code))
 
     def _stage_profile(self, name, code=None):
         """Altitude relative case par case : montée +1, descente -1, plat 0.
@@ -1293,6 +1295,28 @@ class FlammeRougeGame:
                                            else 0))
             self._profile_cache[key] = alt
         return self._profile_cache[key]
+
+    def _preview_weather(self, name, code=None):
+        """Extension Météo cochée : types de météo présents sur le parcours en
+        aperçu, calculés sur un tracé factice avec un RNG seedé par le nom/code
+        (stable d'une frame à l'autre). [] si extension inactive ; [NONE]
+        (soleil) si aucun jeton événement n'est tiré."""
+        if not self.ext_meteo:
+            return []
+        key = ("code", code) if code else name
+        if key not in self._weather_cache:
+            import random
+            from game.game import build_stage_track, build_track_from_code
+            from game.track import WeatherType
+            track = build_track_from_code(code) if code else build_stage_track(name)
+            track.assign_weather(random.Random(repr(key)))
+            seen = []
+            for t in track.tiles:
+                w = t.cells[0].weather if t.cells else WeatherType.NONE
+                if w != WeatherType.NONE and w not in seen:
+                    seen.append(w)
+            self._weather_cache[key] = seen or [WeatherType.NONE]
+        return self._weather_cache[key]
 
     def _draw_profile(self, name, rect):
         """Dessine le profil d'altitude de l'étape dans son sous-panneau."""
@@ -1766,7 +1790,8 @@ class FlammeRougeGame:
                 g = cell.geography
                 alt.append(alt[-1] + (1 if g == CellGeographyType.UPHILL
                                        else -1 if g == CellGeographyType.DOWNHILL else 0))
-        self._draw_profile_array(alt, self._preview_profile_rect(rect))
+        self._draw_profile_array(alt, self._preview_profile_rect(rect),
+                                 weather=self._preview_weather("__editor__", code=self.editor_code))
 
     def _tile_shape_color(self, tile):
         """Couleur de la forme d'une tuile : jaune clair (départ), jaune vif
@@ -1837,11 +1862,13 @@ class FlammeRougeGame:
         # forme simple de la tuile (pas de barres), couleur = relief
         self._draw_tile_shape(pts, tile, tr, size * 0.22)
 
-    def _draw_profile_array(self, alt, rect):
+    def _draw_profile_array(self, alt, rect, weather=None):
         """Profil d'altitude par segment : montée = orange doux, descente =
         bleu doux, plat = gris. 1 case = 1 km : échelle en dessous avec
         distance totale et D+ dans le titre, mots « départ » / « arrivée »
-        aux extrémités et petit drapeau damier sur la ligne d'arrivée."""
+        aux extrémités et petit drapeau damier sur la ligne d'arrivée.
+        `weather` = liste de WeatherType présents -> badge météo animé en haut
+        à droite du panneau (extension Météo)."""
         n = max(len(alt) - 1, 1)  # nombre de cases = kilomètres
         dplus = sum(max(0, alt[i + 1] - alt[i]) for i in range(n))
         self._draw_card(rect, PANEL, radius=8, shadow=False)
@@ -1851,6 +1878,9 @@ class FlammeRougeGame:
             f"Profil — {n} km · D+ {dplus * 100} m  (alt. {min(alt)} .. {max(alt)})",
             True, TEXT_DIM)
         self.screen.blit(lbl, (rect.x + 6, rect.y + 3))
+        if weather:
+            # badge animé en haut à droite (à gauche du drapeau damier d'arrivée)
+            self._draw_weather_badge(pygame.Rect(rect.right - 64, rect.y + 4, 24, 24), weather)
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
         # marge haute de 40 px DANS le panneau pour les mâts des fanions de col
@@ -1938,6 +1968,51 @@ class FlammeRougeGame:
             tx = pts[0][0] + (fx - pts[0][0]) * km / n
             ksurf = self.small_font.render(str(km), True, TEXT_DIM)
             self.screen.blit(ksurf, (tx - ksurf.get_width() // 2, base_y))
+
+    def _draw_weather_badge(self, rect, types):
+        """Petite animation météo (extension Météo) : badge qui cycle entre les
+        météos présentes sur le parcours (changement toutes les 2,5 s) —
+        soleil (rayons qui tournent), vent (traits qui défilent, direction selon
+        le vent : arrière ->, de face <-, de travers vertical) ou pluie
+        (gouttes qui tombent sous un nuage)."""
+        now = pygame.time.get_ticks()
+        w = types[(now // 2500) % len(types)]
+        names = {WeatherType.NONE: "soleil", WeatherType.TAILWIND: "vent arrière",
+                 WeatherType.HEADWIND: "vent de face", WeatherType.CROSSWIND: "vent de travers",
+                 WeatherType.RAIN: "pluie"}
+        cx, cy = rect.center
+        r = min(rect.w, rect.h) // 2 - 1
+        if w == WeatherType.RAIN:
+            # nuage gris + 3 gouttes qui tombent en boucle
+            pygame.draw.ellipse(self.screen, (120, 124, 134),
+                                (cx - r + 2, cy - r + 3, 2 * r - 4, r + 2))
+            for k in range(3):
+                dy = (now // 14 + k * 7) % (r + 8)
+                dx = -r // 2 + k * (r // 2)
+                pygame.draw.line(self.screen, (60, 110, 220),
+                                 (cx + dx, cy + dy - 2), (cx + dx - 2, cy + dy + 3), 2)
+        elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND, WeatherType.CROSSWIND):
+            c = {WeatherType.TAILWIND: (225, 185, 35), WeatherType.HEADWIND: (60, 110, 220),
+                 WeatherType.CROSSWIND: (60, 170, 80)}[w]
+            for k in range(3):
+                o = (now // 10 + k * 8) % (2 * r + 6) - r - 3  # défile en boucle
+                if w == WeatherType.CROSSWIND:
+                    x = cx - r // 2 + k * (r // 2)
+                    pygame.draw.line(self.screen, c, (x, cy + o), (x, cy + o + 5), 2)
+                else:
+                    sgn = 1 if w == WeatherType.TAILWIND else -1
+                    y = cy - r // 2 + k * (r // 2)
+                    pygame.draw.line(self.screen, c, (cx + sgn * o, y),
+                                     (cx + sgn * (o + 5), y), 2)
+        else:  # soleil : disque + rayons qui tournent
+            pygame.draw.circle(self.screen, (250, 210, 60), (cx, cy), max(3, r - 3))
+            for k in range(8):
+                a = now / 350.0 + k * math.pi / 4
+                pygame.draw.line(self.screen, (250, 210, 60),
+                                 (cx + math.cos(a) * (r - 2), cy + math.sin(a) * (r - 2)),
+                                 (cx + math.cos(a) * (r + 1), cy + math.sin(a) * (r + 1)), 2)
+        lbl = self.small_font.render(names.get(w, "?"), True, TEXT_DIM)
+        self.screen.blit(lbl, (rect.x - 6 - lbl.get_width(), cy - lbl.get_height() // 2))
 
     def _draw_menu(self):
         """Menu de sélection (affiché quand self.game is None)."""

@@ -214,7 +214,7 @@ class Track:
     # Extension Météo
     # ------------------------------------------------------------------
 
-    def assign_weather(self) -> None:
+    def assign_weather(self, rng=None) -> None:
         """Extension Météo (règles officielles) : on mélange les 13 jetons
         (9 vierges + 4 événements) et on en pose un FACE VISIBLE sur chaque
         tuile droite (turn None) HORS tuiles de départ et d'arrivée ; les
@@ -222,7 +222,7 @@ class Track:
         la météo est publique dès la mise en place."""
         import random
         bag = list(WEATHER_TOKENS)
-        random.shuffle(bag)
+        (rng or random).shuffle(bag)
         i = 0
         for tile in self.tiles:
             if tile.turn is not None:
@@ -231,7 +231,7 @@ class Track:
                 continue  # pas de jeton sur les tuiles de départ/arrivée
             if i >= len(bag):  # plus de tuiles droites que de jetons : on re-bat
                 bag = list(WEATHER_TOKENS)
-                random.shuffle(bag)
+                (rng or random).shuffle(bag)
                 i = 0
             w = bag[i]
             i += 1

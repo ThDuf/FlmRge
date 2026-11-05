@@ -350,5 +350,66 @@ class TestUiWiring(unittest.TestCase):
                     self.assertTrue(c.weather_revealed)  # face visible dès le départ
 
 
+class TestPreviewWeatherAnimation(unittest.TestCase):
+    """Badge météo animé sur le profil de l'aperçu (extension cochée)."""
+
+    def test_assign_weather_deterministic_with_rng(self):
+        import random
+        def build():
+            t = Track()
+            for _ in range(4):
+                t.add_tile(make_tile("ffffff"))
+            return t
+        t1, t2 = build(), build()
+        t1.assign_weather(random.Random(42))
+        t2.assign_weather(random.Random(42))
+        self.assertEqual([c.weather for t in t1.tiles for c in t.cells],
+                         [c.weather for t in t2.tiles for c in t.cells])
+
+    def test_preview_weather_cache(self):
+        import main
+        ui = main.FlammeRougeGame()
+        self.assertEqual(ui._preview_weather("Avenue Corso Paseo"), [])  # ext off
+        ui.ext_meteo = True
+        w = ui._preview_weather("Avenue Corso Paseo")
+        self.assertTrue(w)  # au moins un type (NONE = soleil si aucun événement tiré)
+        self.assertTrue(all(isinstance(x, WeatherType) for x in w))
+        self.assertNotIn(WeatherType.NONE, w[:-1])  # NONE uniquement en repli seul
+        self.assertEqual(w, ui._preview_weather("Avenue Corso Paseo"))  # caché, stable
+        # le cache est vidé avec la config : un autre code perso -> autre entrée
+        w2 = ui._preview_weather("__editor__", code="abcdefu")
+        self.assertIn(("code", "abcdefu"), ui._weather_cache)
+
+    def test_weather_badge_renders_pixels(self):
+        """Le badge dessine bien quelque chose (soleil/vent/pluie) dans son rect."""
+        import main, pygame
+        ui = main.FlammeRougeGame()
+        ui.screen = pygame.Surface((200, 60))
+        ui.screen.fill((255, 255, 255))
+        for w in (WeatherType.NONE, WeatherType.TAILWIND, WeatherType.HEADWIND,
+                  WeatherType.CROSSWIND, WeatherType.RAIN):
+            ui.screen.fill((255, 255, 255))
+            r = pygame.Rect(80, 10, 24, 24)
+            ui._draw_weather_badge(r, [w])
+            found = any(ui.screen.get_at((x, y))[:3] != (255, 255, 255)
+                        for x in range(r.x, r.right) for y in range(r.y, r.bottom))
+            self.assertTrue(found, f"badge {w.name} n'a rien dessiné")
+
+    def test_menu_with_meteo_badge_renders(self):
+        """Menu de sélection avec extension Météo cochée : le profil affiche le
+        badge animé, rendu sans erreur à 2 tailles."""
+        import main, pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
+        ui.ext_meteo = True
+        for size in [(1280, 800), (1600, 1000)]:
+            ui.width, ui.height = size
+            ui.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+            ui.screen.fill((255, 255, 255))
+            ui._draw_header()
+            ui._draw_menu()  # preview + profil + badge météo
+        self.assertTrue(ui._weather_cache)  # au moins une entrée en cache
+
+
 if __name__ == "__main__":
     unittest.main()
