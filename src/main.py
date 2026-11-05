@@ -171,6 +171,8 @@ class FlammeRougeGame:
         self._pending_stage = None
         self.menu_scroll = 0        # scroll de la liste du menu
         self.menu_search = ""       # filtre de recherche (parcours perso)
+        self.ext_meteo = False      # extension Météo activée ?
+        self.ext_peloton = False    # extension Peloton activée ?
         self.menu_search_active = False
         self._menu_sb_drag = None   # offset du drag du thumb de la scrollbar
         self._pending_code = None  # code perso (JSON) si l'entrée choisie est un circuit perso
@@ -942,9 +944,22 @@ class FlammeRougeGame:
         frame = self._menu_frame_rect()
         return pygame.Rect(frame.x + 20, MENU_TOP + 8, frame.w - 28, 28)
 
+    def _extensions_rect(self):
+        """Section « Options d'extensions » (tickboxes Météo / Peloton) dans le
+        cadre de gauche, entre la barre de recherche et la liste."""
+        frame = self._menu_frame_rect()
+        srect = self._menu_search_rect()
+        return pygame.Rect(frame.x + 10, srect.bottom + 6, frame.w - 20, 64)
+
+    def _ext_tick_rects(self):
+        """Tickboxes des extensions : {'meteo': Rect, 'peloton': Rect}."""
+        er = self._extensions_rect()
+        return {"meteo": pygame.Rect(er.x + 10, er.y + 26, 18, 18),
+                "peloton": pygame.Rect(er.x + 10, er.y + 46, 18, 18)}
+
     def _menu_list_area(self):
-        """Zone visible (scrollable) de la liste des entrées."""
-        top = self._menu_search_rect().bottom + 8
+        """Zone visible (scrollable) de la liste des entrées (sous les extensions)."""
+        top = self._extensions_rect().bottom + 6
         return pygame.Rect(0, top, self.width, self.height - 40 - top)
 
     def _menu_frame_rect(self):
@@ -1920,6 +1935,28 @@ class FlammeRougeGame:
         surf = self.label_font.render(stext, True, BLACK if self.menu_search else TEXT_DIM)
         self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
 
+        # section « Extensions » : tickboxes Météo / Peloton
+        er = self._extensions_rect()
+        self._draw_card(er, PANEL_ALT, radius=10, shadow=False)
+        h = self.small_font.render("EXTENSIONS", True, TEXT_DIM)
+        self.screen.blit(h, (er.x + 10, er.y + 5))
+        for key, label in (("meteo", "Météo"), ("peloton", "Peloton")):
+            tr = self._ext_tick_rects()[key]
+            on = self.ext_meteo if key == "meteo" else self.ext_peloton
+            hovered = tr.collidepoint(mouse)
+            if on:
+                pygame.draw.rect(self.screen, ACCENT, tr, border_radius=4)
+                pygame.draw.line(self.screen, WHITE, (tr.x + 4, tr.centery),
+                                 (tr.x + 8, tr.bottom - 5), 2)
+                pygame.draw.line(self.screen, WHITE, (tr.x + 8, tr.bottom - 5),
+                                 (tr.right - 4, tr.y + 5), 2)
+            else:
+                pygame.draw.rect(self.screen, PANEL if not hovered else ROW_SEL, tr,
+                                 border_radius=4)
+                pygame.draw.rect(self.screen, BORDER, tr, width=1, border_radius=4)
+            lbl = self.label_font.render(label, True, INK if on else TEXT_DIM)
+            self.screen.blit(lbl, (tr.right + 8, tr.centery - lbl.get_height() // 2))
+
         entries = self._menu_entries()
         area = getattr(self, "_menu_scroll_area", self._menu_list_area())
         self.screen.set_clip(area)  # la liste scrollable est clippée (l'entrée épinglée reste en dessous)
@@ -2291,6 +2328,13 @@ class FlammeRougeGame:
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for key, tr in self._ext_tick_rects().items():
+                if tr.collidepoint(event.pos):
+                    if key == "meteo":
+                        self.ext_meteo = not self.ext_meteo
+                    else:
+                        self.ext_peloton = not self.ext_peloton
+                    return
             if self._back_button_rect().collidepoint(event.pos):
                 # « ← Retour » en haut : retour à l'écran du nombre de joueurs
                 self.menu_step = "players"

@@ -469,6 +469,27 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.assertEqual(ui._pending_stage, entries[target][0])
         self.assertEqual(len(ui.game.players), ui.player_count)
 
+    def test_extensions_tickboxes_toggle(self):
+        """Section Extensions sur l'écran de sélection : tickboxes Météo et
+        Peloton, bascule au clic."""
+        import pygame
+        ui = self.ui  # menu_step = "stage"
+        self.assertFalse(ui.ext_meteo)
+        self.assertFalse(ui.ext_peloton)
+        ticks = ui._ext_tick_rects()
+        self.assertEqual(set(ticks), {"meteo", "peloton"})
+        er = ui._extensions_rect()
+        fr = ui._menu_frame_rect()
+        self.assertGreaterEqual(er.x, fr.x)  # dans le cadre de sélection
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ticks["meteo"].center))
+        self.assertTrue(ui.ext_meteo)
+        self.assertFalse(ui.ext_peloton)
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ticks["peloton"].center))
+        self.assertTrue(ui.ext_peloton)
+        ui._draw_menu()  # rendu avec les deux cochées, sans erreur
+
     def test_back_button_elevated_in_menu_and_stage_goes_to_players(self):
         """Dans les menus, le bouton retour est dans le bandeau titre (en haut,
         y < HEADER_H) ; sur l'écran de choix d'étape, il ramène à l'écran
