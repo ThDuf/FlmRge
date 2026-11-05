@@ -947,11 +947,39 @@ class FlammeRougeGame:
         return pygame.Rect(frame.x + 20, MENU_TOP + 8, frame.w - 28, 28)
 
     def _extensions_rect(self):
-        """Section « Options d'extensions » (tickboxes Météo / Peloton) dans le
-        cadre de gauche, entre la barre de recherche et la liste."""
+        """Section « Extensions » (tickboxes Météo / Peloton) : en grand écran
+        (>= 1100 px), dans la bande du bas à GAUCHE du gros bouton JOUER ;
+        sinon dans le cadre de gauche, entre la barre de recherche et la liste."""
+        if self.width >= 1100:
+            nxt = self._next_button_rect()
+            return pygame.Rect(nxt.x - 10 - 232, nxt.y + (nxt.h - 64) // 2, 232, 64)
         frame = self._menu_frame_rect()
         srect = self._menu_search_rect()
         return pygame.Rect(frame.x + 10, srect.bottom + 6, frame.w - 20, 64)
+
+    def _draw_extensions(self, mouse):
+        """Dessine la section Extensions à l'endroit donné par _extensions_rect ;
+        la bascule au clic est gérée dans _menu_event via _ext_tick_rects."""
+        er = self._extensions_rect()
+        self._draw_card(er, PANEL_ALT, radius=10, shadow=False)
+        h = self.small_font.render("EXTENSIONS", True, TEXT_DIM)
+        self.screen.blit(h, (er.x + 10, er.y + 5))
+        for key, label in (("meteo", "Météo"), ("peloton", "Peloton")):
+            tr = self._ext_tick_rects()[key]
+            on = self.ext_meteo if key == "meteo" else self.ext_peloton
+            hovered = tr.collidepoint(mouse)
+            if on:
+                pygame.draw.rect(self.screen, ACCENT, tr, border_radius=4)
+                pygame.draw.line(self.screen, WHITE, (tr.x + 4, tr.centery),
+                                 (tr.x + 8, tr.bottom - 5), 2)
+                pygame.draw.line(self.screen, WHITE, (tr.x + 8, tr.bottom - 5),
+                                 (tr.right - 4, tr.y + 5), 2)
+            else:
+                pygame.draw.rect(self.screen, PANEL if not hovered else ROW_SEL, tr,
+                                 border_radius=4)
+                pygame.draw.rect(self.screen, BORDER, tr, width=1, border_radius=4)
+            lbl = self.label_font.render(label, True, INK if on else TEXT_DIM)
+            self.screen.blit(lbl, (tr.right + 8, tr.centery - lbl.get_height() // 2))
 
     def _ext_tick_rects(self):
         """Tickboxes des extensions : {'meteo': Rect, 'peloton': Rect}."""
@@ -960,8 +988,12 @@ class FlammeRougeGame:
                 "peloton": pygame.Rect(er.x + 10, er.y + 46, 18, 18)}
 
     def _menu_list_area(self):
-        """Zone visible (scrollable) de la liste des entrées (sous les extensions)."""
-        top = self._extensions_rect().bottom + 6
+        """Zone visible (scrollable) de la liste : sous la barre de recherche en
+        grand écran (les extensions sont à côté de JOUER), sous les extensions sinon."""
+        if self.width >= 1100:
+            top = self._menu_search_rect().bottom + 6
+        else:
+            top = self._extensions_rect().bottom + 6
         return pygame.Rect(0, top, self.width, self.height - 40 - top)
 
     def _menu_frame_rect(self):
@@ -1937,27 +1969,8 @@ class FlammeRougeGame:
         surf = self.label_font.render(stext, True, BLACK if self.menu_search else TEXT_DIM)
         self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
 
-        # section « Extensions » : tickboxes Météo / Peloton
-        er = self._extensions_rect()
-        self._draw_card(er, PANEL_ALT, radius=10, shadow=False)
-        h = self.small_font.render("EXTENSIONS", True, TEXT_DIM)
-        self.screen.blit(h, (er.x + 10, er.y + 5))
-        for key, label in (("meteo", "Météo"), ("peloton", "Peloton")):
-            tr = self._ext_tick_rects()[key]
-            on = self.ext_meteo if key == "meteo" else self.ext_peloton
-            hovered = tr.collidepoint(mouse)
-            if on:
-                pygame.draw.rect(self.screen, ACCENT, tr, border_radius=4)
-                pygame.draw.line(self.screen, WHITE, (tr.x + 4, tr.centery),
-                                 (tr.x + 8, tr.bottom - 5), 2)
-                pygame.draw.line(self.screen, WHITE, (tr.x + 8, tr.bottom - 5),
-                                 (tr.right - 4, tr.y + 5), 2)
-            else:
-                pygame.draw.rect(self.screen, PANEL if not hovered else ROW_SEL, tr,
-                                 border_radius=4)
-                pygame.draw.rect(self.screen, BORDER, tr, width=1, border_radius=4)
-            lbl = self.label_font.render(label, True, INK if on else TEXT_DIM)
-            self.screen.blit(lbl, (tr.right + 8, tr.centery - lbl.get_height() // 2))
+        if self.width < 1100:
+            self._draw_extensions(mouse)  # petit écran : dans le cadre, sous la recherche
 
         entries = self._menu_entries()
         area = getattr(self, "_menu_scroll_area", self._menu_list_area())
@@ -2024,6 +2037,10 @@ class FlammeRougeGame:
             name, _d, code, _r, kind = entries[self.menu_index]
             if kind in ("base", "perso"):
                 self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
+        # Section « Extensions » (tickboxes Météo / Peloton) à GAUCHE du bouton
+        # JOUER, dans la bande du bas (grand écran)
+        if self.width >= 1100:
+            self._draw_extensions(mouse)
         # Gros bouton en bas à droite : JOUER (démarre la partie directement,
         # le nombre de joueurs a déjà été choisi au 1er écran)
         self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
@@ -2777,7 +2794,20 @@ class FlammeRougeGame:
         return ("PHASE TERMINALE", "Fatigue puis nouveau tour", (110, 110, 110))
 
     def _grad_fill(self, rect, c_top, c_bot, radius=BTN_R):
-        """Remplissage en dégradé vertical (haut -> bas) dans un rect arrondi."""
+        """Remplissage en dégradé vertical (haut -> bas) dans un rect arrondi.
+        radius > 0 : le dégradé est découpé par un masque à coins arrondis
+        (sinon simples lignes, pour les fonds plein écran en radius=0)."""
+        if radius and radius > 0:
+            s = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+            for i in range(rect.h):
+                t = i / max(1, rect.h - 1)
+                pygame.draw.line(s, _mix(c_top, c_bot, t), (0, i), (rect.w, i))
+            mask = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+            pygame.draw.rect(mask, (255, 255, 255, 255), (0, 0, rect.w, rect.h),
+                             border_radius=min(radius, rect.w // 2, rect.h // 2))
+            s.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            self.screen.blit(s, (rect.x, rect.y))
+            return
         for i in range(rect.h):
             t = i / max(1, rect.h - 1)
             c = _mix(c_top, c_bot, t)

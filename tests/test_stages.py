@@ -479,8 +479,9 @@ class TestMenuSelectionRules(unittest.TestCase):
         ticks = ui._ext_tick_rects()
         self.assertEqual(set(ticks), {"meteo", "peloton"})
         er = ui._extensions_rect()
-        fr = ui._menu_frame_rect()
-        self.assertGreaterEqual(er.x, fr.x)  # dans le cadre de sélection
+        nxt = ui._next_button_rect()
+        self.assertLessEqual(er.right, nxt.x)   # à gauche du bouton JOUER
+        self.assertGreaterEqual(er.x, 0)
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=ticks["meteo"].center))
         self.assertTrue(ui.ext_meteo)
