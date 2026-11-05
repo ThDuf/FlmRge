@@ -2101,40 +2101,65 @@ class FlammeRougeGame:
         pygame.draw.line(self.screen, color, (cx + 2 * s, cy - 4 * s), (cx + 8 * s, cy), w)  # mollet
         pygame.draw.circle(self.screen, color, (int(head[0]), int(head[1])), int(4 * s))  # tête
 
+    def _load_hero_image(self):
+        """Image du hero si l'utilisateur a déposé assets/peloton.jpg/.png
+        (sinon None -> scène vectorielle dessinée en code)."""
+        import os
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            '..', 'assets')
+        for name in ('peloton.jpg', 'peloton.png', 'peloton.jpeg', 'hero.jpg', 'hero.png'):
+            p = os.path.join(base, name)
+            if os.path.exists(p):
+                try:
+                    return pygame.image.load(p)
+                except Exception:
+                    return None
+        return None
+
     def _draw_players_hero(self, rect):
         """Panneau hero de l'écran joueurs (à droite) : scène vectorielle d'un
         peloton (ciel, soleil, collines, route, cyclistes), gros chiffre du
         nombre de joueurs, et jetons R+S par couleur en dessous."""
         self._draw_card(rect, PANEL, radius=CARD_R)
-        # scène en haut du panneau
+        # scène en haut du panneau : photo assets/peloton.jpg si déposée,
+        # sinon la scène vectorielle dessinée en code
         top_h = int(rect.h * 0.55)
         scene = pygame.Rect(rect.x + 1, rect.y + 1, rect.w - 2, top_h)
-        self._grad_fill(scene, (214, 233, 248), (243, 249, 253), CARD_R)  # ciel
-        # soleil doux
-        pygame.draw.circle(self.screen, (255, 236, 170),
-                           (scene.right - 60, scene.y + 44), 22)
-        pygame.draw.circle(self.screen, (255, 244, 205),
-                           (scene.right - 60, scene.y + 44), 30)
-        # collines lointaines
-        pygame.draw.polygon(self.screen, (214, 232, 219),
-                            [(scene.x, scene.bottom - 40),
-                             (scene.x + scene.w // 3, scene.bottom - 78),
-                             (scene.x + 2 * scene.w // 3, scene.bottom - 46),
-                             (scene.right, scene.bottom - 70),
-                             (scene.right, scene.bottom), (scene.x, scene.bottom)])
-        # route
-        road = pygame.Rect(scene.x, scene.bottom - 34, scene.w, 34)
-        pygame.draw.rect(self.screen, (120, 126, 138), road)
-        for x in range(road.x + 8, road.right - 8, 26):
-            pygame.draw.line(self.screen, (240, 242, 246), (x, road.centery),
-                             (x + 12, road.centery), 2)
-        # peloton de silhouettes sur la route
-        n = 6
-        for i in range(n):
-            s = 0.62 + 0.1 * (i % 3)
-            cx = scene.x + 40 + i * (scene.w - 90) / (n - 1)
-            cy = road.bottom - 12
-            self._draw_cyclist(cx, cy, s, _mix(INK, WHITE, 0.08 * (i % 3)))
+        img = self._load_hero_image()
+        if img is not None:
+            # l'image couvre la zone scène (cover)
+            scale = max(scene.w / img.get_width(), scene.h / img.get_height())
+            img = pygame.transform.smoothscale(
+                img, (max(1, int(img.get_width() * scale)),
+                      max(1, int(img.get_height() * scale))))
+            self.screen.blit(img, (scene.x + (scene.w - img.get_width()) // 2,
+                                   scene.y + (scene.h - img.get_height()) // 2))
+            # voile blanc léger pour garder le texte lisible
+            veil = pygame.Surface((scene.w, scene.h), pygame.SRCALPHA)
+            veil.fill((255, 255, 255, 90))
+            self.screen.blit(veil, (scene.x, scene.y))
+        else:
+            # scène vectorielle : ciel, soleil, collines, route, peloton
+            self._grad_fill(scene, (214, 233, 248), (243, 249, 253), CARD_R)  # ciel
+            pygame.draw.circle(self.screen, (255, 236, 170),
+                               (scene.right - 60, scene.y + 44), 22)
+            pygame.draw.circle(self.screen, (255, 244, 205),
+                               (scene.right - 60, scene.y + 44), 30)
+            pygame.draw.polygon(self.screen, (214, 232, 219),
+                                [(scene.x, scene.bottom - 40),
+                                 (scene.x + scene.w // 3, scene.bottom - 78),
+                                 (scene.x + 2 * scene.w // 3, scene.bottom - 46),
+                                 (scene.right, scene.bottom - 70),
+                                 (scene.right, scene.bottom), (scene.x, scene.bottom)])
+            road = pygame.Rect(scene.x, scene.bottom - 34, scene.w, 34)
+            pygame.draw.rect(self.screen, (120, 126, 138), road)
+            for x in range(road.x + 8, road.right - 8, 26):
+                pygame.draw.line(self.screen, (240, 242, 246), (x, road.centery),
+                                 (x + 12, road.centery), 2)
+            for i in range(6):
+                s = 0.62 + 0.1 * (i % 3)
+                cx = scene.x + 40 + i * (scene.w - 90) / 5
+                self._draw_cyclist(cx, road.bottom - 12, s, _mix(INK, WHITE, 0.08 * (i % 3)))
         # gros chiffre + libellé par-dessus la scène
         big = self.display_font.render(str(self.player_count), True, INK)
         self.screen.blit(big, (rect.x + 24, rect.y + 18))
