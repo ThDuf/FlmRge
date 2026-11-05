@@ -2845,7 +2845,7 @@ class FlammeRougeGame:
         name_surf = self.phase_font.render(label, True, _mix(color, BLACK, 0.45))
         desc_surf = self.label_font.render(desc, True, (60, 66, 78))
         pw = 14 + 10 + name_surf.get_width() + 18 + desc_surf.get_width() + 16
-        pw = min(pw, self.width - 240)  # laisser la place aux infos/bouton à droite
+        pw = min(pw, self.width - 240)  # laisser la place au bouton retour à droite
         pill = pygame.Rect((self.width - pw) // 2, rect.y + 4, pw, PHASE_H - 8)
         pygame.draw.rect(self.screen, _mix(color, WHITE, 0.86), pill, border_radius=CHIP_R)
         pygame.draw.rect(self.screen, color, pill, width=1, border_radius=CHIP_R)
@@ -2854,35 +2854,6 @@ class FlammeRougeGame:
         self.screen.blit(desc_surf, (pill.x + 30 + name_surf.get_width() + 18,
                                      pill.centery - desc_surf.get_height() // 2))
 
-        # À droite du bandeau de phase : compteur + action faite / prochaine étape
-        right_lines = []
-        if self.showing_movement:
-            right_lines.append(f"Mouvement {self.movement_step}/{self.movement_total}")
-        elif self.showing_aspiration:
-            right_lines.append(f"Aspiration {self.aspiration_step}/{self.aspiration_total}")
-        elif self.game.current_phase == Phase.ENERGY:
-            right_lines.append(f"Cartes {self.game.cards_played_this_turn}/"
-                               f"{self.game.total_cards_to_play}")
-        if self.last_action:
-            right_lines.append(self.last_action[0])
-        if self.showing_movement and self.movement_movements:
-            runner, value = self.movement_movements[0]
-            eff, reason = self.game.track.effective_steps(runner.x, value)
-            txt = f"Suivant : {self._short_id(runner)} joue {value}"
-            if eff != value:
-                txt += f" → {eff}"
-            if reason:
-                txt += f" ({reason})"
-            right_lines.append(txt)
-        elif self.showing_aspiration and self.aspiration_movements:
-            step = self.aspiration_movements[0]
-            right_lines.append("Pack : " + ", ".join(
-                f"{self._short_id(r)}:{fx}→{tx}" for r, fx, _fl, tx, _tl in step))
-        for i, line in enumerate(right_lines[-2:]):
-            surf = self.small_font.render(line, True, (60, 66, 78))
-            self.screen.blit(surf, (rect.right - 10 - self._back_button_rect().w - 10
-                                    - surf.get_width(),
-                                    rect.y + 6 + i * 16))
         # Bouton « retour » en haut à droite, DANS le bandeau de phase (hors du
         # bandeau FLAMME ROUGE) : fait comme ÉCHAP (retour au menu)
         self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
