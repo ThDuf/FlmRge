@@ -1906,8 +1906,9 @@ class FlammeRougeGame:
             for gi, (cell_x, color, label) in enumerate(markers):
                 ci = max(0, min(int(cell_x), n))
                 fx, fy = pts[ci]
-                pygame.draw.circle(self.screen, WHITE, (int(fx), int(fy)), 6)
-                pygame.draw.circle(self.screen, color, (int(fx), int(fy)), 4)
+                # marqueur = PETIT VÉLO couleur d'équipe (pas un point), posé sur la ligne
+                pygame.draw.circle(self.screen, WHITE, (int(fx), int(fy)), 8)  # halo blanc
+                self._draw_cyclist(int(fx), int(fy) - 1, 0.38, color)
                 # NOM du groupe en gras, au-dessus ou en dessous de la ligne
                 # (alterné pour éviter les chevauchements)
                 lt = self.bold_font.render(label, True, INK)
