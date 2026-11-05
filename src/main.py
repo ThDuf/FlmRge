@@ -1862,13 +1862,15 @@ class FlammeRougeGame:
         # forme simple de la tuile (pas de barres), couleur = relief
         self._draw_tile_shape(pts, tile, tr, size * 0.22)
 
-    def _draw_profile_array(self, alt, rect, weather=None):
+    def _draw_profile_array(self, alt, rect, weather=None, markers=None):
         """Profil d'altitude par segment : montée = orange doux, descente =
         bleu doux, plat = gris. 1 case = 1 km : échelle en dessous avec
         distance totale et D+ dans le titre, mots « départ » / « arrivée »
         aux extrémités et petit drapeau damier sur la ligne d'arrivée.
         `weather` = liste de WeatherType présents -> badge météo animé en haut
-        à droite du panneau (extension Météo)."""
+        à droite du panneau (extension Météo).
+        `markers` = [(case_x, couleur, libellé)] -> marqueurs dessinés SUR la
+        ligne de profil (groupes de la course en cours)."""
         n = max(len(alt) - 1, 1)  # nombre de cases = kilomètres
         dplus = sum(max(0, alt[i + 1] - alt[i]) for i in range(n))
         self._draw_card(rect, PANEL, radius=8, shadow=False)
@@ -1913,6 +1915,20 @@ class FlammeRougeGame:
             quad = top + [(top[-1][0], inner.bottom), (top[0][0], inner.bottom)]
             pygame.draw.polygon(self.screen, soft_fill[key], quad)
             pygame.draw.lines(self.screen, seg_line[key], False, top, 2)
+        # marqueurs (groupes de la course) sur la ligne de profil : pastille
+        # couleur d'équipe au point du coureur le plus avancé + libellé en
+        # dessous, en quinconce pour éviter les chevauchements
+        if markers:
+            self.screen.set_clip(inner)
+            for gi, (cell_x, color, label) in enumerate(markers):
+                ci = max(0, min(int(cell_x), n))
+                fx, fy = pts[ci]
+                pygame.draw.circle(self.screen, WHITE, (int(fx), int(fy)), 6)
+                pygame.draw.circle(self.screen, color, (int(fx), int(fy)), 4)
+                lt = self.small_font.render(label, True, INK)
+                self.screen.blit(lt, (int(fx) - lt.get_width() // 2,
+                                      int(fy) + (8 if gi % 2 == 0 else 20)))
+            self.screen.set_clip(None)
         # petit fanion rouge sur CHAQUE col : une cote = une montée qui se
         # TERMINE par du plat (ou par l'arrivée, qui peut donc être un col).
         # Catégorie selon la longueur de la montée qui précède ce col.
@@ -3000,6 +3016,51 @@ class FlammeRougeGame:
             out.append((label, g, max(r.x for r in g)))
         return out
 
+    def _race_profile_rect(self) -> pygame.Rect:
+        """Panneau du profil de course EN COURS : bande en haut à droite du
+        cadre du parcours (à côté du panneau des groupes, en haut à gauche)."""
+        frame = self._frame_rect()
+        w = min(420, max(240, frame.w - 320))
+        h = max(90, min(140, frame.h // 4))
+        return pygame.Rect(frame.right - w - 10, frame.y + 10, w, h)
+
+    def _game_weather(self):
+        """Types de météo présents sur la piste de la partie en cours (badge
+        animé du profil de course) ; [] si extension inactive, [NONE] (soleil)
+        si aucun jeton événement."""
+        if self.game is None or not getattr(self.game, "meteo", False):
+            return []
+        seen = []
+        for t in self.game.track.tiles:
+            w = t.cells[0].weather if t.cells else WeatherType.NONE
+            if w != WeatherType.NONE and w not in seen:
+                seen.append(w)
+        return seen or [WeatherType.NONE]
+
+    def _race_profile_markers(self):
+        """Marqueurs des groupes sur le profil de course :
+        [(case du coureur le plus avancé, couleur équipe, libellé court)]."""
+        players_by_runner = {r.id: p for p in self.game.players
+                             for r in p.get_runners()}
+        short = {"Tête de course": "Tête", "Lanterne rouge": "Lanterne"}
+        out = []
+        for label, group, lead_x in self._group_names():
+            lead = max(group, key=lambda r: r.x)
+            color = PLAYER_COLORS.get(players_by_runner[lead.id].color, BLACK)
+            out.append((lead_x, color, short.get(label, label)))
+        return out
+
+    def _draw_race_profile(self):
+        """Profil d'altitude de la course en cours, en haut à droite du cadre du
+        parcours, avec un marqueur par groupe (tête de course, peloton, ...) et
+        le badge météo animé si l'extension Météo est active."""
+        if self.game is None:
+            return
+        rect = self._race_profile_rect()
+        alt = self._stage_profile(self.game.stage, code=self.game.custom_code)
+        self._draw_profile_array(alt, rect, weather=self._game_weather(),
+                                 markers=self._race_profile_markers())
+
     def _draw_groups_panel(self):
         """Panneau en haut à gauche du cadre du parcours : une ligne par groupe."""
         if self.game is None:
@@ -3039,6 +3100,7 @@ class FlammeRougeGame:
         self._draw_header()
         self._draw_phase_band()
         self._draw_groups_panel()
+        self._draw_race_profile()
 
         info_x = self._left_w() + 16  # (les compteurs/infos sont dans le bandeau de phase)
         # Barre du bas : panneau de cartes du joueur en cours (en bas à gauche)
