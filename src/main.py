@@ -1990,6 +1990,10 @@ class FlammeRougeGame:
         self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
+        # Bouton « ← Retour » élevé en haut à droite (dans le bandeau titre) :
+        # retour à l'écran du nombre de joueurs (1er écran du process)
+        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
+                             mouse, pressed=(self._pressed_button == "back"))
 
     def _draw_gear(self, center, r, color):
         """Dessine un écrou en `center` : hexagone plein avec trou central."""
@@ -2216,6 +2220,10 @@ class FlammeRougeGame:
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._back_button_rect().collidepoint(event.pos):
+                # « ← Retour » en haut : retour à l'écran du nombre de joueurs
+                self.menu_step = "players"
+                return
             if self._next_button_rect().collidepoint(event.pos):
                 # gros bouton rouge = passer à l'écran suivant
                 # (même animation d'enfoncement que les autres boutons)
@@ -2725,8 +2733,11 @@ class FlammeRougeGame:
                              pygame.mouse.get_pos())
 
     def _back_button_rect(self):
-        """Bouton retour en haut à droite du bandeau de phase (hors du bandeau
-        titre FLAMME ROUGE)."""
+        """Bouton « ← Retour » en haut à droite. Dans les menus : dans le
+        bandeau titre (bien en haut). En partie : dans le bandeau de phase,
+        hors du bandeau titre FLAMME ROUGE."""
+        if self.game is None:
+            return pygame.Rect(self.width - 112, 12, 100, 34)
         return pygame.Rect(self.width - 104, HEADER_H + 4 + (PHASE_H - 26) // 2,
                            96, 26)
 

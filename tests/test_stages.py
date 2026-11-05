@@ -469,6 +469,17 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.assertEqual(ui._pending_stage, entries[target][0])
         self.assertEqual(len(ui.game.players), ui.player_count)
 
+    def test_back_button_elevated_in_menu_and_stage_goes_to_players(self):
+        """Dans les menus, le bouton retour est dans le bandeau titre (en haut,
+        y < HEADER_H) ; sur l'écran de choix d'étape, il ramène à l'écran
+        joueurs (1er écran du process)."""
+        pygame = self.pygame
+        ui = self.ui  # menu_step = "stage"
+        r = ui._back_button_rect()
+        self.assertLess(r.y, main.HEADER_H)  # élevé dans le bandeau titre
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=r.center))
+        self.assertEqual(ui.menu_step, "players")
+
     def test_back_button_on_players_screen(self):
         """Sur l'écran du nombre de joueurs, le bouton « ← Retour » en haut à
         droite fait comme ÉCHAP : retour au choix d'étape (sélection 1er parcours)."""
