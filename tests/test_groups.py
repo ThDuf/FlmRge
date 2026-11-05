@@ -61,15 +61,21 @@ class TestGroupNames(unittest.TestCase):
         self.assertEqual(len(names), 1)
         self.assertEqual(names[0][0], "Peloton")
 
-    def test_panel_renders(self):
-        """Le panneau se dessine sans erreur avec plusieurs groupes."""
+    def test_groups_shown_on_race_profile_not_panel(self):
+        """Le panneau « Groupes » séparé est supprimé ; les noms des groupes
+        apparaissent sur le profil de course (marqueurs)."""
         pygame.display.set_mode((1200, 800))
         self.ui.width, self.ui.height = 1200, 800
         self.ui.screen = pygame.display.set_mode((1200, 800))
         place_isolated(self.ui, [20, 15, 10, 5])
+        self.assertFalse(hasattr(self.ui, "_draw_groups_panel"))
         self.ui.screen.fill(main.BG)
-        self.ui._draw_groups_panel()
-        self.assertTrue(self.ui._group_names())
+        self.ui._draw_race_profile()  # ne plante pas, avec plusieurs groupes
+        markers = self.ui._race_profile_markers()
+        labels = [m[2] for m in markers]
+        self.assertEqual(labels, [n[0] for n in self.ui._group_names()])
+        self.assertIn("Tête de course", labels)
+        self.assertIn("Lanterne rouge", labels)
 
 
 if __name__ == '__main__':

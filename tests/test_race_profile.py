@@ -58,14 +58,13 @@ class TestRaceProfile(unittest.TestCase):
         self.assertGreaterEqual(len(groups), 3)
         markers = ui._race_profile_markers()
         self.assertEqual(len(markers), len(groups))
-        short_map = {"Tête de course": "Tête", "Lanterne rouge": "Lanterne"}
-        for (label, group, lead_x), (mx, color, short) in zip(groups, markers):
+        for (label, group, lead_x), (mx, color, name) in zip(groups, markers):
             self.assertEqual(mx, lead_x)
-            self.assertEqual(short, short_map.get(label, label))
+            self.assertEqual(name, label)  # nom COMPLET du groupe sur le profil
             self.assertIsInstance(color, tuple)
         labels = [m[2] for m in markers]
-        self.assertIn("Tête", labels)
-        self.assertIn("Lanterne", labels)
+        self.assertIn("Tête de course", labels)
+        self.assertIn("Lanterne rouge", labels)
 
     def test_profile_renders_with_group_markers(self):
         """Le rendu de l'écran de course dessine le profil ET les pastilles

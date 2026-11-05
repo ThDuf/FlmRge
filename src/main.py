@@ -3032,12 +3032,11 @@ class FlammeRougeGame:
         [(case du coureur le plus avancé, couleur équipe, libellé court)]."""
         players_by_runner = {r.id: p for p in self.game.players
                              for r in p.get_runners()}
-        short = {"Tête de course": "Tête", "Lanterne rouge": "Lanterne"}
         out = []
         for label, group, lead_x in self._group_names():
             lead = max(group, key=lambda r: r.x)
             color = PLAYER_COLORS.get(players_by_runner[lead.id].color, BLACK)
-            out.append((lead_x, color, short.get(label, label)))
+            out.append((lead_x, color, label))  # nom complet du groupe
         return out
 
     def _draw_race_profile(self):
@@ -3051,46 +3050,10 @@ class FlammeRougeGame:
         self._draw_profile_array(alt, rect, weather=self._game_weather(),
                                  markers=self._race_profile_markers())
 
-    def _draw_groups_panel(self):
-        """Panneau en haut à gauche du cadre du parcours : une ligne par groupe."""
-        if self.game is None:
-            return
-        names = self._group_names()
-        if not names:
-            return
-        frame = self._frame_rect()
-        line_h = 17
-        rows = []
-        for label, group, lead_x in names:
-            ids = " ".join(self._short_id(r) for r in group)
-            rows.append((label, ids, f"case {lead_x}"))
-        w = 200
-        for label, ids, x in rows:
-            lw = self.label_font.render(label, True, BLACK).get_width()
-            iw = self.small_font.render(ids, True, TEXT_DIM).get_width()
-            xw = self.small_font.render(x, True, TEXT_DIM).get_width()
-            w = max(w, 10 + lw + 8 + iw + 8 + xw + 10)
-        w = min(w, frame.w - 20)
-        h = 24 + line_h * len(rows) + 6
-        rect = pygame.Rect(frame.x + 10, frame.y + 10, w, h)
-        self._draw_card(rect, PANEL, radius=10)
-        title = self.label_font.render("Groupes", True, BLACK)
-        self.screen.blit(title, (rect.x + 10, rect.y + 5))
-        y = rect.y + 24
-        for label, ids, x in rows:
-            lt = self.label_font.render(label, True, BLACK)
-            self.screen.blit(lt, (rect.x + 10, y))
-            it = self.small_font.render(ids, True, TEXT_DIM)
-            self.screen.blit(it, (rect.x + 10 + lt.get_width() + 8, y + 2))
-            xt = self.small_font.render(x, True, TEXT_DIM)
-            self.screen.blit(xt, (rect.right - 10 - xt.get_width(), y + 2))
-            y += line_h
-
     def _draw_ui(self):
         self._draw_header()
         self._draw_phase_band()
-        self._draw_groups_panel()
-        self._draw_race_profile()
+        self._draw_race_profile()  # panneau groupes -> noms des groupes SUR le profil
 
         info_x = self._left_w() + 16  # (les compteurs/infos sont dans le bandeau de phase)
         # Barre du bas : panneau de cartes du joueur en cours (en bas à gauche)
