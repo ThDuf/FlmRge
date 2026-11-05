@@ -2171,15 +2171,13 @@ class FlammeRougeGame:
                 cx = scene.x + 30 + col * (scene.w - 60) / max(1, cols - 0.5)
                 cy = road.bottom - 8 - row * (16 * s)
                 if team_start <= i < team_start + n_team:
-                    # coureur d'équipe : couleur + lettre R/S + anneau blanc
+                    # coureur d'équipe : silhouette colorée + tête cerclée de
+                    # blanc (sans lettre)
                     tcol = colors[((i - team_start) // 2) % len(colors)]
-                    letter = "R" if (i - team_start) % 2 == 0 else "S"
                     self._draw_cyclist(cx, cy, s, tcol)
                     hx, hy = cx + 13 * s, cy - 26 * s  # tête
                     pygame.draw.circle(self.screen, WHITE, (int(hx), int(hy)), int(4 * s) + 1)
                     pygame.draw.circle(self.screen, tcol, (int(hx), int(hy)), int(4 * s))
-                    t = self.bold_font.render(letter, True, BLACK)
-                    self.screen.blit(t, t.get_rect(center=(int(hx), int(hy))))
                 else:
                     self._draw_cyclist(cx, cy, s, _mix(INK, WHITE, 0.06 * (i % 3)))
         # gros chiffre + libellé par-dessus la scène
