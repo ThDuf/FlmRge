@@ -187,7 +187,6 @@ class FlammeRougeGame:
                                        '..', 'saves')
         self._preview_cache = {}  # nom d'étape -> polyligne de prévisualisation
         self._profile_cache = {}  # nom d'étape -> profil d'altitude
-        self._weather_cache = {}  # nom/code -> [WeatherType présents] (badge météo de l'aperçu)
         self.show_hands = True
         self.played_display_index = {}  # runner_id -> position d'origine de la carte jouée
         self.show_decks = False  # Panneau des cartes restantes (touche D)
@@ -1275,8 +1274,7 @@ class FlammeRougeGame:
         # Profil d'altitude de l'étape / du parcours perso (code si fourni),
         # en grand : il occupe tout l'espace restant sous le tracé
         alt = self._stage_profile(name, code=code)
-        self._draw_profile_array(alt, self._menu_profile_rect(rect),
-                                 weather=self._preview_weather(name, code=code))
+        self._draw_profile_array(alt, self._menu_profile_rect(rect))
 
     def _stage_profile(self, name, code=None):
         """Altitude relative case par case : montée +1, descente -1, plat 0.
@@ -1295,28 +1293,6 @@ class FlammeRougeGame:
                                            else 0))
             self._profile_cache[key] = alt
         return self._profile_cache[key]
-
-    def _preview_weather(self, name, code=None):
-        """Extension Météo cochée : types de météo présents sur le parcours en
-        aperçu, calculés sur un tracé factice avec un RNG seedé par le nom/code
-        (stable d'une frame à l'autre). [] si extension inactive ; [NONE]
-        (soleil) si aucun jeton événement n'est tiré."""
-        if not self.ext_meteo:
-            return []
-        key = ("code", code) if code else name
-        if key not in self._weather_cache:
-            import random
-            from game.game import build_stage_track, build_track_from_code
-            from game.track import WeatherType
-            track = build_track_from_code(code) if code else build_stage_track(name)
-            track.assign_weather(random.Random(repr(key)))
-            seen = []
-            for t in track.tiles:
-                w = t.cells[0].weather if t.cells else WeatherType.NONE
-                if w != WeatherType.NONE and w not in seen:
-                    seen.append(w)
-            self._weather_cache[key] = seen or [WeatherType.NONE]
-        return self._weather_cache[key]
 
     def _draw_profile(self, name, rect):
         """Dessine le profil d'altitude de l'étape dans son sous-panneau."""
@@ -1790,8 +1766,7 @@ class FlammeRougeGame:
                 g = cell.geography
                 alt.append(alt[-1] + (1 if g == CellGeographyType.UPHILL
                                        else -1 if g == CellGeographyType.DOWNHILL else 0))
-        self._draw_profile_array(alt, self._preview_profile_rect(rect),
-                                 weather=self._preview_weather("__editor__", code=self.editor_code))
+        self._draw_profile_array(alt, self._preview_profile_rect(rect))
 
     def _tile_shape_color(self, tile):
         """Couleur de la forme d'une tuile : jaune clair (départ), jaune vif
@@ -2610,6 +2585,38 @@ class FlammeRougeGame:
     # Dessin : circuit serpentin
     # ------------------------------------------------------------------
 
+    def _draw_weather_icon(self, w, mx, my, tx, ty, nx, ny, now):
+        """Icône météo ANIMÉE sur le parcours (écran de course) : 2 chevrons qui
+        défilent en boucle dans le sens du vent (arrière = sens de la marche,
+        face = inverse, travers = perpendiculaire à la route), ou gouttes de
+        pluie qui tombent."""
+        if w == WeatherType.RAIN:
+            for k in range(2):
+                dy = (now // 12 + k * 6) % 12
+                pygame.draw.circle(self.screen, (45, 45, 65),
+                                   (int(mx - 3 + k * 6), int(my - 6 + dy)), 2)
+            return
+        if w == WeatherType.TAILWIND:
+            c, sgn = (225, 185, 35), 1
+        elif w == WeatherType.HEADWIND:
+            c, sgn = (60, 110, 220), -1
+        else:  # CROSSWIND
+            c, sgn = (60, 170, 80), 0
+        for k in range(2):
+            o = (now // 9 + k * 8) % 16 - 8
+            if sgn == 0:  # vent de travers : défile selon la normale
+                ax, ay = mx + nx * o, my + ny * o
+                pygame.draw.polygon(self.screen, c,
+                                    [(ax + nx * 6, ay + ny * 6),
+                                     (ax - nx * 2 + tx * 4, ay - ny * 2 + ty * 4),
+                                     (ax - nx * 2 - tx * 4, ay - ny * 2 - ty * 4)])
+            else:  # vent arrière/face : défile selon la tangente
+                ax, ay = mx + tx * sgn * o, my + ty * sgn * o
+                pygame.draw.polygon(self.screen, c,
+                                    [(ax + tx * sgn * 6, ay + ty * sgn * 6),
+                                     (ax - tx * sgn * 2 + nx * 4, ay - ty * sgn * 2 + ny * 4),
+                                     (ax - tx * sgn * 2 - nx * 4, ay - ty * sgn * 2 - ny * 4)])
+
     def _draw_track(self):
         """Dessine le circuit organique : un chemin continu sans saut.
 
@@ -2680,32 +2687,15 @@ class FlammeRougeGame:
                 arrow_color = UPHILL_ARROW if cell_geo == CellGeographyType.UPHILL else DOWNHILL_ARROW
                 pygame.draw.polygon(self.screen, arrow_color, tri)
 
-            # Extension Météo : icône météo sur les tuiles droites (face
-            # visible dès la mise en place), côté extérieur gauche
+            # Extension Météo : icône météo ANIMÉE sur les tuiles droites (face
+            # visible dès la mise en place), côté extérieur gauche de la route
             w = track.weather_at(x_cell)
             if w != WeatherType.NONE:
                 px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
                 nx, ny = -ty, tx
                 mx, my = px - nx * (half + 14), py - ny * (half + 14)
-                if w == WeatherType.TAILWIND:  # flèche jaune, sens de la marche
-                    pygame.draw.polygon(self.screen, (225, 185, 35),
-                                        [(mx + tx * 7, my + ty * 7),
-                                         (mx - tx * 3 + nx * 4, my - ty * 3 + ny * 4),
-                                         (mx - tx * 3 - nx * 4, my - ty * 3 - ny * 4)])
-                elif w == WeatherType.HEADWIND:  # flèche bleue, contre la marche
-                    pygame.draw.polygon(self.screen, (60, 110, 220),
-                                        [(mx - tx * 7, my - ty * 7),
-                                         (mx + tx * 3 + nx * 4, my + ty * 3 + ny * 4),
-                                         (mx + tx * 3 - nx * 4, my + ty * 3 - ny * 4)])
-                elif w == WeatherType.CROSSWIND:  # flèche verte, de travers
-                    pygame.draw.polygon(self.screen, (60, 170, 80),
-                                        [(mx + nx * 7, my + ny * 7),
-                                         (mx - nx * 3 + tx * 4, my - ny * 3 + ty * 4),
-                                         (mx - nx * 3 - tx * 4, my - ny * 3 - ty * 4)])
-                elif w == WeatherType.RAIN:  # goutte noire
-                    pygame.draw.polygon(self.screen, (45, 45, 65),
-                                        [(mx, my - 7), (mx + 4, my + 2), (mx - 4, my + 2)])
-                    pygame.draw.circle(self.screen, (45, 45, 65), (int(mx), int(my + 2)), 4)
+                self._draw_weather_icon(w, mx, my, tx, ty, nx, ny,
+                                        pygame.time.get_ticks())
 
         # Ligne médiane entre les deux files (sur tout le tracé) + quadrillage des cases
         pygame.draw.lines(self.screen, WHITE, False,

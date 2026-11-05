@@ -350,8 +350,10 @@ class TestUiWiring(unittest.TestCase):
                     self.assertTrue(c.weather_revealed)  # face visible dès le départ
 
 
-class TestPreviewWeatherAnimation(unittest.TestCase):
-    """Badge météo animé sur le profil de l'aperçu (extension cochée)."""
+class TestWeatherAnimationRaceScreen(unittest.TestCase):
+    """Animations météo DANS l'écran de course (et plus sur le profil de
+    sélection) : badge animé sur le profil de course + icônes animées sur les
+    tuiles droites du parcours."""
 
     def test_assign_weather_deterministic_with_rng(self):
         import random
@@ -366,26 +368,11 @@ class TestPreviewWeatherAnimation(unittest.TestCase):
         self.assertEqual([c.weather for t in t1.tiles for c in t.cells],
                          [c.weather for t in t2.tiles for c in t.cells])
 
-    def test_preview_weather_cache(self):
-        import main
-        ui = main.FlammeRougeGame()
-        self.assertEqual(ui._preview_weather("Avenue Corso Paseo"), [])  # ext off
-        ui.ext_meteo = True
-        w = ui._preview_weather("Avenue Corso Paseo")
-        self.assertTrue(w)  # au moins un type (NONE = soleil si aucun événement tiré)
-        self.assertTrue(all(isinstance(x, WeatherType) for x in w))
-        self.assertNotIn(WeatherType.NONE, w[:-1])  # NONE uniquement en repli seul
-        self.assertEqual(w, ui._preview_weather("Avenue Corso Paseo"))  # caché, stable
-        # le cache est vidé avec la config : un autre code perso -> autre entrée
-        w2 = ui._preview_weather("__editor__", code="abcdefu")
-        self.assertIn(("code", "abcdefu"), ui._weather_cache)
-
     def test_weather_badge_renders_pixels(self):
         """Le badge dessine bien quelque chose (soleil/vent/pluie) dans son rect."""
         import main, pygame
         ui = main.FlammeRougeGame()
         ui.screen = pygame.Surface((200, 60))
-        ui.screen.fill((255, 255, 255))
         for w in (WeatherType.NONE, WeatherType.TAILWIND, WeatherType.HEADWIND,
                   WeatherType.CROSSWIND, WeatherType.RAIN):
             ui.screen.fill((255, 255, 255))
@@ -395,20 +382,55 @@ class TestPreviewWeatherAnimation(unittest.TestCase):
                         for x in range(r.x, r.right) for y in range(r.y, r.bottom))
             self.assertTrue(found, f"badge {w.name} n'a rien dessiné")
 
-    def test_menu_with_meteo_badge_renders(self):
-        """Menu de sélection avec extension Météo cochée : le profil affiche le
-        badge animé, rendu sans erreur à 2 tailles."""
+    def test_badge_only_on_race_screen_not_on_selection_profile(self):
+        """Le badge météo animé n'est PAS sur le profil de sélection du parcours,
+        mais bien sur le profil de l'écran de course."""
         import main, pygame
         ui = main.FlammeRougeGame()
         ui.menu_step = "stage"
         ui.ext_meteo = True
-        for size in [(1280, 800), (1600, 1000)]:
-            ui.width, ui.height = size
-            ui.screen = pygame.display.set_mode(size, pygame.RESIZABLE)
-            ui.screen.fill((255, 255, 255))
-            ui._draw_header()
-            ui._draw_menu()  # preview + profil + badge météo
-        self.assertTrue(ui._weather_cache)  # au moins une entrée en cache
+        calls = []
+        orig = main.FlammeRougeGame._draw_weather_badge
+        ui._draw_weather_badge = lambda *a, **k: calls.append(a) or orig(ui, *a, **k)
+        ui.width, ui.height = 1280, 800
+        ui.screen = pygame.display.set_mode((1280, 800), pygame.RESIZABLE)
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header()
+        ui._draw_menu()  # écran de SÉLECTION : aucun badge
+        self.assertEqual(calls, [])
+        # écran de COURSE : le badge est bien là
+        ui._select_stage("Avenue Corso Paseo")
+        ui.game.auto_place_riders()
+        calls.clear()
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header(); ui._draw_phase_band()
+        ui._draw_track(); ui._draw_runners(); ui._draw_ui()
+        self.assertTrue(calls, "badge météo absent du profil de course")
+
+    def test_weather_icons_animated_on_track_in_race_screen(self):
+        """Chaque type de météo pose une icône animée (couleurs propres) sur sa
+        tuile droite du parcours, dans l'écran de course."""
+        import main, pygame
+        ui = main.FlammeRougeGame(stage="Avenue Corso Paseo")
+        game = ui.game
+        types = [WeatherType.TAILWIND, WeatherType.HEADWIND,
+                 WeatherType.CROSSWIND, WeatherType.RAIN]
+        straights = [t for t in game.track.tiles if t.turn is None]
+        for tile, w in zip(straights, types):
+            for c in tile.cells:
+                c.weather = w
+        ui.width, ui.height = 1280, 800
+        ui.screen = pygame.display.set_mode((1280, 800), pygame.RESIZABLE)
+        ui.screen.fill((200, 200, 210))
+        ui._draw_header(); ui._draw_phase_band(); ui._draw_track()  # piste seule
+        colors = {(225, 185, 35), (60, 110, 220), (60, 170, 80), (45, 45, 65)}
+        found = set()
+        for y in range(0, ui.height, 2):
+            for x in range(0, ui.width, 2):
+                p = ui.screen.get_at((x, y))[:3]
+                if p in colors:
+                    found.add(p)
+        self.assertEqual(found, colors, f"icônes météo manquantes sur le parcours: {colors - found}")
 
 
 if __name__ == "__main__":
