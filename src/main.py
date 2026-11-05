@@ -2161,15 +2161,16 @@ class FlammeRougeGame:
             # 2 équipes -> 4 coureurs d'équipe, 3 -> 6, 4 -> 8, plus des noirs.
             colors = list(PLAYER_COLORS.values())
             n_team = self.player_count * 2
-            n_total = max(8, n_team + 4)  # peloton assez dense
-            cols = math.ceil(n_total / 2)  # 2 rangées en quinconce
+            n_total = max(14, n_team + 8)  # peloton nombreux de silhouettes noires
+            n_rows = 3                      # 3 rangées en quinconce
+            cols = math.ceil(n_total / n_rows)
             team_start = (n_total - n_team) // 2  # coureurs d'équipe au centre
             for i in range(n_total):
-                row = i // cols            # 0 = rangée arrière (haut), 1 = avant
+                row = i // cols            # 0 = arrière (haut) ... 2 = avant
                 col = i % cols + (row % 2) * 0.5  # quinconce
-                s = 0.5 + 0.07 * ((i * 7) % 3)
-                cx = scene.x + 30 + col * (scene.w - 60) / max(1, cols - 0.5)
-                cy = road.bottom - 8 - row * (16 * s)
+                s = 0.42 + 0.06 * ((i * 7) % 3)   # plus petits -> plus nombreux
+                cx = scene.x + 22 + col * (scene.w - 44) / max(1, cols - 0.5)
+                cy = road.bottom - 6 - row * (13 * s)
                 if team_start <= i < team_start + n_team:
                     # coureur d'équipe : silhouette colorée + tête cerclée de
                     # blanc (sans lettre)
