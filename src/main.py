@@ -2589,18 +2589,14 @@ class FlammeRougeGame:
                 arrow_color = UPHILL_ARROW if cell_geo == CellGeographyType.UPHILL else DOWNHILL_ARROW
                 pygame.draw.polygon(self.screen, arrow_color, tri)
 
-            # Extension Météo : jeton sur les tuiles droites, « ? » tant que
-            # face cachée, sinon icône selon le jeton (côté extérieur gauche)
+            # Extension Météo : icône météo sur les tuiles droites (face
+            # visible dès la mise en place), côté extérieur gauche
             w = track.weather_at(x_cell)
             if w != WeatherType.NONE:
                 px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
                 nx, ny = -ty, tx
                 mx, my = px - nx * (half + 14), py - ny * (half + 14)
-                cell_obj = track.get_cell(x_cell, 0)
-                if not cell_obj.weather_revealed:
-                    q = self.small_font.render("?", True, TEXT_DIM)
-                    self.screen.blit(q, q.get_rect(center=(int(mx), int(my))))
-                elif w == WeatherType.TAILWIND:  # flèche jaune, sens de la marche
+                if w == WeatherType.TAILWIND:  # flèche jaune, sens de la marche
                     pygame.draw.polygon(self.screen, (225, 185, 35),
                                         [(mx + tx * 7, my + ty * 7),
                                          (mx - tx * 3 + nx * 4, my - ty * 3 + ny * 4),
@@ -3104,7 +3100,8 @@ class FlammeRougeGame:
         for entry in self.game.history:
             if lines:
                 lines.append(("", None, False))  # ligne vide entre les tours
-            lines.append((f"TOUR {entry['turn']}", (180, 140, 20), True))
+            lines.append((f"TOUR {entry['turn']}" if entry["turn"] else "Météo de la course",
+                          (180, 140, 20), True))
             if entry["cards"]:
                 lines.append(("Énergie", TEXT_DIM, True))
                 for color, rid, val in entry["cards"]:

@@ -30,10 +30,10 @@ class WeatherType(Enum):
     RAIN = auto()       # pluie (noir) : chute si la case d'arrivée est pleine
 
 
-# Les 13 jetons Météo de l'extension : 3 vent arrière, 3 vent de face,
-# 3 vent de travers, 4 pluie.
-WEATHER_TOKENS = ([WeatherType.TAILWIND] * 3 + [WeatherType.HEADWIND] * 3
-                  + [WeatherType.CROSSWIND] * 3 + [WeatherType.RAIN] * 4)
+# Les 13 jetons Météo de l'extension : 9 jetons VIERGES (sans effet) et
+# 4 jetons événement (1 vent arrière, 1 vent de face, 1 vent de travers, 1 pluie).
+WEATHER_TOKENS = ([WeatherType.NONE] * 9 + [WeatherType.TAILWIND, WeatherType.HEADWIND,
+                  WeatherType.CROSSWIND, WeatherType.RAIN])
 
 
 # Alphabet des cases d'une tuile (initiales anglaises) :
@@ -215,15 +215,20 @@ class Track:
     # ------------------------------------------------------------------
 
     def assign_weather(self) -> None:
-        """Extension Météo : un jeton météo FACE CACHÉE sur chaque tuile
-        droite (turn None) — mélange des 13 jetons de la boîte."""
+        """Extension Météo (règles officielles) : on mélange les 13 jetons
+        (9 vierges + 4 événements) et on en pose un FACE VISIBLE sur chaque
+        tuile droite (turn None) HORS tuiles de départ et d'arrivée ; les
+        jetons sont ensuite retirés (les panneaux marquent la météo) ->
+        la météo est publique dès la mise en place."""
         import random
         bag = list(WEATHER_TOKENS)
         random.shuffle(bag)
         i = 0
         for tile in self.tiles:
             if tile.turn is not None:
-                continue  # seuls les tuiles droites portent un jeton
+                continue  # seules les tuiles droites portent un jeton
+            if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
+                continue  # pas de jeton sur les tuiles de départ/arrivée
             if i >= len(bag):  # plus de tuiles droites que de jetons : on re-bat
                 bag = list(WEATHER_TOKENS)
                 random.shuffle(bag)
@@ -232,7 +237,7 @@ class Track:
             i += 1
             for cell in tile.cells:
                 cell.weather = w
-                cell.weather_revealed = False
+                cell.weather_revealed = True  # face visible dès la mise en place
 
     def weather_at(self, x: int) -> WeatherType:
         """Météo de la case x (NONE si hors piste ou extension inactive)."""
@@ -375,14 +380,18 @@ class Track:
           montée — la 6e case ou plus ne peut jamais y pénétrer, le
           coureur s'arrête juste avant (dernière file libre).
 
-        Extension Météo :
-        - PLUIE : un coureur SUR une tuile pluie dont la case d'arrivée est
-          pleine CHUTE (il reste couché sur place, `runner.crashed = True`)
-          au lieu de se recaler derrière.
-        - COUREUR COUCHE : à son prochain mouvement il se relève et sa carte
-          vaut −2 (pénalité appliquée APRÈS les ajustements descente ; le
-          plafond de 5 en montée n'est pas modifié). Une carte 2 = il se
-          relève sans bouger. `crashed` est remis à False.
+        Extension Météo (règles officielles Meteo) :
+        - PLUIE (Wet) : si le coureur TERMINE son mouvement dans une zone
+          humide en ayant perdu des cases à cause d'un blocage (case pleine
+          devant), il CHUTE : couché sur la case où il s'est arrêté
+          (`runner.crashed = True`). Une case entièrement accidentée est
+          impassable (effet domino : on s'arrête une case avant, et si cette
+          case est humide -> nouvelle chute). Un coureur couché ne donne ni
+          ne reçoit l'aspiration.
+        - COUREUR COUCHE : à son prochain mouvement il se relève, sa carte
+          vaut -2 APRÈS les modificateurs (min 5 en descente, plafond 5 en
+          montée) — ex. carte 2 en descente = 5 normalement, 3 après chute.
+          `crashed` est remis à False.
 
         Retourne la raison du déplacement (pour le log), ou None.
         """
@@ -390,25 +399,27 @@ class Track:
             return None
         steps, reason = self.effective_steps(runner.x, steps)
         if runner.crashed:
-            # le coureur se relève : sa carte vaut −2 (après ajustements)
+            # le coureur se relève : sa carte vaut -2, APRÈS les modificateurs
+            # (min 5 en descente, plafond 5 en montée)
             steps = max(0, steps - 2)
             reason = (reason + " ; " if reason else "") + "se relève (-2, chute)"
             runner.crashed = False
         if steps <= 0:
             return reason
         target = min(runner.x + steps, self.length - 1)
-        # Pluie : case d'arrivée pleine -> chute (au lieu du recul arrière)
-        if (self.weather_at(runner.x) == WeatherType.RAIN
-                and self.get_cell(target, 0) is not None
-                and self.get_cell(target, 0).is_full()):
-            runner.crashed = True
-            return "chute (pluie) : case d'arrivée pleine"
+        # Pluie (effet domino) : une case ENTIÈREMENT accidentée est impassable
+        for c in range(runner.x + 1, target + 1):
+            cell_c = self.get_cell(c, 0)
+            if cell_c is not None and cell_c.is_full() and all(r.crashed for r in cell_c.runners):
+                target = c - 1  # on s'arrête une case avant l'amas de chutes
+                break
         x = target
         # Reculer tant que la case est pleine, jusqu'à trouver une file libre
         while x > runner.x and self.get_cell(x, 0).is_full():
             x -= 1
         if x == runner.x:
             return reason  # bloqué : toutes les cases devant sont pleines
+        blocked = x < min(runner.x + steps, self.length - 1)  # cases perdues (bloqué)
         old_cell = self.get_cell(runner.x, runner.y)
         old_cell.remove_runner(runner.y)
         cell = self.get_cell(x, 0)
@@ -416,6 +427,11 @@ class Track:
             cell.set_runner(runner, 0)  # file A (droite) en priorité
         else:
             cell.set_runner(runner, 1)  # seule la file B est libre
+        # Pluie : mouvement terminé dans une zone humide en ayant été bloqué
+        # -> CHUTE (le coureur est couché sur la case où il s'est arrêté)
+        if blocked and self.weather_at(x) == WeatherType.RAIN:
+            runner.crashed = True
+            return "chute (pluie) : bloqué dans une zone humide"
         return reason
 
     def get_groups(self) -> List[List[Runner]]:

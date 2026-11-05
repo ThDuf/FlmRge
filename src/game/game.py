@@ -200,7 +200,9 @@ class Game:
         self.players: List[Player] = []
         self.track = self._build_track(stage)
         if self.meteo:
-            # un jeton météo face cachée sur chaque tuile droite
+            # jetons météo posés FACE VISIBLE sur les tuiles droites (hors
+            # départ/arrivée) dès la mise en place (logué plus bas, une fois
+            # l'historique initialisé)
             self.track.assign_weather()
         self.current_phase: Phase = Phase.PLACEMENT
         self.turn_count: int = 0
@@ -224,6 +226,12 @@ class Game:
         self.placement_queue: List[tuple] = []
         self.placement_index = 0
         self.history: List[dict] = []  # historique des coups : un dict par tour
+        if self.meteo:
+            # météo de la course (jetons face visible dès la mise en place)
+            self.history.append({"turn": 0, "cards": [], "moves": [], "slips": [],
+                                 "weather": sorted((t.x, t.cells[0].weather.name)
+                                                   for t in self.track.tiles
+                                                   if t.cells and t.cells[0].weather != WeatherType.NONE)})
         if auto_place:
             self._auto_place_all()
             self.start_turn()
@@ -285,7 +293,6 @@ class Game:
             return False
         _player, runner = self.current_placement()
         self.track.get_cell(x, lane).set_runner(runner, lane)
-        self._reveal_weather()  # le départ est sur une tuile droite : jeton révélé
         self.placement_index += 1
         if self.placement_index >= len(self.placement_queue):
             self.start_turn()
@@ -356,7 +363,6 @@ class Game:
                 cell = self.track.get_cell(x, lane)
                 if cell and cell.is_empty(lane):
                     cell.set_runner(runner, lane)
-                    self._reveal_weather()
                     return
         raise RuntimeError(f"Placement impossible : {runner.id} (zone de départ pleine)")
 
@@ -378,18 +384,6 @@ class Game:
             if w == WeatherType.HEADWIND:
                 return 3
         return 4
-
-    def _reveal_weather(self) -> None:
-        """Extension Météo : révèle le jeton des tuiles où se trouvent des
-        coureurs (premier passage) et le note dans l'historique."""
-        if not self.meteo:
-            return
-        for x, _lane, _runner in self.track.get_all_runners():
-            w = self.track.reveal_weather_at(x)
-            if w is not None and w != WeatherType.NONE:
-                tile_x = self.track.tiles[self.track.tile_index_at(x)].x
-                self._hist_turn()["weather"].append((tile_x, w.name))
-                print(f"  [Météo] tuile {tile_x} révélée : {w.name}")
 
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
@@ -477,7 +471,6 @@ class Game:
         from_x = runner.x
         reason = self.track.move_runner(runner, value)  # gère chute pluie / −2
         eff = runner.x - from_x
-        self._reveal_weather()  # arrivée sur une tuile droite = jeton révélé
         print(f"    -> Déplacé à {runner.x}, file {runner.y}"
               + (f" ({reason})" if reason else ""))
         self._hist_turn()["moves"].append(
@@ -526,7 +519,6 @@ class Game:
     def apply_slipstream_step(self, step) -> None:
         """Applique UNE étape d'aspiration sur le plateau (pour le pas-à-pas UI)."""
         self.track.apply_slipstream_step(step)
-        self._reveal_weather()
 
     def apply_aspiration_steps(self, steps: List) -> None:
         """Applique toutes les étapes d'aspiration (usage headless)."""
