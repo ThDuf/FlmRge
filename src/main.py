@@ -1902,15 +1902,17 @@ class FlammeRougeGame:
         # couleur d'équipe au point du coureur le plus avancé + libellé en
         # dessous, en quinconce pour éviter les chevauchements
         if markers:
-            self.screen.set_clip(inner)
+            self.screen.set_clip(rect)
             for gi, (cell_x, color, label) in enumerate(markers):
                 ci = max(0, min(int(cell_x), n))
                 fx, fy = pts[ci]
                 pygame.draw.circle(self.screen, WHITE, (int(fx), int(fy)), 6)
                 pygame.draw.circle(self.screen, color, (int(fx), int(fy)), 4)
-                lt = self.small_font.render(label, True, INK)
-                self.screen.blit(lt, (int(fx) - lt.get_width() // 2,
-                                      int(fy) + (8 if gi % 2 == 0 else 20)))
+                # NOM du groupe en gras, au-dessus ou en dessous de la ligne
+                # (alterné pour éviter les chevauchements)
+                lt = self.bold_font.render(label, True, INK)
+                ly = int(fy) - 26 if gi % 2 == 0 else int(fy) + 9
+                self.screen.blit(lt, (int(fx) - lt.get_width() // 2, ly))
             self.screen.set_clip(None)
         # petit fanion rouge sur CHAQUE col : une cote = une montée qui se
         # TERMINE par du plat (ou par l'arrivée, qui peut donc être un col).
@@ -1969,11 +1971,10 @@ class FlammeRougeGame:
             self.screen.blit(ksurf, (tx - ksurf.get_width() // 2, base_y))
 
     def _draw_weather_badge(self, rect, types):
-        """Petite animation météo (extension Météo) : badge qui cycle entre les
-        météos présentes sur le parcours (changement toutes les 2,5 s) —
-        soleil (rayons qui tournent), vent (traits qui défilent, direction selon
-        le vent : arrière ->, de face <-, de travers vertical) ou pluie
-        (gouttes qui tombent sous un nuage)."""
+        """Petite animation météo sur le profil de course : pastille qui cycle
+        entre les météos présentes (toutes les 2,5 s), avec l'icône animée
+        (vent = traits sur le côté, pluie = traits vers le bas + gouttes au sol,
+        vent latéral = effet de profondeur, sinon soleil) et le libellé."""
         now = pygame.time.get_ticks()
         w = types[(now // 2500) % len(types)]
         names = {WeatherType.NONE: "soleil", WeatherType.TAILWIND: "vent arrière",
@@ -1981,38 +1982,11 @@ class FlammeRougeGame:
                  WeatherType.RAIN: "pluie"}
         cx, cy = rect.center
         r = min(rect.w, rect.h) // 2 - 1
-        if w == WeatherType.RAIN:
-            # nuage gris + 3 gouttes qui tombent en boucle
-            pygame.draw.ellipse(self.screen, (120, 124, 134),
-                                (cx - r + 2, cy - r + 3, 2 * r - 4, r + 2))
-            for k in range(3):
-                dy = (now // 14 + k * 7) % (r + 8)
-                dx = -r // 2 + k * (r // 2)
-                pygame.draw.line(self.screen, (60, 110, 220),
-                                 (cx + dx, cy + dy - 2), (cx + dx - 2, cy + dy + 3), 2)
-        elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND, WeatherType.CROSSWIND):
-            c = {WeatherType.TAILWIND: (225, 185, 35), WeatherType.HEADWIND: (60, 110, 220),
-                 WeatherType.CROSSWIND: (60, 170, 80)}[w]
-            for k in range(3):
-                o = (now // 10 + k * 8) % (2 * r + 6) - r - 3  # défile en boucle
-                if w == WeatherType.CROSSWIND:
-                    x = cx - r // 2 + k * (r // 2)
-                    pygame.draw.line(self.screen, c, (x, cy + o), (x, cy + o + 5), 2)
-                else:
-                    sgn = 1 if w == WeatherType.TAILWIND else -1
-                    y = cy - r // 2 + k * (r // 2)
-                    pygame.draw.line(self.screen, c, (cx + sgn * o, y),
-                                     (cx + sgn * (o + 5), y), 2)
-        else:  # soleil : disque + rayons qui tournent
-            pygame.draw.circle(self.screen, (250, 210, 60), (cx, cy), max(3, r - 3))
-            for k in range(8):
-                a = now / 350.0 + k * math.pi / 4
-                pygame.draw.line(self.screen, (250, 210, 60),
-                                 (cx + math.cos(a) * (r - 2), cy + math.sin(a) * (r - 2)),
-                                 (cx + math.cos(a) * (r + 1), cy + math.sin(a) * (r + 1)), 2)
+        pygame.draw.circle(self.screen, PANEL, (cx, cy), r)
+        pygame.draw.circle(self.screen, BORDER, (cx, cy), r, 1)
+        self._draw_weather_icon(w, cx, cy, 1.0, 0.0, 0.0, 1.0, now)
         lbl = self.small_font.render(names.get(w, "?"), True, TEXT_DIM)
         self.screen.blit(lbl, (rect.x - 6 - lbl.get_width(), cy - lbl.get_height() // 2))
-
     def _draw_menu(self):
         """Menu de sélection (affiché quand self.game is None)."""
         mouse = pygame.mouse.get_pos()
@@ -2593,38 +2567,55 @@ class FlammeRougeGame:
     # Dessin : circuit serpentin
     # ------------------------------------------------------------------
 
-    def _draw_weather_icon(self, w, mx, my, tx, ty, nx, ny, now):
-        """Icône météo ANIMÉE sur le parcours (écran de course) : 2 chevrons qui
-        défilent en boucle dans le sens du vent (arrière = sens de la marche,
-        face = inverse, travers = perpendiculaire à la route), ou gouttes de
-        pluie qui tombent."""
+    def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
+        """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
+        selon la tangente (tx, ty) et la normale (nx, ny) de la route :
+        - vent arrière / de face : TRAITS SUR LE CÔTÉ qui défilent dans le sens
+          du vent (jaune ->, bleu <-) ;
+        - vent de travers (latéral) : traits traversants avec EFFET DE
+          PROFONdeur (proche = plus long et foncé, loin = plus court et clair) ;
+        - pluie : TRAITS VERS LE BAS qui tombent + petites gouttes par terre ;
+        - sinon (NONE) : SOLEIL (disque + rayons qui tournent)."""
         if w == WeatherType.RAIN:
-            for k in range(2):
-                dy = (now // 12 + k * 6) % 12
-                pygame.draw.circle(self.screen, (45, 45, 65),
-                                   (int(mx - 3 + k * 6), int(my - 6 + dy)), 2)
+            for k in range(3):  # traits vers le bas qui tombent en boucle
+                dy = (now // 10 + k * 5) % 14
+                x = cx - 5 + k * 5
+                pygame.draw.line(self.screen, (90, 130, 210),
+                                 (x, cy - 7 + dy), (x, cy - 1 + dy), 2)
+            # petites gouttes par terre
+            pygame.draw.circle(self.screen, (60, 100, 190), (int(cx - 3), int(cy + 6)), 2)
+            pygame.draw.circle(self.screen, (60, 100, 190), (int(cx + 3), int(cy + 7)), 1)
             return
-        if w == WeatherType.TAILWIND:
-            c, sgn = (225, 185, 35), 1
-        elif w == WeatherType.HEADWIND:
-            c, sgn = (60, 110, 220), -1
-        else:  # CROSSWIND
-            c, sgn = (60, 170, 80), 0
-        for k in range(2):
-            o = (now // 9 + k * 8) % 16 - 8
-            if sgn == 0:  # vent de travers : défile selon la normale
-                ax, ay = mx + nx * o, my + ny * o
-                pygame.draw.polygon(self.screen, c,
-                                    [(ax + nx * 6, ay + ny * 6),
-                                     (ax - nx * 2 + tx * 4, ay - ny * 2 + ty * 4),
-                                     (ax - nx * 2 - tx * 4, ay - ny * 2 - ty * 4)])
-            else:  # vent arrière/face : défile selon la tangente
-                ax, ay = mx + tx * sgn * o, my + ty * sgn * o
-                pygame.draw.polygon(self.screen, c,
-                                    [(ax + tx * sgn * 6, ay + ty * sgn * 6),
-                                     (ax - tx * sgn * 2 + nx * 4, ay - ty * sgn * 2 + ny * 4),
-                                     (ax - tx * sgn * 2 - nx * 4, ay - ty * sgn * 2 - ny * 4)])
-
+        if w == WeatherType.NONE:  # soleil : disque + rayons tournants
+            pygame.draw.circle(self.screen, (250, 210, 60), (int(cx), int(cy)), 5)
+            for k in range(8):
+                a = now / 350.0 + k * math.pi / 4
+                pygame.draw.line(self.screen, (250, 210, 60),
+                                 (cx + math.cos(a) * 6, cy + math.sin(a) * 6),
+                                 (cx + math.cos(a) * 9, cy + math.sin(a) * 9), 2)
+            return
+        if w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
+            c = (225, 185, 35) if w == WeatherType.TAILWIND else (60, 110, 220)
+            sgn = 1 if w == WeatherType.TAILWIND else -1
+            for k in range(3):  # traits sur le côté, défilant selon le vent
+                o = (now // 9 + k * 6) % 14 - 7
+                lat = (k - 1) * 5
+                bx, by = cx + nx * lat, cy + ny * lat
+                pygame.draw.line(self.screen, c,
+                                 (bx + tx * sgn * o, by + ty * sgn * o),
+                                 (bx + tx * sgn * (o + 5), by + ty * sgn * (o + 5)), 2)
+        else:  # CROSSWIND : effet de profondeur (traits traversants)
+            c = (60, 170, 80)
+            for k in range(4):
+                depth = k / 3.0  # 0 = loin, 1 = proche
+                o = (now // 8 + k * 5) % 16 - 8
+                lat = (k - 1.5) * 4
+                ln = 3 + 5 * depth  # plus long si proche
+                col = _mix(c, WHITE, 0.55 * (1 - depth))  # plus clair si loin
+                bx, by = cx + tx * lat, cy + ty * lat
+                pygame.draw.line(self.screen, col,
+                                 (bx + nx * o, by + ny * o),
+                                 (bx + nx * (o + ln), by + ny * (o + ln)), 2)
     def _draw_track(self):
         """Dessine le circuit organique : un chemin continu sans saut.
 

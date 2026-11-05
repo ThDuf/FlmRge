@@ -423,7 +423,7 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         ui.screen = pygame.display.set_mode((1280, 800), pygame.RESIZABLE)
         ui.screen.fill((200, 200, 210))
         ui._draw_header(); ui._draw_phase_band(); ui._draw_track()  # piste seule
-        colors = {(225, 185, 35), (60, 110, 220), (60, 170, 80), (45, 45, 65)}
+        colors = {(225, 185, 35), (60, 110, 220), (60, 170, 80), (90, 130, 210)}  # pluie = traits bleu (90,130,210) + gouttes (60,100,190)
         found = set()
         for y in range(0, ui.height, 2):
             for x in range(0, ui.width, 2):
