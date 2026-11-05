@@ -1985,9 +1985,9 @@ class FlammeRougeGame:
             name, _d, code, _r, kind = entries[self.menu_index]
             if kind in ("base", "perso"):
                 self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
-        # Gros bouton en bas à droite : passer à l'écran suivant (même rendu
-        # que « Créer un circuit », en rouge ; même typo phase_font)
-        self._draw_ui_button(self._next_button_rect(), "SUIVANT →", (200, 45, 45),
+        # Gros bouton en bas à droite : JOUER (démarre la partie directement,
+        # le nombre de joueurs a déjà été choisi au 1er écran)
+        self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
 
@@ -2185,9 +2185,10 @@ class FlammeRougeGame:
         if kind == "editor":
             self.menu_step = "editor"
         else:
+            # le nombre de joueurs a déjà été choisi (1er écran) : on démarre
             self._pending_stage = name
             self._pending_code = code if kind == "perso" else None
-            self.menu_step = "players"
+            self._select_stage(name)
 
     def _players_menu_event(self, event):
         """Étape 2 du menu : choix du nombre de joueurs (2-4)."""

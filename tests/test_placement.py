@@ -462,11 +462,8 @@ class TestMenuCategories(unittest.TestCase):
         self.assertEqual(len(perso), 1)
         self.assertEqual(perso[0][0], "mon_beau_parcours")
         self.assertEqual(perso[0][2], "abKcdfu")
-        # validation -> étape joueurs avec code perso en attente
+        # validation (JOUER) -> démarre directement avec le code perso
         ui.menu_index = entries.index(perso[0])
-        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        self.assertEqual(ui.menu_step, "players")
-        self.assertEqual(ui._pending_code, "abKcdfu")
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.custom_code, "abKcdfu")

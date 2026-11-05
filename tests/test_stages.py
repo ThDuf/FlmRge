@@ -260,24 +260,26 @@ class TestStageMenu(unittest.TestCase):
         self.assertIsNone(ui.game)  # le clic n'a rien sélectionné (souris hors entrée)
         ui.menu_index = 1
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        self.assertIsNone(ui.game)  # ENTRÉE passe à l'étape "joueurs"
-        self.assertEqual(ui.menu_step, "players")
-        self.assertEqual(ui._pending_stage, name)
-        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        # ENTRÉE = JOUER : démarre directement (joueurs choisis au 1er écran)
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, name)
+        self.assertEqual(ui._pending_stage, name)
         self.assertEqual(len(ui.game.players), 2)  # 2 joueurs par défaut
 
     def test_menu_player_count_2_to_4(self):
-        """Étape 'players' du menu : on choisit 3 joueurs au clavier."""
+        """Process : 1er écran = joueurs (choix 2-4), puis étape -> JOUER
+        démarre directement la partie (plus d'écran joueurs après)."""
         import pygame
         ui = main.FlammeRougeGame()
-        ui.menu_step = "stage"  # process : joueurs d'abord, ici on est sur l'étape
-        ui.menu_index = 1  # 1re étape de base (0 = en-tête de catégorie)
-        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        self.assertEqual(ui.menu_step, "players")
+        self.assertEqual(ui.menu_step, "players")  # 1er écran
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
         self.assertEqual(ui.player_count, 3)
+        # SUIVANT (pas d'étape choisie) -> écran de choix d'étape
+        nb = ui._next_button_rect()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
+        self.assertEqual(ui.menu_step, "stage")
+        # JOUER sur l'étape choisie -> partie démarrée directement avec 3 joueurs
+        ui.menu_index = 1  # 1re étape de base (0 = en-tête de catégorie)
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertIsNotNone(ui.game)
         self.assertEqual(len(ui.game.players), 3)
@@ -461,8 +463,11 @@ class TestMenuSelectionRules(unittest.TestCase):
             ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
         finally:
             pygame.mouse.get_pos = orig_get_pos
-        self.assertEqual(ui.menu_step, "players")        # bouton rouge = suivant
+        # bouton rouge JOUER : démarre la partie directement (plus d'écran
+        # joueurs après le choix du circuit, il est en 1er dans le process)
+        self.assertIsNotNone(ui.game)
         self.assertEqual(ui._pending_stage, entries[target][0])
+        self.assertEqual(len(ui.game.players), ui.player_count)
 
     def test_back_button_on_players_screen(self):
         """Sur l'écran du nombre de joueurs, le bouton « ← Retour » en haut à
