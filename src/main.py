@@ -2009,31 +2009,53 @@ class FlammeRougeGame:
         return self._menu_frame_rect()
 
     def _draw_players_menu(self, mouse):
-        """Étape 2 du menu : choix du nombre de joueurs (2-4), DANS le cadre
-        de gauche (comme la sélection d'étape), preview à droite."""
+        """1er écran : choix du nombre de joueurs (2-4), façon « lobby » de jeu
+        de course en ligne : grosses cartes d'options à gauche (dans le cadre),
+        panneau hero à droite avec le gros chiffre et le peloton de jetons."""
         frame = self._players_frame_rect()
         self._draw_card(frame, PANEL, radius=CARD_R)
-        title = self.title_font.render("Combien de joueurs ?", True, BLACK)
-        self.screen.blit(title, (frame.x + 16, frame.y + 14))
-        stage = self.label_font.render(self._pending_stage or "", True, TEXT_DIM)
-        self.screen.blit(stage, (frame.x + 16, frame.y + 46))
-        hint = self.small_font.render("Clic ou flèches G/D + ENTRÉE (Échap = retour)",
-                                      True, TEXT_DIM)
-        self.screen.blit(hint, (frame.x + 16, frame.y + 70))
+        title = self.display_font.render("Combien de joueurs ?", True, INK)
+        self.screen.blit(title, (frame.x + 20, frame.y + 16))
+        sub = self.label_font.render("Chaque joueur pilote 2 coureurs (rouleur + sprinteur)",
+                                     True, TEXT_DIM)
+        self.screen.blit(sub, (frame.x + 22, frame.y + 16 + title.get_height() + 6))
+        if self._pending_stage:
+            stage = self.label_font.render(self._pending_stage, True, TEXT_DIM)
+            self.screen.blit(stage, (frame.x + 22, frame.y + 16 + title.get_height() + 30))
+        hint = self.small_font.render("Clic ou flèches G/D + ENTRÉE", True, TEXT_DIM)
+        self.screen.blit(hint, (frame.x + 22, frame.y + 16 + title.get_height() + 52))
         for count, rect in self._player_count_rects():
             selected = (count == self.player_count)
             hovered = rect.collidepoint(mouse)
-            # même design que la sélection de parcours : fond blanc, grisé au
-            # survol, jamais entouré, trait rouge à gauche si sélectionné
+            # grosse carte d'option : lift + ombre au survol, trait accent si
+            # sélectionnée, gros chiffre à gauche
             fill = ROW_SEL if hovered else PANEL
-            pygame.draw.rect(self.screen, fill, rect, border_radius=8)
+            if hovered:
+                sh = pygame.Surface((rect.w + 8, rect.h + 10), pygame.SRCALPHA)
+                pygame.draw.rect(sh, (*SHADOW_RGB, 40), (4, 6, rect.w, rect.h),
+                                 border_radius=CARD_R)
+                self.screen.blit(sh, (rect.x - 4, rect.y - 2))
+            pygame.draw.rect(self.screen, fill, rect, border_radius=CARD_R)
             if selected:
-                pygame.draw.rect(self.screen, (235, 60, 60),
+                pygame.draw.rect(self.screen, ACCENT, rect, width=2, border_radius=CARD_R)
+                pygame.draw.rect(self.screen, ACCENT,
                                  (rect.x, rect.y + 2, 4, rect.h - 4))
-            n_surf = self.big_font.render(f"{count} joueurs", True, BLACK)
-            self.screen.blit(n_surf, n_surf.get_rect(center=rect.center))
-        if self.width >= 1100 and self._pending_stage:
-            self._draw_menu_preview(self._pending_stage, self._preview_rect())
+            n_surf = self.display_font.render(str(count), True, ACCENT if selected else INK)
+            self.screen.blit(n_surf, (rect.x + 20,
+                                      rect.centery - n_surf.get_height() // 2))
+            lbl = self.label_font.render("joueurs", True, TEXT_DIM)
+            self.screen.blit(lbl, (rect.x + 20 + n_surf.get_width() + 10,
+                                   rect.centery - lbl.get_height() // 2))
+            duo = self.small_font.render(f"soit {count * 2} coureurs", True, TEXT_DIM)
+            self.screen.blit(duo, (rect.right - 16 - duo.get_width(),
+                                   rect.centery - duo.get_height() // 2))
+        # Panneau hero à droite : si une étape est en attente, sa preview ;
+        # sinon un grand panneau dégradé avec le gros chiffre et le peloton
+        if self.width >= 1100:
+            if self._pending_stage:
+                self._draw_menu_preview(self._pending_stage, self._preview_rect())
+            else:
+                self._draw_players_hero(self._preview_rect())
         # Bouton « ← Retour » en haut à droite : comme ÉCHAP (retour au choix d'étape)
         self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
                              mouse, pressed=(self._pressed_button == "back"))
@@ -2043,6 +2065,44 @@ class FlammeRougeGame:
         self._draw_ui_button(self._next_button_rect(), label, (200, 45, 45),
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
+
+    def _draw_players_hero(self, rect):
+        """Panneau hero de l'écran joueurs (à droite) : dégradé doux, gros
+        chiffre du nombre de joueurs choisi, et peloton de jetons glossy
+        (2 coureurs par joueur), façon lobby de jeu de course."""
+        self._draw_card(rect, PANEL, radius=CARD_R)
+        # dégradé doux teinté accent sur la partie haute du panneau
+        top_h = int(rect.h * 0.55)
+        grad = pygame.Rect(rect.x + 1, rect.y + 1, rect.w - 2, top_h)
+        self._grad_fill(grad, _mix(ACCENT_SOFT, WHITE, 0.55), _mix(ACCENT_SOFT, WHITE, 0.85), CARD_R)
+        # gros chiffre
+        big = self.display_font.render(str(self.player_count), True, WHITE)
+        self.screen.blit(big, (rect.x + 28, rect.y + 24))
+        lbl = self.phase_font.render("joueurs", True, WHITE)
+        self.screen.blit(lbl, (rect.x + 28 + big.get_width() + 12,
+                               rect.y + 24 + big.get_height() - lbl.get_height() - 6))
+        cap = self.small_font.render("2 coureurs par joueur", True, _mix(WHITE, ACCENT_SOFT, 0.25))
+        self.screen.blit(cap, (rect.x + 30, rect.y + 24 + big.get_height() + 10))
+        # peloton de jetons : player_count * 2 coureurs, 2 par ligne
+        colors = list(PLAYER_COLORS.values())
+        n = self.player_count * 2
+        r = 16
+        cols = min(n, 4)
+        rows = (n + cols - 1) // cols
+        start_x = rect.centerx - (cols * (r * 2 + 10) - 10) // 2
+        start_y = rect.y + top_h + (rect.h - top_h) // 2 - (rows * (r * 2 + 8) - 8) // 2
+        for i in range(n):
+            cx = start_x + (i % cols) * (r * 2 + 10) + r
+            cy = start_y + (i // cols) * (r * 2 + 8) + r
+            col = colors[i % len(colors)]
+            pygame.draw.ellipse(self.screen, ROAD_SHADOW,
+                                (cx - r, cy + r - 3, r * 2, 6))
+            pygame.draw.circle(self.screen, WHITE, (cx, cy), r + 2)
+            pygame.draw.circle(self.screen, col, (cx, cy), r)
+            pygame.draw.circle(self.screen, _mix(col, WHITE, 0.45),
+                               (cx - r // 3, cy - r // 3), max(2, r // 2))
+            t = self.bold_font.render("S" if i % 2 == 0 else "R", True, BLACK)
+            self.screen.blit(t, t.get_rect(center=(cx, cy)))
 
     def _player_count_rects(self):
         """Boutons 2/3/4 joueurs, empilés DANS le cadre de gauche du menu."""
