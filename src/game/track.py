@@ -20,6 +20,22 @@ class CellRunType(Enum):
     END = auto()       # ligne d'arrivée
 
 
+class WeatherType(Enum):
+    """Météo d'une case (extension Météo) : un jeton face cachée sur chaque
+    tuile droite, révélé au premier passage d'un coureur."""
+    NONE = auto()
+    TAILWIND = auto()   # vent arrière (jaune) : pioche 5 cartes au lieu de 4
+    HEADWIND = auto()   # vent de face (bleu) : pioche 3 cartes au lieu de 4
+    CROSSWIND = auto()  # vent de travers (vert) : aucune aspiration sur la tuile
+    RAIN = auto()       # pluie (noir) : chute si la case d'arrivée est pleine
+
+
+# Les 13 jetons Météo de l'extension : 3 vent arrière, 3 vent de face,
+# 3 vent de travers, 4 pluie.
+WEATHER_TOKENS = ([WeatherType.TAILWIND] * 3 + [WeatherType.HEADWIND] * 3
+                  + [WeatherType.CROSSWIND] * 3 + [WeatherType.RAIN] * 4)
+
+
 # Alphabet des cases d'une tuile (initiales anglaises) :
 #   f = flat, u = uphill, d = downhill, s = start line, e = end line
 CELL_CHARS = {
@@ -33,11 +49,13 @@ CELL_CHARS = {
 
 @dataclass
 class Cell:
-    """Une case de la piste : géographie + ligne + occupation des files."""
+    """Une case de la piste : géographie + ligne + météo + occupation des files."""
     geography: CellGeographyType = CellGeographyType.FLAT
     run: CellRunType = CellRunType.NONE
     runners: List[Optional[Runner]] = field(default_factory=lambda: [None, None])
     x: int = 0  # Position X de la case
+    weather: WeatherType = WeatherType.NONE       # jeton météo (extension Météo)
+    weather_revealed: bool = False                # False = face cachée (« ? »)
 
     def is_empty(self, lane: int) -> bool:
         """Vérifie si une file est vide."""
@@ -192,6 +210,62 @@ class Track:
         cell = self.get_cell(x, 0)
         return cell.run if cell else CellRunType.NONE
 
+    # ------------------------------------------------------------------
+    # Extension Météo
+    # ------------------------------------------------------------------
+
+    def assign_weather(self) -> None:
+        """Extension Météo : un jeton météo FACE CACHÉE sur chaque tuile
+        droite (turn None) — mélange des 13 jetons de la boîte."""
+        import random
+        bag = list(WEATHER_TOKENS)
+        random.shuffle(bag)
+        i = 0
+        for tile in self.tiles:
+            if tile.turn is not None:
+                continue  # seuls les tuiles droites portent un jeton
+            if i >= len(bag):  # plus de tuiles droites que de jetons : on re-bat
+                bag = list(WEATHER_TOKENS)
+                random.shuffle(bag)
+                i = 0
+            w = bag[i]
+            i += 1
+            for cell in tile.cells:
+                cell.weather = w
+                cell.weather_revealed = False
+
+    def weather_at(self, x: int) -> WeatherType:
+        """Météo de la case x (NONE si hors piste ou extension inactive)."""
+        cell = self.get_cell(x, 0)
+        return cell.weather if cell else WeatherType.NONE
+
+    def reveal_weather_at(self, x: int) -> Optional[WeatherType]:
+        """Révèle le jeton de la tuile contenant la case x (premier passage
+        d'un coureur). Retourne la météo révélée, ou None si déjà révélée
+        ou sans jeton."""
+        if not (0 <= x < self.length):
+            return None
+        tile = self.tiles[self.tile_index_at(x)]
+        if not tile.cells or tile.cells[0].weather == WeatherType.NONE:
+            return None
+        if tile.cells[0].weather_revealed:
+            return None
+        for cell in tile.cells:
+            cell.weather_revealed = True
+        return tile.cells[0].weather
+
+    def blocks_slipstream_at(self, x: int, runner: Optional[Runner] = None) -> bool:
+        """True si la case x bloque l'aspiration : montée (règle de base),
+        vent de travers (extension Météo : aucune aspiration donnée ni reçue
+        sur toute la tuile), ou coureur couché (ne donne plus l'aspiration)."""
+        if self.geography_at(x) == CellGeographyType.UPHILL:
+            return True
+        if self.weather_at(x) == WeatherType.CROSSWIND:
+            return True
+        if runner is not None and runner.crashed:
+            return True
+        return False
+
     def end_line_x(self) -> int:
         """Case de la ligne d'arrivée (dernière case si pas de ligne)."""
         for tile in self.tiles:
@@ -284,7 +358,7 @@ class Track:
             break
         return steps, reason
 
-    def move_runner(self, runner: Runner, steps: int) -> None:
+    def move_runner(self, runner: Runner, steps: int) -> Optional[str]:
         """
         Déplace un coureur de `steps` cases selon les règles officielles :
         - Il avance exactement `steps` cases et PEUT TRAVERSER les autres
@@ -300,17 +374,41 @@ class Track:
         - MONTÉE : plafonné à 5 si le trajet (départ compris) touche une
           montée — la 6e case ou plus ne peut jamais y pénétrer, le
           coureur s'arrête juste avant (dernière file libre).
+
+        Extension Météo :
+        - PLUIE : un coureur SUR une tuile pluie dont la case d'arrivée est
+          pleine CHUTE (il reste couché sur place, `runner.crashed = True`)
+          au lieu de se recaler derrière.
+        - COUREUR COUCHE : à son prochain mouvement il se relève et sa carte
+          vaut −2 (pénalité appliquée APRÈS les ajustements descente ; le
+          plafond de 5 en montée n'est pas modifié). Une carte 2 = il se
+          relève sans bouger. `crashed` est remis à False.
+
+        Retourne la raison du déplacement (pour le log), ou None.
         """
+        if steps <= 0 and not runner.crashed:
+            return None
+        steps, reason = self.effective_steps(runner.x, steps)
+        if runner.crashed:
+            # le coureur se relève : sa carte vaut −2 (après ajustements)
+            steps = max(0, steps - 2)
+            reason = (reason + " ; " if reason else "") + "se relève (-2, chute)"
+            runner.crashed = False
         if steps <= 0:
-            return
-        steps, _reason = self.effective_steps(runner.x, steps)
+            return reason
         target = min(runner.x + steps, self.length - 1)
+        # Pluie : case d'arrivée pleine -> chute (au lieu du recul arrière)
+        if (self.weather_at(runner.x) == WeatherType.RAIN
+                and self.get_cell(target, 0) is not None
+                and self.get_cell(target, 0).is_full()):
+            runner.crashed = True
+            return "chute (pluie) : case d'arrivée pleine"
         x = target
         # Reculer tant que la case est pleine, jusqu'à trouver une file libre
         while x > runner.x and self.get_cell(x, 0).is_full():
             x -= 1
         if x == runner.x:
-            return  # bloqué : toutes les cases devant sont pleines
+            return reason  # bloqué : toutes les cases devant sont pleines
         old_cell = self.get_cell(runner.x, runner.y)
         old_cell.remove_runner(runner.y)
         cell = self.get_cell(x, 0)
@@ -318,6 +416,7 @@ class Track:
             cell.set_runner(runner, 0)  # file A (droite) en priorité
         else:
             cell.set_runner(runner, 1)  # seule la file B est libre
+        return reason
 
     def get_groups(self) -> List[List[Runner]]:
         """
@@ -398,10 +497,11 @@ class Track:
             if ahead_x - rear_x != 2:  # pas exactement une case vide
                 i += 1
                 continue
-            # Montée : le donneur (le coureur le plus en arrière du pack de
-            # devant) ne peut pas donner l'aspiration depuis une montée.
+            # Montée / vent de travers / coureur couché : le donneur (le
+            # coureur le plus en arrière du pack de devant) ne peut pas
+            # donner l'aspiration depuis une telle case.
             giver = min(packs[i + 1], key=lambda r: pos[r][0])
-            if self.geography_at(pos[giver][0]) == CellGeographyType.UPHILL:
+            if self.blocks_slipstream_at(pos[giver][0], runners[giver]):
                 i += 1
                 continue
             # Du coureur le plus en avant au plus en arrière : chacun doit
@@ -411,9 +511,11 @@ class Track:
             # sur place et bloque ceux derrière lui ; les coureurs devant
             # lui, hors montée, partent quand même ("left behind, even
             # though he is in the same pack") : le pack peut se séparer.
+            # Idem extension Météo : vent de travers (ni donne ni reçoit) et
+            # coureur couché (ne donne plus l'aspiration).
             step = []
             for rid in sorted(packs[i], key=lambda r: -pos[r][0]):
-                if self.geography_at(pos[rid][0]) == CellGeographyType.UPHILL:
+                if self.blocks_slipstream_at(pos[rid][0], runners[rid]):
                     break  # reste sur place ; bloque ceux derrière lui
                 fx, flane = pos[rid]
                 step.append((runners[rid], fx, flane, fx + 1, flane))

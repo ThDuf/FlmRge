@@ -1,6 +1,7 @@
-# Extension Météo (Flamme Rouge: Meteo) — règles et plan d'implémentation
+# Extension Météo (Flamme Rouge: Meteo) — règles et implémentation
 
-> Recherche faite le soir de la session ; **pas encore implémenté** (voir roadmap README).
+> ✅ **Implémenté** (voir roadmap README) : `Game(meteo=True)`, case « Météo » au menu,
+> `tests/test_meteo.py`.
 > Sources : passionludique.fr, zatu.com, trictrac.net, boardgamegeek (Flamme Rouge: Meteo).
 
 ## Règles officielles (résumé)
@@ -20,21 +21,27 @@ tirée aux 2d6 — brouillard 2, pluvieux 3-4, couvert 5-6, venteux 7-8, ensolei
 | Vent de travers (vert) | **aucune aspiration** donnée ni reçue sur toute la tuile (comme côte/pavés) |
 | Pluie (noir) | si la case d'arrivée du coureur est **pleine** (mouvement bloqué) → **chute** : coureur couché, ne donne plus d'aspiration ; à son prochain tour il se relève et sa carte vaut **−2** (carte 2 = se relève sans bouger). Pénalité appliquée après les ajustements descente ; ne modifie pas le plafond de 5 en montée |
 
-## Plan d'implémentation proposé
+## Implémentation réalisée
 
-1. **Modèle** : champ `weather` sur `Cell` (`NONE / TAILWIND / HEADWIND / CROSSWIND / RAIN`),
-   rempli à la construction de la piste quand l'option est active (`Game(meteo=True)`) :
-   mélange des 13 jetons, un par tuile droite, face cachée jusqu'au premier passage d'un coureur.
+1. **Modèle** (`src/game/track.py`) : enum `WeatherType` (`NONE / TAILWIND / HEADWIND / CROSSWIND / RAIN`),
+   champs `weather` + `weather_revealed` sur `Cell`, `WEATHER_TOKENS` (les 13 jetons : 3/3/3/4),
+   `Track.assign_weather()` (un jeton face cachée par tuile droite, mélange du sac),
+   `Track.weather_at(x)` / `Track.reveal_weather_at(x)` (révèle toute la tuile au 1er passage).
 2. **Moteur** (`src/game/game.py`, `src/game/track.py`) :
-   - pioche : 4 cartes de base, **5 en vent arrière, 3 en vent de face** (tuile du coureur au moment de piocher) ;
-   - aspiration : coureurs sur tuile **vent de travers** ne donnent ni ne reçoivent (même traitement
-     que la montée dans `compute_slipstream_steps`) ;
-   - **chute pluie** : dans `move_runner`, si le coureur est sur tuile pluie et que son mouvement
-     est bloqué → `runner.crashed = True` ; un tombé ne donne pas d'aspiration ; à son prochain
-     tour sa carte vaut **−2** (après ajustements descente, plafond 5 en montée inchangé), puis
-     `crashed = False`.
-3. **UI** (`src/main.py`) : icônes météo sur les cases (flèches jaune/bleu/vert, goutte noire),
-   « ? » tant que non révélé, indicateur de chute (coureur couché / croix rouge), messages dans le
-   log, case à cocher « Extension Météo » au menu de sélection d'étape.
-4. **Tests** : taille de main 5/3 selon le vent, pas d'aspiration en vent de travers, chute en
-   pluie + pénalité −2 au tour suivant.
+   - pioche : `Game._draw_count_for()` — 4 de base, **5 en vent arrière, 3 en vent de face**
+     (tuile du coureur au moment de piocher, `start_turn`) ;
+   - aspiration : `Track.blocks_slipstream_at()` — vent de travers et coureur couché traités
+     comme la montée dans `compute_slipstream_steps` (ni donneur ni receveur) ;
+   - **chute pluie** : dans `Track.move_runner`, coureur sur tuile pluie dont la case d'arrivée
+     est pleine → `runner.crashed = True` (reste sur place) ; à son prochain mouvement il se
+     relève, sa carte vaut **−2** (après ajustements descente, plafond 5 en montée inchangé),
+     `crashed = False` ; `Game._reveal_weather()` révèle les jetons au passage et les logue
+     dans l'historique (`entry["weather"]`).
+3. **UI** (`src/main.py`) : case « Météo » du menu passée à `Game(meteo=...)` ; icônes météo sur
+   les cases du parcours (flèches jaune/bleu/vert, goutte noire, « ? » tant que caché), croix rouge
+   sur le coureur couché, chips météo dans la légende, section « Météo » dans l'historique,
+   bandeau « CHUTE sous la pluie ! ».
+4. **Tests** (`tests/test_meteo.py`, 18 tests) : pose des jetons (droites seules, face cachée),
+   révélation, pioche 5/3, pas d'aspiration en vent de travers (donneur et receveur), coureur
+   couché sans aspiration, chute en pluie + relevé −2 (carte 5 → 3 cases, carte 2 → sans bouger),
+   plafond montagne inchangé, câblage UI du menu.

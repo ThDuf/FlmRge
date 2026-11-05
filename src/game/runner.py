@@ -23,6 +23,7 @@ class Runner:
     discard_pile: List[Card] = field(default_factory=list)  # cartes recyclées (non jouées + fatigue reçue)
     hand: List[Card] = field(default_factory=list)
     played_card: Optional[Card] = None  # carte jouée ce tour (retirée du jeu à la fin du tour)
+    crashed: bool = False  # extension Météo : couché après une chute (pluie)
 
     def draw_cards(self, count: int) -> List[Card]:
         """Pioche `count` cartes Énergie.

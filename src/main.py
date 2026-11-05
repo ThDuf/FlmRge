@@ -4,7 +4,7 @@ import math
 from bisect import bisect_right
 from game.game import Game, Phase
 from game.card import CardType
-from game.track import CellGeographyType, CellRunType
+from game.track import CellGeographyType, CellRunType, WeatherType
 
 # Initialiser Pygame
 pygame.init()
@@ -395,14 +395,16 @@ class FlammeRougeGame:
             return True
         move = self.movement_movements.pop(0)
         runner, value = move
-        eff, reason = self.game.track.effective_steps(runner.x, value)
         from_x, from_y = runner.x, runner.y
-        self.game.apply_movement_step(move)
+        reason = self.game.apply_movement_step(move)  # gère chute pluie / relevé −2
         to_x, to_y = runner.x, runner.y
+        eff = to_x - from_x
         self._push_animation(runner.id, from_x, from_y, to_x, to_y)
 
         # Bandeau : ce qui vient de se passer
-        if to_x == from_x:
+        if reason and "chute" in reason and to_x == from_x:
+            desc = f"{self._short_id(runner)} joue {value} : CHUTE sous la pluie !"
+        elif to_x == from_x:
             desc = f"{self._short_id(runner)} joue {value} : bloqu\u00e9 (cases pleines devant)"
         elif reason:
             desc = (f"{self._short_id(runner)} joue {value} \u2192 {eff} ({reason}) : "
@@ -1337,7 +1339,7 @@ class FlammeRougeGame:
             code += 'u'
         self.stage = "Éditeur de piste"
         self.game = Game(stage=self.stage, player_count=self.player_count,
-                         auto_place=False, custom_code=code)
+                         auto_place=False, custom_code=code, meteo=self.ext_meteo)
         self.menu_step = "stage"
         self.showing_movement = False
         self.showing_aspiration = False
@@ -2244,7 +2246,7 @@ class FlammeRougeGame:
         code = self._pending_code
         self._pending_code = None
         self.game = Game(stage=name, player_count=self.player_count, auto_place=False,
-                         custom_code=code)
+                         custom_code=code, meteo=self.ext_meteo)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -2570,6 +2572,37 @@ class FlammeRougeGame:
                 arrow_color = UPHILL_ARROW if cell_geo == CellGeographyType.UPHILL else DOWNHILL_ARROW
                 pygame.draw.polygon(self.screen, arrow_color, tri)
 
+            # Extension Météo : jeton sur les tuiles droites, « ? » tant que
+            # face cachée, sinon icône selon le jeton (côté extérieur gauche)
+            w = track.weather_at(x_cell)
+            if w != WeatherType.NONE:
+                px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
+                nx, ny = -ty, tx
+                mx, my = px - nx * (half + 14), py - ny * (half + 14)
+                cell_obj = track.get_cell(x_cell, 0)
+                if not cell_obj.weather_revealed:
+                    q = self.small_font.render("?", True, TEXT_DIM)
+                    self.screen.blit(q, q.get_rect(center=(int(mx), int(my))))
+                elif w == WeatherType.TAILWIND:  # flèche jaune, sens de la marche
+                    pygame.draw.polygon(self.screen, (225, 185, 35),
+                                        [(mx + tx * 7, my + ty * 7),
+                                         (mx - tx * 3 + nx * 4, my - ty * 3 + ny * 4),
+                                         (mx - tx * 3 - nx * 4, my - ty * 3 - ny * 4)])
+                elif w == WeatherType.HEADWIND:  # flèche bleue, contre la marche
+                    pygame.draw.polygon(self.screen, (60, 110, 220),
+                                        [(mx - tx * 7, my - ty * 7),
+                                         (mx + tx * 3 + nx * 4, my + ty * 3 + ny * 4),
+                                         (mx + tx * 3 - nx * 4, my + ty * 3 - ny * 4)])
+                elif w == WeatherType.CROSSWIND:  # flèche verte, de travers
+                    pygame.draw.polygon(self.screen, (60, 170, 80),
+                                        [(mx + nx * 7, my + ny * 7),
+                                         (mx - nx * 3 + tx * 4, my - ny * 3 + ty * 4),
+                                         (mx - nx * 3 - tx * 4, my - ny * 3 - ty * 4)])
+                elif w == WeatherType.RAIN:  # goutte noire
+                    pygame.draw.polygon(self.screen, (45, 45, 65),
+                                        [(mx, my - 7), (mx + 4, my + 2), (mx - 4, my + 2)])
+                    pygame.draw.circle(self.screen, (45, 45, 65), (int(mx), int(my + 2)), 4)
+
         # Ligne médiane entre les deux files (sur tout le tracé) + quadrillage des cases
         pygame.draw.lines(self.screen, WHITE, False,
                           [(x, y) for x, y, _tx, _ty in samples], 2)
@@ -2686,6 +2719,14 @@ class FlammeRougeGame:
             type_text = "S" if runner.type.name == "SPRINTER" else "R"
             type_surf = self.bold_font.render(type_text, True, BLACK)
             self.screen.blit(type_surf, type_surf.get_rect(center=(int(cx), int(cy))))
+
+            # Extension Météo : coureur couché (chute sous la pluie) = croix rouge
+            if runner.crashed:
+                r = radius + 3
+                pygame.draw.line(self.screen, (200, 30, 30),
+                                 (cx - r, cy - r), (cx + r, cy + r), 3)
+                pygame.draw.line(self.screen, (200, 30, 30),
+                                 (cx - r, cy + r), (cx + r, cy - r), 3)
 
             if self.game.current_phase in [Phase.MOVEMENT, Phase.TERMINAL, Phase.ASPIRATION] and runner.played_card:
                 val_surf = self.small_font.render(str(runner.played_card.value), True, WHITE)
@@ -2979,6 +3020,9 @@ class FlammeRougeGame:
         legend_x = self._left_w() + 20
         items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
                  (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente")]
+        if getattr(self.game, "meteo", False):
+            items += [((225, 185, 35), "Vent arrière"), ((60, 110, 220), "Vent de face"),
+                      ((60, 170, 80), "Vent de travers"), ((45, 45, 65), "Pluie")]
         for swatch, label in items:
             text_surf = self.small_font.render(label, True, INK)
             chip = pygame.Rect(legend_x, legend_y, 14 + 8 + text_surf.get_width() + 12, 22)
@@ -3084,6 +3128,15 @@ class FlammeRougeGame:
                     desc = ", ".join(f"{fx}->{tx}" for rid, fx, tx in slip)
                     lines.append((f"  {who} glisse d'1 case ({desc})",
                                   (200, 110, 0), False))
+            if entry.get("weather"):
+                lines.append(("Météo", TEXT_DIM, True))
+                wlabels = {"TAILWIND": "vent arrière (pioche 5)",
+                           "HEADWIND": "vent de face (pioche 3)",
+                           "CROSSWIND": "vent de travers (pas d'aspiration)",
+                           "RAIN": "pluie (chute si bloqué)"}
+                for tile_x, wname in entry["weather"]:
+                    lines.append((f"  Tuile {tile_x} : {wlabels.get(wname, wname)}",
+                                  (90, 130, 200), False))
         return lines
 
     def _draw_log_panel(self):
