@@ -167,7 +167,7 @@ class FlammeRougeGame:
         self.player_count = 2  # nombre de joueurs choisi au menu (2-4)
         self.game = Game(stage=stage, player_count=self.player_count) if stage else None
         self.menu_index = 1          # à l'arrivée, sélection sur le 1er parcours (index 0 = en-tête)
-        self.menu_step = "stage"  # "stage" -> "players" / "editor"
+        self.menu_step = "players"  # 1er écran : nb de joueurs, puis "stage" / "editor"
         self._pending_stage = None
         self.menu_scroll = 0        # scroll de la liste du menu
         self.menu_search = ""       # filtre de recherche (parcours perso)
@@ -2037,8 +2037,10 @@ class FlammeRougeGame:
         # Bouton « ← Retour » en haut à droite : comme ÉCHAP (retour au choix d'étape)
         self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
                              mouse, pressed=(self._pressed_button == "back"))
-        # Gros bouton en bas à droite : JOUER (démarrer la partie) — idem SUIVANT
-        self._draw_ui_button(self._next_button_rect(), "JOUER", (200, 45, 45),
+        # Gros bouton en bas à droite : JOUER si une étape est choisie, sinon
+        # SUIVANT -> écran de choix de l'étape (1er écran du process)
+        label = "JOUER" if self._pending_stage else "SUIVANT →"
+        self._draw_ui_button(self._next_button_rect(), label, (200, 45, 45),
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
 
@@ -2194,13 +2196,18 @@ class FlammeRougeGame:
             self._pressed_button = None  # relâche : les boutons reviennent à la normale
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self._back_button_rect().collidepoint(event.pos):
-                # « ← Retour » = ÉCHAP : retour au choix de l'étape
-                self.menu_step = "stage"
-                self.menu_index = 1
+                # « ← Retour » = ÉCHAP : retour au choix de l'étape (si on en vient)
+                if self._pending_stage:
+                    self.menu_step = "stage"
+                    self.menu_index = 1
                 return
             if self._next_button_rect().collidepoint(event.pos):
                 self._pressed_button = "next"  # animation d'enfoncement au clic
-                self._select_stage(self._pending_stage)  # gros bouton rouge JOUER
+                if self._pending_stage:
+                    self._select_stage(self._pending_stage)  # bouton JOUER : démarre
+                else:
+                    self.menu_step = "stage"  # 1er écran : SUIVANT -> choix de l'étape
+                    self.menu_index = 1
                 self._pressed_button = None  # revient à l'état initial après le clic
                 return
             for count, rect in self._player_count_rects():
@@ -2213,11 +2220,15 @@ class FlammeRougeGame:
             elif event.key == pygame.K_RIGHT:
                 self.player_count = counts[min(len(counts) - 1, counts.index(self.player_count) + 1)]
             elif event.key == pygame.K_RETURN:
-                self._select_stage(self._pending_stage)
+                if self._pending_stage:
+                    self._select_stage(self._pending_stage)
+                else:
+                    self.menu_step = "stage"
+                    self.menu_index = 1
             elif event.key == pygame.K_ESCAPE:
-                self.menu_step = "stage"
-                # retour à l'écran de sélection : sélection sur le 1er parcours
-                self.menu_index = 1
+                if self._pending_stage:
+                    self.menu_step = "stage"
+                    self.menu_index = 1
 
     def _placement_click(self, pos):
         """Phase de placement : clic sur une case derrière la ligne DÉPART."""

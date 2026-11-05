@@ -248,6 +248,7 @@ class TestStageMenu(unittest.TestCase):
 
     def test_menu_click_selects_entry(self):
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"  # process : joueurs d'abord
         entries = ui._menu_entries()
         name, _d, _c, rect, _kind = entries[1]  # première étape officielle (après l'en-tête)
         # simule un clic au centre de l'entrée
@@ -271,6 +272,7 @@ class TestStageMenu(unittest.TestCase):
         """Étape 'players' du menu : on choisit 3 joueurs au clavier."""
         import pygame
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"  # process : joueurs d'abord, ici on est sur l'étape
         ui.menu_index = 1  # 1re étape de base (0 = en-tête de catégorie)
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertEqual(ui.menu_step, "players")
@@ -414,6 +416,19 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.ui = main.FlammeRougeGame()
         self.ui.width, self.ui.height = 1200, 800
         self.ui.screen = pygame.display.set_mode((1200, 800))
+        self.ui.menu_step = "stage"  # l'écran joueurs vient en 1er ; on teste l'écran étape
+
+    def test_players_screen_comes_first(self):
+        """Process : l'écran du nombre de joueurs est le 1er ; SUIVANT (sans
+        étape choisie) mène au choix de l'étape."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        self.assertEqual(ui.menu_step, "players")
+        self.assertIsNone(ui._pending_stage)
+        nb = ui._next_button_rect()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
+        self.assertEqual(ui.menu_step, "stage")
+        self.assertEqual(ui.menu_index, 1)
 
     def test_selection_starts_on_first_course(self):
         """À l'arrivée sur le menu, la sélection est sur le 1er parcours

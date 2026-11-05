@@ -304,6 +304,7 @@ class TestTrackEditor(unittest.TestCase):
     def test_editor_entry_in_menu_and_draw(self):
         import pygame
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"  # process : joueurs d'abord
         ui.screen = pygame.display.set_mode((1200, 800))
         entries = ui._menu_entries()
         self.assertEqual(entries[-1][0], "Créer un circuit")
@@ -453,6 +454,7 @@ class TestMenuCategories(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         save_track_json("abKcdfu", ui.saves_dir, name="mon_beau_parcours")
         entries = ui._menu_entries()
@@ -999,6 +1001,7 @@ class TestCircuitZoom(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         for i in range(8):
             save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
@@ -1073,6 +1076,7 @@ class TestCircuitZoom(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         for i in range(12):
             save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
@@ -1111,6 +1115,7 @@ class TestCircuitZoom(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         for i in range(12):
             save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
