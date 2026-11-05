@@ -2005,7 +2005,11 @@ class FlammeRougeGame:
                            (int(cx), int(cy)), max(2, r // 2), 1)         # bord du trou
 
     def _players_frame_rect(self):
-        """Même cadre à gauche que l'écran de sélection d'étape."""
+        """Cadre de gauche de l'écran joueurs : plus large que celui de la
+        sélection d'étape (~42 % de la fenêtre) pour y voir clair."""
+        if self.width >= 1100:
+            w = max(380, int(self.width * 0.42))
+            return pygame.Rect(12, MENU_TOP, w, self.height - 12 - MENU_TOP)
         return self._menu_frame_rect()
 
     def _draw_players_menu(self, mouse):
@@ -2055,7 +2059,11 @@ class FlammeRougeGame:
             if self._pending_stage:
                 self._draw_menu_preview(self._pending_stage, self._preview_rect())
             else:
-                self._draw_players_hero(self._preview_rect())
+                # hero = tout l'espace à droite du cadre élargi
+                hero = pygame.Rect(frame.right + 16, MENU_TOP,
+                                   self.width - 16 - (frame.right + 16),
+                                   self.height - 12 - MENU_TOP)
+                self._draw_players_hero(hero)
         # Bouton « ← Retour » en haut à droite : comme ÉCHAP (retour au choix d'étape)
         self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
                              mouse, pressed=(self._pressed_button == "back"))
@@ -2083,25 +2091,28 @@ class FlammeRougeGame:
                                rect.y + 24 + big.get_height() - lbl.get_height() - 6))
         cap = self.small_font.render("2 coureurs par joueur", True, _mix(WHITE, ACCENT_SOFT, 0.25))
         self.screen.blit(cap, (rect.x + 30, rect.y + 24 + big.get_height() + 10))
-        # peloton de jetons : player_count * 2 coureurs, 2 par ligne
+        # peloton : pour chaque couleur de joueur, UN rouleur (R) + UN sprinteur (S)
         colors = list(PLAYER_COLORS.values())
-        n = self.player_count * 2
+        tokens = []
+        for i in range(self.player_count):
+            col = colors[i % len(colors)]
+            tokens.append((col, "R"))
+            tokens.append((col, "S"))
         r = 16
-        cols = min(n, 4)
-        rows = (n + cols - 1) // cols
+        cols = min(len(tokens), 4)
+        rows = (len(tokens) + cols - 1) // cols
         start_x = rect.centerx - (cols * (r * 2 + 10) - 10) // 2
         start_y = rect.y + top_h + (rect.h - top_h) // 2 - (rows * (r * 2 + 8) - 8) // 2
-        for i in range(n):
+        for i, (col, letter) in enumerate(tokens):
             cx = start_x + (i % cols) * (r * 2 + 10) + r
             cy = start_y + (i // cols) * (r * 2 + 8) + r
-            col = colors[i % len(colors)]
             pygame.draw.ellipse(self.screen, ROAD_SHADOW,
                                 (cx - r, cy + r - 3, r * 2, 6))
             pygame.draw.circle(self.screen, WHITE, (cx, cy), r + 2)
             pygame.draw.circle(self.screen, col, (cx, cy), r)
             pygame.draw.circle(self.screen, _mix(col, WHITE, 0.45),
                                (cx - r // 3, cy - r // 3), max(2, r // 2))
-            t = self.bold_font.render("S" if i % 2 == 0 else "R", True, BLACK)
+            t = self.bold_font.render(letter, True, BLACK)
             self.screen.blit(t, t.get_rect(center=(cx, cy)))
 
     def _player_count_rects(self):
