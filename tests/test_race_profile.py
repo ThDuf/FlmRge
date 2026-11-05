@@ -32,17 +32,20 @@ class TestRaceProfile(unittest.TestCase):
         ui._draw_runners()
         ui._draw_ui()
 
-    def test_rect_inside_frame_top_right(self):
+    def test_rect_below_track_above_bar(self):
+        """Le profil de course est SOUS le parcours (sous le cadre), au-dessus
+        de la barre du bas, plein largeur."""
         ui = self.ui
-        ui.width, ui.height = 1280, 800
-        ui.screen = pygame.display.set_mode((1280, 800), pygame.RESIZABLE)
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
         frame = ui._frame_rect()
+        bar = ui._bar_rect()
         r = ui._race_profile_rect()
         self.assertGreaterEqual(r.x, frame.x)
         self.assertLessEqual(r.right, frame.right)
-        self.assertGreaterEqual(r.y, frame.y)
-        self.assertLessEqual(r.bottom, frame.bottom)
-        self.assertGreater(r.x, frame.x + frame.w // 2)  # bien à droite
+        self.assertGreaterEqual(r.y, frame.bottom)      # sous le parcours
+        self.assertLessEqual(r.bottom, bar.y + 1)       # au-dessus de la barre du bas
+        self.assertGreater(r.w, frame.w * 0.8)          # plein largeur
 
     def test_markers_match_groups(self):
         ui = self.ui
@@ -82,12 +85,14 @@ class TestRaceProfile(unittest.TestCase):
         self.assertTrue(found, "aucune pastille d'équipe trouvée sur le profil")
 
     def test_profile_renders_at_several_sizes(self):
-        for size in [(900, 600), (1280, 800), (1600, 1000)]:
-            self._render(self.ui, size)  # pas d'erreur, panneau dans le cadre
+        for size in [(900, 700), (1280, 920), (1600, 1000)]:
+            self._render(self.ui, size)  # pas d'erreur
             r = self.ui._race_profile_rect()
             frame = self.ui._frame_rect()
+            bar = self.ui._bar_rect()
             self.assertLessEqual(r.right, frame.right)
-            self.assertLessEqual(r.bottom, frame.bottom)
+            self.assertGreaterEqual(r.y, frame.bottom)   # sous le parcours
+            self.assertLessEqual(r.bottom, bar.y + 1)
 
     def test_weather_badge_on_race_profile_when_meteo(self):
         """Extension Météo active : le badge animé est aussi sur le profil de

@@ -871,7 +871,7 @@ class TestCircuitZoom(unittest.TestCase):
         ui._draw_ui()
         # boutons caméra à côté de la légende (bas du cadre)
         frame = ui._frame_rect()
-        legend_y = ui._bar_rect().y - 24
+        legend_y = ui._frame_rect().bottom - 26  # légende en bas du cadre (profil sous le parcours)
         for key, rect in ui._frame_button_rects().items():
             self.assertTrue(frame.contains(rect))
             self.assertGreaterEqual(rect.y, legend_y - 40)  # en bas, près de la légende

@@ -11,7 +11,7 @@ pygame.init()
 
 # Constantes
 SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 800
+SCREEN_HEIGHT = 920
 MIN_WIDTH = 900    # taille minimale de la fenêtre
 MIN_HEIGHT = 600
 CELLS_PER_ROW = None  # (obsolète : le tracé suit désormais la séquence des tuiles)
@@ -31,6 +31,7 @@ PANEL_HEADER = 30  # hauteur de l'en-tête des panneaux (nom + progression)
 PANEL_H = 170      # hauteur d'un panneau de joueur (colonne de gauche)
 BUTTONS_H = 100    # hauteur réservée en bas de colonne pour les 2 boutons
 BAR_H = 150        # hauteur de la barre du bas (cartes + log + boutons)
+PROFILE_H = 120    # hauteur du bandeau profil de course, SOUS le parcours
 CARD_H_MAIN = 36   # hauteur fixe des cartes à sélectionner (le bloc s'adapte, pas l'inverse)
 GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
@@ -273,7 +274,7 @@ class FlammeRougeGame:
         left = 16
         right = self.width - 12
         top = TOP_H + 8
-        bottom = self._bar_rect().y - 34  # la barre du bas est hors du parcours
+        bottom = self._frame_rect().bottom - 28  # légende en bas du cadre, profil sous le parcours
         avail_w = max(50.0, right - left)
         avail_h = max(50.0, bottom - top)
 
@@ -432,9 +433,16 @@ class FlammeRougeGame:
         return None
 
     def _frame_rect(self) -> pygame.Rect:
-        """Cadre du parcours (tout l'écran sauf la barre du bas)."""
+        """Cadre du parcours : entre les bandeaux du haut et le bandeau profil
+        de course (sous le parcours), lui-même au-dessus de la barre du bas."""
+        strip = self._profile_strip_rect()
+        return pygame.Rect(4, TOP_H + 2, self.width - 10, strip.y - 6 - (TOP_H + 2))
+
+    def _profile_strip_rect(self) -> pygame.Rect:
+        """Bandeau du profil de course SOUS le parcours, plein largeur, entre le
+        cadre du parcours et la barre du bas."""
         bar = self._bar_rect()
-        return pygame.Rect(4, TOP_H + 2, self.width - 10, bar.y - TOP_H - 8)
+        return pygame.Rect(4, bar.y - PROFILE_H - 6, self.width - 10, PROFILE_H)
 
     def _podium_button_rect(self) -> pygame.Rect:
         """Bouton « Podium » dans le bandeau de titre (écran de fin, avec TAB)."""
@@ -3007,12 +3015,10 @@ class FlammeRougeGame:
         return out
 
     def _race_profile_rect(self) -> pygame.Rect:
-        """Panneau du profil de course EN COURS : bande en haut à droite du
-        cadre du parcours (à côté du panneau des groupes, en haut à gauche)."""
-        frame = self._frame_rect()
-        w = min(420, max(240, frame.w - 320))
-        h = max(90, min(140, frame.h // 4))
-        return pygame.Rect(frame.right - w - 10, frame.y + 10, w, h)
+        """Panneau du profil de course EN COURS : SOUS le parcours, dans le
+        bandeau plein largeur entre le cadre du parcours et la barre du bas."""
+        strip = self._profile_strip_rect()
+        return pygame.Rect(strip.x + 6, strip.y + 4, strip.w - 12, strip.h - 8)
 
     def _game_weather(self):
         """Types de météo présents sur la piste de la partie en cours (badge
@@ -3108,7 +3114,7 @@ class FlammeRougeGame:
 
         # Légende des couleurs du circuit (bas du cadre) en PASTILLES (chips) :
         # chaque item = pill arrondi avec pastille couleur + libellé
-        legend_y = self._bar_rect().y - 26  # légende en bas du cadre du parcours
+        legend_y = self._frame_rect().bottom - 26  # légende en bas du cadre du parcours
         legend_x = self._left_w() + 20
         items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
                  (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente")]
