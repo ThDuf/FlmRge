@@ -67,3 +67,6 @@ venv.bak/
 
 # Pygame assets (optional)
 assets/
+
+# Parcours perso sauvegardés (JSON) : locaux, non suivis
+saves/
