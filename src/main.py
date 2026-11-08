@@ -1883,8 +1883,8 @@ class FlammeRougeGame:
         à droite du panneau (extension Météo).
         `markers` = [(case_x, couleur, libellé)] -> marqueurs dessinés SUR la
         ligne de profil (groupes de la course en cours).
-        `weather_tiles` = [(case début tuile, WeatherType)] -> icônes météo
-        animées à l'EMPLACEMENT de chaque tuile météo sur le profil."""
+        `weather_tiles` = [(case début, longueur, WeatherType)] -> animation
+        météo sur TOUTE LA LONGUEUR de chaque tuile météo sur le profil."""
         n = max(len(alt) - 1, 1)  # nombre de cases = kilomètres
         dplus = sum(max(0, alt[i + 1] - alt[i]) for i in range(n))
         self._draw_card(rect, PANEL, radius=8, shadow=False)
@@ -1897,6 +1897,26 @@ class FlammeRougeGame:
         if weather:
             # badge animé en haut à droite (à gauche du drapeau damier d'arrivée)
             self._draw_weather_badge(pygame.Rect(rect.right - 64, rect.y + 4, 24, 24), weather)
+        if weather_tiles:
+            # LÉGENDE météo dans le bloc profil : mini-icône + libellé par type présent
+            wnames = {WeatherType.TAILWIND: "vent arrière", WeatherType.HEADWIND: "vent de face",
+                      WeatherType.CROSSWIND: "vent de travers", WeatherType.RAIN: "pluie",
+                      WeatherType.NONE: "soleil"}
+            seen = []
+            for _tx, _tl, w in weather_tiles:
+                if w not in seen:
+                    seen.append(w)
+            lx = rect.x + 6 + lbl.get_width() + 18
+            for w in seen:
+                if lx > rect.right - 110:  # ne pas toucher le badge
+                    break
+                mini = pygame.Rect(lx, rect.y + 7, 18, 18)
+                pygame.draw.circle(self.screen, PANEL_ALT, mini.center, 9)
+                pygame.draw.circle(self.screen, BORDER, mini.center, 9, 1)
+                self._draw_weather_icon(w, mini.centerx, mini.centery, 1.0, 0.0, 0.0, -1.0, 0)
+                t = self.small_font.render(wnames.get(w, "?"), True, TEXT_DIM)
+                self.screen.blit(t, (mini.right + 4, mini.centery - t.get_height() // 2))
+                lx = mini.right + 4 + t.get_width() + 14
         lo, hi = min(alt), max(alt)
         span = max(hi - lo, 1)
         # marge haute de 40 px DANS le panneau pour les mâts des fanions de col
@@ -1946,14 +1966,17 @@ class FlammeRougeGame:
                 ly = int(fy) - 26 if gi % 2 == 0 else int(fy) + 9
                 self.screen.blit(lt, (int(fx) - lt.get_width() // 2, ly))
             self.screen.set_clip(None)
-        # icônes météo ANIMÉES à l'emplacement de chaque tuile météo sur le profil
+        # animation météo sur TOUTE LA LONGUEUR de chaque tuile météo du profil
         if weather_tiles:
             self.screen.set_clip(rect)
             now = pygame.time.get_ticks()
-            for tile_x, w in weather_tiles:
-                ci = max(0, min(int(tile_x), n))
-                fx, fy = pts[ci]
-                self._draw_weather_icon(w, fx, fy - 16, 1.0, 0.0, 0.0, -1.0, now)
+            for tile_x, tile_len, w in weather_tiles:
+                c0 = max(0, min(int(tile_x), n))
+                c1 = max(c0 + 1, min(int(tile_x + tile_len), n))
+                x0, y0 = pts[c0]
+                x1 = pts[c1][0]
+                fy = min(pts[c0][1], pts[c1][1])
+                self._draw_weather_zone(w, x0, x1, fy - 14, now)
             self.screen.set_clip(None)
         # petit fanion rouge sur CHAQUE col : une cote = une montée qui se
         # TERMINE par du plat (ou par l'arrivée, qui peut donc être un col).
@@ -2609,6 +2632,39 @@ class FlammeRougeGame:
     # Dessin : circuit serpentin
     # ------------------------------------------------------------------
 
+    def _draw_weather_zone(self, w, x0, x1, y, now):
+        """Animation météo sur TOUTE LA LONGUEUR de la tuile (entre x0 et x1,
+        centrée en y sur le profil de course) : mêmes codes que _draw_weather_icon
+        (vent = traits qui défilent, pluie = traits vers le bas + gouttes au sol,
+        vent latéral = effet de profondeur, soleil = voile jaune)."""
+        now = now // 5  # ralenti, comme les icônes
+        span = max(8, x1 - x0)
+        if w == WeatherType.RAIN:
+            for x in range(int(x0), int(x1), 6):  # traits vers le bas sur toute la tuile
+                dy = (now // 10 + x * 7) % 12
+                pygame.draw.line(self.screen, (90, 130, 210), (x, y - 8 + dy), (x, y - 2 + dy), 2)
+            for x in range(int(x0) + 3, int(x1), 12):  # petites gouttes par terre
+                pygame.draw.circle(self.screen, (60, 100, 190), (x, int(y + 7)), 1)
+        elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
+            c = (225, 185, 35) if w == WeatherType.TAILWIND else (60, 110, 220)
+            sgn = 1 if w == WeatherType.TAILWIND else -1
+            for k in range(3):  # traits sur toute la longueur, qui défilent
+                ry = y - 8 + k * 5
+                for j in range(2):
+                    p = (now // 9 + j * (span // 2) + k * 7) % span
+                    sx = x0 + p if sgn > 0 else x1 - p
+                    pygame.draw.line(self.screen, c, (sx, ry), (sx + 8 * sgn, ry), 2)
+        elif w == WeatherType.CROSSWIND:
+            c = (60, 170, 80)
+            for x in range(int(x0), int(x1), 8):  # effet de profondeur selon la position
+                depth = (x - x0) / span
+                o = (now // 8 + x * 5) % 14 - 7
+                ln = 3 + 5 * depth
+                col = _mix(c, WHITE, 0.55 * (1 - depth))
+                pygame.draw.line(self.screen, col, (x, y + o), (x, y + o + ln), 2)
+        else:  # soleil : voile jaune sur toute la tuile
+            pygame.draw.line(self.screen, (250, 210, 60), (x0, y), (x1, y), 6)
+
     def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
         """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
         selon la tangente (tx, ty) et la normale (nx, ny) de la route :
@@ -2729,15 +2785,6 @@ class FlammeRougeGame:
                 arrow_color = UPHILL_ARROW if cell_geo == CellGeographyType.UPHILL else DOWNHILL_ARROW
                 pygame.draw.polygon(self.screen, arrow_color, tri)
 
-            # Extension Météo : icône météo ANIMÉE sur les tuiles droites (face
-            # visible dès la mise en place), côté extérieur gauche de la route
-            w = track.weather_at(x_cell)
-            if w != WeatherType.NONE:
-                px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
-                nx, ny = -ty, tx
-                mx, my = px - nx * (half + 14), py - ny * (half + 14)
-                self._draw_weather_icon(w, mx, my, tx, ty, nx, ny,
-                                        pygame.time.get_ticks())
 
         # Ligne médiane entre les deux files (sur tout le tracé) + quadrillage des cases
         pygame.draw.lines(self.screen, WHITE, False,
@@ -3084,7 +3131,7 @@ class FlammeRougeGame:
         jeton météo (icônes animées à leur emplacement sur le profil)."""
         if self.game is None or not getattr(self.game, "meteo", False):
             return []
-        return [(t.x, t.cells[0].weather) for t in self.game.track.tiles
+        return [(t.x, t.length, t.cells[0].weather) for t in self.game.track.tiles
                 if t.cells and t.cells[0].weather != WeatherType.NONE]
 
     def _draw_race_profile(self):
@@ -3161,9 +3208,6 @@ class FlammeRougeGame:
         legend_x = self._left_w() + 20
         items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
                  (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente")]
-        if getattr(self.game, "meteo", False):
-            items += [((225, 185, 35), "Vent arrière"), ((60, 110, 220), "Vent de face"),
-                      ((60, 170, 80), "Vent de travers"), ((45, 45, 65), "Pluie")]
         for swatch, label in items:
             text_surf = self.small_font.render(label, True, INK)
             chip = pygame.Rect(legend_x, legend_y, 14 + 8 + text_surf.get_width() + 12, 22)

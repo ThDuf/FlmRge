@@ -407,30 +407,56 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         ui._draw_track(); ui._draw_runners(); ui._draw_ui()
         self.assertTrue(calls, "badge météo absent du profil de course")
 
-    def test_weather_icons_animated_on_track_in_race_screen(self):
-        """Chaque type de météo pose une icône animée (couleurs propres) sur sa
-        tuile droite du parcours, dans l'écran de course."""
+    def test_weather_zones_in_profile_block_not_on_track(self):
+        """Les animations météo sont dans le BLOC PROFIL de course (légende +
+        zone sur toute la longueur de la tuile), et PLUS sur le parcours."""
         import main, pygame
-        ui = main.FlammeRougeGame(stage="Avenue Corso Paseo")
+        from game.track import CellRunType
+        ui = main.FlammeRougeGame()
+        ui.ext_meteo = True
+        ui._select_stage("Avenue Corso Paseo")
+        ui.game.auto_place_riders()
         game = ui.game
         types = [WeatherType.TAILWIND, WeatherType.HEADWIND,
                  WeatherType.CROSSWIND, WeatherType.RAIN]
-        straights = [t for t in game.track.tiles if t.turn is None]
+        straights = [t for t in game.track.tiles if t.turn is None
+                     and not any(c.run in (CellRunType.START, CellRunType.END) for c in t.cells)]
         for tile, w in zip(straights, types):
             for c in tile.cells:
                 c.weather = w
-        ui.width, ui.height = 1280, 800
-        ui.screen = pygame.display.set_mode((1280, 800), pygame.RESIZABLE)
+        ui.width, ui.height = 1200, 920
+        ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
         ui.screen.fill((200, 200, 210))
-        ui._draw_header(); ui._draw_phase_band(); ui._draw_track()  # piste seule
-        colors = {(225, 185, 35), (60, 110, 220), (60, 170, 80), (90, 130, 210)}  # pluie = traits bleu (90,130,210) + gouttes (60,100,190)
-        found = set()
-        for y in range(0, ui.height, 2):
-            for x in range(0, ui.width, 2):
+        ui._draw_header(); ui._draw_phase_band(); ui._draw_track(); ui._draw_runners(); ui._draw_ui()
+        colors = {(225, 185, 35), (60, 110, 220), (60, 170, 80), (90, 130, 210)}
+        prof = ui._race_profile_rect()
+        in_prof = set()
+        for y in range(prof.y, prof.bottom):
+            for x in range(prof.x, prof.right):
                 p = ui.screen.get_at((x, y))[:3]
                 if p in colors:
-                    found.add(p)
-        self.assertEqual(found, colors, f"icônes météo manquantes sur le parcours: {colors - found}")
+                    in_prof.add(p)
+        self.assertEqual(in_prof, colors, f"zones météo manquantes dans le bloc profil: {colors - in_prof}")
+        # plus rien sur le parcours (cadre du haut)
+        frame = ui._frame_rect()
+        in_track = set()
+        for y in range(frame.y, frame.bottom, 2):
+            for x in range(frame.x, frame.right, 2):
+                p = ui.screen.get_at((x, y))[:3]
+                if p in colors:
+                    in_track.add(p)
+        self.assertEqual(in_track, set(), f"icônes météo encore présentes sur le parcours: {in_track}")
+        # la zone pluie couvre toute la longueur de sa tuile sur le profil
+        rain_tile = straights[3]
+        n = game.track.length
+        x0 = prof.x + 6 + (prof.w - 12) * rain_tile.x / n
+        x1 = prof.x + 6 + (prof.w - 12) * (rain_tile.x + rain_tile.length) / n
+        rain_px = [x for x in range(int(x0), int(x1)) for y in range(prof.y, prof.bottom)
+                   if ui.screen.get_at((x, y))[:3] in ((90, 130, 210), (60, 100, 190))]
+        self.assertGreater(len(rain_px), (x1 - x0) * 0.5, "zone pluie trop courte")
+        # couvre bien TOUTE la longueur de la tuile (du début à la fin)
+        self.assertLessEqual(min(rain_px), x0 + 6)
+        self.assertGreaterEqual(max(rain_px), x1 - 6)
 
     def test_weather_icons_on_profile_at_tile_positions(self):
         """Les icônes météo animées apparaissent sur le profil de course à
@@ -448,7 +474,7 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         for c in target.cells:
             c.weather = WeatherType.RAIN
         tiles_w = ui._game_weather_tiles()
-        self.assertIn((target.x, WeatherType.RAIN), tiles_w)
+        self.assertIn((target.x, target.length, WeatherType.RAIN), tiles_w)
         ui.width, ui.height = 1200, 920
         ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
         ui.screen.fill((200, 200, 210))
