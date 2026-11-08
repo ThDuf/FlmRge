@@ -40,6 +40,8 @@ LIGHT_TURN_FILL = (255, 250, 205)    # virage léger
 SHARP_TURN_FILL = (255, 224, 178)   # virage serré
 UPHILL_FILL = (255, 205, 205)       # montée (bords rouges dans le jeu officiel)
 DOWNHILL_FILL = (205, 225, 255)     # descente (bords bleus)
+COBBLE_FILL = (176, 176, 184)       # pavés (Peloton) : gris pavé
+SUPPLY_FILL = (198, 232, 198)       # zone d'approvisionnement (Peloton) : vert clair
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -1190,6 +1192,10 @@ class FlammeRougeGame:
                     seg_color = (235, 145, 50)   # montée : orange (comme le profil)
                 elif cell.geography == CellGeographyType.DOWNHILL:
                     seg_color = (80, 120, 235)   # descente : bleu (comme le profil)
+                elif cell.geography == CellGeographyType.COBBLE:
+                    seg_color = (150, 150, 158)  # pavés : gris pavé
+                elif cell.geography == CellGeographyType.SUPPLY:
+                    seg_color = (110, 180, 110)  # zone d'approvisionnement : vert
                 else:
                     seg_color = (48, 52, 60)     # plat : gris très foncé
                 # la case reprend le DERNIER point posé (frontière partagée avec
@@ -1390,7 +1396,8 @@ class FlammeRougeGame:
             code += 'u'
         self.stage = "Éditeur de piste"
         self.game = Game(stage=self.stage, player_count=self.player_count,
-                         auto_place=False, custom_code=code, meteo=self.ext_meteo)
+                         auto_place=False, custom_code=code, meteo=self.ext_meteo,
+                         peloton=self.ext_peloton)
         self.menu_step = "stage"
         self.showing_movement = False
         self.showing_aspiration = False
@@ -1787,6 +1794,10 @@ class FlammeRougeGame:
                     c = (220, 50, 50)
                 elif cell.geography == CellGeographyType.DOWNHILL:
                     c = (50, 90, 220)
+                elif cell.geography == CellGeographyType.COBBLE:
+                    c = (140, 140, 148)
+                elif cell.geography == CellGeographyType.SUPPLY:
+                    c = (120, 190, 120)
                 else:
                     c = (200, 205, 215)
                 seg = []
@@ -1844,6 +1855,10 @@ class FlammeRougeGame:
                 c = (220, 50, 50)
             elif cell.geography == CellGeographyType.DOWNHILL:
                 c = (50, 90, 220)
+            elif cell.geography == CellGeographyType.COBBLE:
+                c = (140, 140, 148)
+            elif cell.geography == CellGeographyType.SUPPLY:
+                c = (120, 190, 120)
             else:
                 c = (200, 205, 215)
             seg = [tr(p) for p in dense[ci * per_cell:(ci + 1) * per_cell + 1]]
@@ -2361,7 +2376,7 @@ class FlammeRougeGame:
         code = self._pending_code
         self._pending_code = None
         self.game = Game(stage=name, player_count=self.player_count, auto_place=False,
-                         custom_code=code, meteo=self.ext_meteo)
+                         custom_code=code, meteo=self.ext_meteo, peloton=self.ext_peloton)
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -2809,6 +2824,10 @@ class FlammeRougeGame:
                 color = UPHILL_FILL
             elif cell_geo == CellGeographyType.DOWNHILL:
                 color = DOWNHILL_FILL
+            elif cell_geo == CellGeographyType.COBBLE:
+                color = COBBLE_FILL
+            elif cell_geo == CellGeographyType.SUPPLY:
+                color = SUPPLY_FILL
             else:
                 color = None
             if color is not None:
@@ -2933,7 +2952,14 @@ class FlammeRougeGame:
                 off = off0 + (off1 - off0) * e
             else:
                 px, py, tx, ty = self._cell_anchor(x)
-                off = lane_off if lane == 0 else -lane_off  # file A = droite
+                cell0 = self.game.track.get_cell(x, 0)
+                n_lanes = len(cell0.runners) if cell0 else 2
+                if n_lanes <= 1:
+                    off = 0
+                elif n_lanes == 2:
+                    off = lane_off if lane == 0 else -lane_off  # file A = droite
+                else:
+                    off = lane_off - lane * (2 * lane_off / (n_lanes - 1))
             nx, ny = -ty, tx
             cx = px + nx * off
             cy = py + ny * off
@@ -3241,6 +3267,8 @@ class FlammeRougeGame:
         legend_x = self._left_w() + 20
         items = [((255, 236, 130), "Départ"), ((240, 210, 60), "Arrivée"),
                  (UPHILL_FILL, "Montée"), (DOWNHILL_FILL, "Descente")]
+        if getattr(self.game, "peloton", False):
+            items += [(COBBLE_FILL, "Pavés"), (SUPPLY_FILL, "Appro")]
         for swatch, label in items:
             text_surf = self.small_font.render(label, True, INK)
             chip = pygame.Rect(legend_x, legend_y, 14 + 8 + text_surf.get_width() + 12, 22)

@@ -79,8 +79,21 @@ MOUNTAIN_DEFS = {
 }
 
 
+# Tuiles de l'extension Peloton (lettres v-y) :
+#   v = pavés droit (1 file, pas d'aspiration), w = zone d'approvisionnement (3 files, min 4),
+#   x/y = pavés en virage (1 file)
+PELOTON_TILE_DEFS = {
+    'v': (None, 1, "cccccc"),
+    'w': (None, 3, "zzzzzz"),
+    'x': ((math.pi / 4, 1), 1, "cc"),
+    'y': ((math.pi / 2, -1), 1, "cc"),
+}
+
+
 def tile_def_for_letter(ch: str):
-    """(virage, largeur, cases) pour une lettre de code de stage (a-u / A-U)."""
+    """(virage, largeur, cases) pour une lettre de code de stage (a-u / A-U / v-y Peloton)."""
+    if ch in PELOTON_TILE_DEFS:
+        return PELOTON_TILE_DEFS[ch]
     if ch.isupper():
         return MOUNTAIN_DEFS[ch]
     return TILE_DEFS[ch]
@@ -192,11 +205,12 @@ class Game:
 
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
                  auto_place: bool = True, custom_code: str = None,
-                 meteo: bool = False):
+                 meteo: bool = False, peloton: bool = False):
         player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
         self.stage = stage
         self.custom_code = custom_code  # code de tuiles perso (éditeur), prioritaire
         self.meteo = meteo              # extension Météo activée ?
+        self.peloton = peloton          # extension Peloton activée ?
         self.players: List[Player] = []
         self.track = self._build_track(stage)
         if self.meteo:

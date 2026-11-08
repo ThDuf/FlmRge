@@ -11,6 +11,8 @@ class CellGeographyType(Enum):
     FLAT = auto()      # plat
     UPHILL = auto()    # montée (bord rouge)
     DOWNHILL = auto()  # descente (bord bleu)
+    COBBLE = auto()    # pavés (extension Peloton : 1 file, pas d'aspiration)
+    SUPPLY = auto()    # zone d'approvisionnement (extension Peloton : 3 files, min 4)
 
 
 class CellRunType(Enum):
@@ -44,6 +46,8 @@ CELL_CHARS = {
     'd': (CellGeographyType.DOWNHILL, CellRunType.NONE),
     's': (CellGeographyType.FLAT,     CellRunType.START),
     'e': (CellGeographyType.FLAT,     CellRunType.END),
+    'c': (CellGeographyType.COBBLE,   CellRunType.NONE),   # pavés
+    'z': (CellGeographyType.SUPPLY,   CellRunType.NONE),   # zone d'approvisionnement
 }
 
 
@@ -265,6 +269,8 @@ class Track:
         sur toute la tuile), ou coureur couché (ne donne plus l'aspiration)."""
         if self.geography_at(x) == CellGeographyType.UPHILL:
             return True
+        if self.geography_at(x) == CellGeographyType.COBBLE:
+            return True  # pavés (Peloton) : aucune aspiration donnée ni reçue
         if self.weather_at(x) == WeatherType.CROSSWIND:
             return True
         if runner is not None and runner.crashed:
@@ -347,6 +353,9 @@ class Track:
         if self.geography_at(x) == CellGeographyType.DOWNHILL and steps < 5:
             steps = 5
             reason = "minimum 5 (descente)"
+        if self.geography_at(x) == CellGeographyType.SUPPLY and steps < 4:
+            steps = 4
+            reason = "minimum 4 (zone d'approvisionnement)"
         target = min(x + steps, self.length - 1)
         for d, c in enumerate(range(x, target + 1)):
             if self.geography_at(c) != CellGeographyType.UPHILL:
@@ -426,7 +435,10 @@ class Track:
         if cell.is_empty(0):
             cell.set_runner(runner, 0)  # file A (droite) en priorité
         else:
-            cell.set_runner(runner, 1)  # seule la file B est libre
+            for lane in range(1, len(cell.runners)):  # première file libre (largeur 1-3)
+                if cell.is_empty(lane):
+                    cell.set_runner(runner, lane)
+                    break
         # Pluie : mouvement terminé dans une zone humide en ayant été bloqué
         # -> CHUTE (le coureur est couché sur la case où il s'est arrêté)
         if blocked and self.weather_at(x) == WeatherType.RAIN:
