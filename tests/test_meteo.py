@@ -432,6 +432,34 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
                     found.add(p)
         self.assertEqual(found, colors, f"icônes météo manquantes sur le parcours: {colors - found}")
 
+    def test_weather_icons_on_profile_at_tile_positions(self):
+        """Les icônes météo animées apparaissent sur le profil de course à
+        l'EMPLACEMENT de la tuile qui porte le jeton."""
+        import main, pygame
+        from game.track import CellRunType
+        ui = main.FlammeRougeGame()
+        ui.ext_meteo = True
+        ui._select_stage("Avenue Corso Paseo")
+        ui.game.auto_place_riders()
+        track = ui.game.track
+        straights = [t for t in track.tiles if t.turn is None
+                     and not any(c.run in (CellRunType.START, CellRunType.END) for c in t.cells)]
+        target = straights[0]
+        for c in target.cells:
+            c.weather = WeatherType.RAIN
+        tiles_w = ui._game_weather_tiles()
+        self.assertIn((target.x, WeatherType.RAIN), tiles_w)
+        ui.width, ui.height = 1200, 920
+        ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
+        ui.screen.fill((200, 200, 210))
+        ui._draw_header(); ui._draw_phase_band()
+        ui._draw_track(); ui._draw_runners(); ui._draw_ui()
+        r = ui._race_profile_rect()
+        rain = sum(1 for x in range(r.x, r.right) for y in range(r.y, r.bottom)
+                   if ui.screen.get_at((x, y))[:3] in ((90, 130, 210), (60, 100, 190)))
+        self.assertGreater(rain, 0, "icône pluie absente du profil à l'emplacement de la tuile")
+
+
 
 if __name__ == "__main__":
     unittest.main()
