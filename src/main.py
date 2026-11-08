@@ -1473,7 +1473,7 @@ class FlammeRougeGame:
         """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
         labels = [("Retirer", "retirer"), ("Effacer", "effacer"),
                   ("Sauver", "sauver"), ("Charger", "charger"),
-                  ("Dossier", "dossier"), ("Retour", "retour")]
+                  ("Ouvrir...", "dossier"), ("Retour", "retour")]
         if self.width < 1100:  # pas de panneau d'aperçu à droite -> JOUER à gauche
             labels.insert(4, ("JOUER", "jouer"))
         x0, y0, bw, bh, gap, cols, label_h = self._editor_palette_geom()

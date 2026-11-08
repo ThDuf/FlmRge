@@ -492,7 +492,7 @@ class TestEditorButtons(unittest.TestCase):
         rects = ui._editor_action_rects()
         self.assertIn("dossier", rects)
         label, rect = rects["dossier"]
-        self.assertEqual(label, "Dossier")
+        self.assertEqual(label, "Ouvrir...")
         self.assertLessEqual(rect.right, ui.width)  # tient à l'écran
         opened = []
         orig = getattr(os, "startfile", None)
