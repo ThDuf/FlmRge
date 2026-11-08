@@ -189,17 +189,25 @@ class TestDummyTeams(unittest.TestCase):
         self.assertFalse(g._is_ai(g.players[2]))
 
     def test_teams_screen_flow(self):
-        """UI : avec Peloton coché, JOUER sur le choix d'étape mène à l'écran
-        d'assignation des équipes, puis JOUER démarre avec l'équipe factice."""
+        """UI : sélection du parcours -> écran OPTIONS (joueurs/extensions) ;
+        Peloton coché + JOUER -> écran d'assignation des équipes ; JOUER -> partie
+        avec l'équipe factice."""
         import main, pygame
         ui = main.FlammeRougeGame()
-        ui.menu_step = "stage"
-        ui.ext_peloton = True
         entries = ui._menu_entries()
         stage = next(e for e in entries if e[4] == "base")
-        ui._menu_validate(stage)
-        self.assertEqual(ui.menu_step, "teams")       # écran d'assignation
+        ui.menu_index = entries.index(stage)
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "options")            # options après le parcours
         self.assertEqual(ui._pending_stage, stage[0])
+        # coche le bloc Peloton sur l'écran d'options
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._ext_tick_rects()["peloton"].center))
+        self.assertTrue(ui.ext_peloton)
+        # JOUER -> écran d'assignation des équipes
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._next_button_rect().center))
+        self.assertEqual(ui.menu_step, "teams")
         ui.dummy_teams.append({"kind": "peloton", "color": "pink"})
         ui.controllers[("d", 0)] = 1                    # contrôlée par le joueur 2
         specs = ui._dummy_specs()
@@ -213,9 +221,5 @@ class TestDummyTeams(unittest.TestCase):
         self.assertIsNotNone(ui.game)
         self.assertTrue(any(p.ai == "peloton" and p.controller == 1
                             for p in ui.game.players))
-
-
-
-
 if __name__ == "__main__":
     unittest.main()

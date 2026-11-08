@@ -254,35 +254,39 @@ class TestStageMenu(unittest.TestCase):
 
     def test_menu_click_selects_entry(self):
         ui = main.FlammeRougeGame()
-        ui.menu_step = "stage"  # process : joueurs d'abord
         entries = ui._menu_entries()
         name, _d, _c, rect, _kind = entries[1]  # première étape officielle (après l'en-tête)
-        # simule un clic au centre de l'entrée
         import pygame
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=rect.center))
-        # le survol est calculé depuis la position souris (ici 0,0) : on
-        # force via clavier à la place
         self.assertIsNone(ui.game)  # le clic n'a rien sélectionné (souris hors entrée)
         ui.menu_index = 1
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        # ENTRÉE = JOUER : démarre directement (joueurs choisis au 1er écran)
+        # ENTRÉE sur le parcours -> écran d'OPTIONS (joueurs/extensions ensuite)
+        self.assertEqual(ui.menu_step, "options")
+        self.assertIsNone(ui.game)
+        self.assertEqual(ui._pending_stage, name)
+        # JOUER sur l'écran d'options -> démarre la partie
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._next_button_rect().center))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, name)
-        self.assertEqual(ui._pending_stage, name)
         self.assertEqual(len(ui.game.players), 2)  # 2 joueurs par défaut
-
-    def test_player_count_block_on_stage_screen(self):
-        """Plus d'écran joueurs séparé : le bloc JOUEURS (2-6) est sur l'écran de
-        sélection, à gauche des extensions ; 5/6 -> Peloton impératif."""
+    def test_player_count_block_on_options_screen(self):
+        """Le choix du nombre de joueurs se fait APRÈS la sélection du parcours :
+        écran d'options avec le bloc JOUEURS (2-6) ; 5/6 -> Peloton impératif."""
         import pygame
         ui = main.FlammeRougeGame()
-        self.assertEqual(ui.menu_step, "stage")  # le menu démarre sur la sélection
+        self.assertEqual(ui.menu_step, "stage")  # 1er écran : sélection du parcours
+        entries = ui._menu_entries()
+        ui.menu_index = next(i for i, e in enumerate(entries) if e[4] == "base")
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "options")  # options APRÈS le parcours choisi
         self.assertEqual(ui.player_count, 2)
         opts = ui._player_count_option_rects()
         self.assertEqual(sorted(opts), [2, 3, 4, 5, 6])
-        # le bloc est à gauche du panneau extensions (grand écran)
-        self.assertLess(ui._players_block_rect().right, ui._extensions_rect().x)
+        # bloc joueurs au-dessus du panneau extensions, dans le panneau options
+        self.assertGreater(ui._extensions_rect().y, ui._players_block_rect().bottom)
         # clic sur "3"
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=opts[3].center))
@@ -433,8 +437,8 @@ class TestMenuSelectionRules(unittest.TestCase):
 
     def test_hover_highlights_click_selects_next_button_navigates(self):
         """Le survol ne change que le highlight ; le clic ne fait QUE
-        sélectionner (pas de navigation) ; le gros bouton rouge en bas à
-        droite passe à l'écran suivant."""
+        sélectionner ; le gros bouton rouge en bas à droite passe à l'écran
+        d'options (joueurs/extensions), puis JOUER démarre la partie."""
         pygame = self.pygame
         ui = self.ui
         entries = ui._menu_entries()
@@ -454,17 +458,21 @@ class TestMenuSelectionRules(unittest.TestCase):
             ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
         finally:
             pygame.mouse.get_pos = orig_get_pos
-        # bouton rouge JOUER : démarre la partie directement (plus d'écran
-        # joueurs après le choix du circuit, il est en 1er dans le process)
-        self.assertIsNotNone(ui.game)
+        # bouton rouge : écran d'options (pas de démarrage direct)
+        self.assertEqual(ui.menu_step, "options")
+        self.assertIsNone(ui.game)
         self.assertEqual(ui._pending_stage, entries[target][0])
+        # JOUER sur l'écran d'options démarre la partie
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
+        self.assertIsNotNone(ui.game)
         self.assertEqual(len(ui.game.players), ui.player_count)
-
     def test_extensions_tickboxes_toggle(self):
-        """Section Extensions sur l'écran de sélection : tickboxes Météo et
-        Peloton, bascule au clic."""
+        """Blocs Extensions sur l'écran d'OPTIONS (après sélection du parcours) :
+        Météo et Peloton côte à côte, bascule au clic, actif = bordure accent."""
         import pygame
-        ui = self.ui  # menu_step = "stage"
+        ui = self.ui
+        ui.menu_step = "options"  # écran d'options (après le choix du parcours)
+        ui._pending_stage = "Avenue Corso Paseo"
         self.assertFalse(ui.ext_meteo)
         self.assertFalse(ui.ext_peloton)
         ticks = ui._ext_tick_rects()
@@ -473,9 +481,6 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.assertEqual(ticks["meteo"].y, ticks["peloton"].y)
         self.assertLessEqual(ticks["meteo"].right, ticks["peloton"].x)
         er = ui._extensions_rect()
-        nxt = ui._next_button_rect()
-        self.assertLessEqual(er.right, nxt.x)   # à gauche du bouton JOUER
-        self.assertGreaterEqual(er.x, 0)
         for k, tr in ticks.items():  # les blocs tiennent dans le panneau
             self.assertTrue(er.contains(tr), f"bloc {k} hors panneau")
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
@@ -485,12 +490,10 @@ class TestMenuSelectionRules(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=ticks["peloton"].center))
         self.assertTrue(ui.ext_peloton)
-        ui._draw_menu()  # rendu avec les deux blocs actifs, sans erreur
-        import pygame as _pg
+        ui._draw_menu()  # rendu écran options avec les deux blocs actifs, sans erreur
         for key, tr in ui._ext_tick_rects().items():
             edge = ui.screen.get_at((tr.centerx, tr.y + 1))[:3]  # bordure haut du bloc actif
             self.assertEqual(edge, main.ACCENT, f"bloc {key} actif sans bordure accent")
-
     def test_no_back_button_on_stage_screen(self):
         """L'écran de sélection n'a plus de bouton retour (l'écran joueurs est
         supprimé) : un clic à sa place ne change rien."""
@@ -501,15 +504,16 @@ class TestMenuSelectionRules(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=r.center))
         self.assertEqual(ui.menu_step, "stage")
     def test_players_block_renders(self):
-        """Le bloc JOUEURS se dessine sur l'écran de sélection (bouton actif en accent)."""
+        """Le bloc JOUEURS se dessine sur l'écran d'options (option active en accent)."""
         pygame = self.pygame
         ui = self.ui
+        ui.menu_step = "options"
+        ui._pending_stage = "Avenue Corso Paseo"
         ui.width, ui.height = 1280, 920
         ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
         ui.screen.fill((255, 255, 255))
         ui._draw_header()
         ui._draw_menu()
-        br = ui._players_block_rect()
         sel = ui._player_count_option_rects()[ui.player_count]
         self.assertEqual(ui.screen.get_at((sel.centerx, sel.y + 1))[:3], main.ACCENT)
 if __name__ == '__main__':

@@ -963,16 +963,16 @@ class FlammeRougeGame:
         frame = self._menu_frame_rect()
         return pygame.Rect(frame.x + 20, MENU_TOP + 8, frame.w - 28, 28)
 
+    def _options_frame_rect(self):
+        """Panneau de gauche de l'écran d'options (joueurs + extensions),
+        affiché APRÈS la sélection du parcours."""
+        return pygame.Rect(12, MENU_TOP, min(620, self.width - 24),
+                           self.height - 12 - MENU_TOP - 90)
+
     def _players_block_rect(self):
-        """Bloc du choix du nombre de joueurs (2-6) : à GAUCHE du panneau
-        Extensions en grand écran, dans le cadre de gauche au-dessus des
-        extensions sinon."""
-        if self.width >= 1100:
-            er = self._extensions_rect()
-            return pygame.Rect(er.x - 10 - 190, er.y, 190, er.h)
-        frame = self._menu_frame_rect()
-        srect = self._menu_search_rect()
-        return pygame.Rect(frame.x + 10, srect.bottom + 6, frame.w - 20, 64)
+        """Bloc du choix du nombre de joueurs (2-6), en haut du panneau options."""
+        fr = self._options_frame_rect()
+        return pygame.Rect(fr.x + 10, fr.y + 64, fr.w - 20, 64)
 
     def _player_count_option_rects(self):
         """Petits boutons 2..6 dans le bloc joueurs."""
@@ -1003,15 +1003,11 @@ class FlammeRougeGame:
             self.screen.blit(lbl, lbl.get_rect(center=rect.center))
 
     def _extensions_rect(self):
-        """Section « Extensions » (tickboxes Météo / Peloton) : en grand écran
-        (>= 1100 px), dans la bande du bas à GAUCHE du gros bouton JOUER ;
-        sinon dans le cadre de gauche, entre la barre de recherche et la liste."""
-        if self.width >= 1100:
-            nxt = self._next_button_rect()
-            return pygame.Rect(nxt.x - 10 - 232, nxt.y + (nxt.h - 64) // 2, 232, 64)
-        frame = self._menu_frame_rect()
+        """Panneau « Extensions » (blocs Météo / Peloton), sous le bloc joueurs
+        sur l'écran d'options (après sélection du parcours)."""
+        fr = self._options_frame_rect()
         pr = self._players_block_rect()
-        return pygame.Rect(frame.x + 10, pr.bottom + 6, frame.w - 20, 64)
+        return pygame.Rect(fr.x + 10, pr.bottom + 8, fr.w - 20, 64)
 
     def _draw_extensions(self, mouse):
         """Section Extensions : deux BLOCS côte à côte (Météo / Peloton), tout le
@@ -1052,12 +1048,8 @@ class FlammeRougeGame:
         return {"meteo": pygame.Rect(er.x + 10, by, bw, bh),
                 "peloton": pygame.Rect(er.x + 18 + bw, by, bw, bh)}
     def _menu_list_area(self):
-        """Zone visible (scrollable) de la liste : sous la barre de recherche en
-        grand écran (les extensions sont à côté de JOUER), sous les extensions sinon."""
-        if self.width >= 1100:
-            top = self._menu_search_rect().bottom + 6
-        else:
-            top = self._extensions_rect().bottom + 6
+        """Zone visible (scrollable) de la liste des parcours : sous la recherche."""
+        top = self._menu_search_rect().bottom + 6
         return pygame.Rect(0, top, self.width, self.height - 40 - top)
 
     def _menu_frame_rect(self):
@@ -2104,6 +2096,9 @@ class FlammeRougeGame:
         if self.menu_step == "teams":
             self._draw_teams_menu(mouse)
             return
+        if self.menu_step == "options":
+            self._draw_options_menu(mouse)
+            return
         # Hero du menu : grand titre à gauche + sous-titre, alignés sur le cadre
         title = self.display_font.render("Choix de l'étape", True, INK)
         self.screen.blit(title, (20, HEADER_H + 2))
@@ -2124,10 +2119,6 @@ class FlammeRougeGame:
         stext = self.menu_search if self.menu_search else "Rechercher un parcours perso…"
         surf = self.label_font.render(stext, True, BLACK if self.menu_search else TEXT_DIM)
         self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
-
-        if self.width < 1100:
-            self._draw_players_block(mouse)  # petit écran : dans le cadre, sous la recherche
-            self._draw_extensions(mouse)
 
         entries = self._menu_entries()
         area = getattr(self, "_menu_scroll_area", self._menu_list_area())
@@ -2194,16 +2185,74 @@ class FlammeRougeGame:
             name, _d, code, _r, kind = entries[self.menu_index]
             if kind in ("base", "perso"):
                 self._draw_menu_preview(name, self._preview_rect(), code=code if kind == "perso" else None)
-        # Section « Extensions » (tickboxes Météo / Peloton) à GAUCHE du bouton
-        # JOUER, dans la bande du bas (grand écran)
-        if self.width >= 1100:
-            self._draw_players_block(mouse)  # à gauche du panneau Extensions
-            self._draw_extensions(mouse)
-        # Gros bouton en bas à droite : JOUER (démarre la partie directement,
-        # le nombre de joueurs a déjà été choisi au 1er écran)
+        # Gros bouton en bas à droite : SUIVANT -> écran d'options (joueurs +
+        # extensions), affiché APRÈS la sélection du parcours
+        self._draw_ui_button(self._next_button_rect(), "SUIVANT →", ACCENT,
+                             mouse, pressed=(self._pressed_button == "next"),
+                             font=self.phase_font)
+
+    # ------------------------------------------------------------------
+    # Écran d'options (APRÈS la sélection du parcours) : joueurs + extensions
+    # ------------------------------------------------------------------
+
+    def _options_validate(self):
+        """JOUER sur l'écran d'options : Peloton -> écran équipes, sinon démarre."""
+        if self.ext_peloton:
+            self.menu_step = "teams"  # Peloton : d'abord qui contrôle quelle équipe
+        else:
+            self._select_stage(self._pending_stage)
+
+    def _options_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._back_button_rect().collidepoint(event.pos):
+                self.menu_step = "stage"  # retour à la sélection du parcours
+                return
+            if self._next_button_rect().collidepoint(event.pos):
+                self._pressed_button = "next"
+                self._options_validate()
+                self._pressed_button = None
+                return
+            for n, rect in self._player_count_option_rects().items():
+                if rect.collidepoint(event.pos):
+                    self.player_count = n
+                    if n >= 5:
+                        self.ext_peloton = True  # 5/6 joueurs -> Peloton IMPÉRATIF
+                    return
+            for key, tr in self._ext_tick_rects().items():
+                if tr.collidepoint(event.pos):
+                    if key == "meteo":
+                        self.ext_meteo = not self.ext_meteo
+                    elif not (self.player_count >= 5 and self.ext_peloton):
+                        self.ext_peloton = not self.ext_peloton  # à 5/6 joueurs, Peloton reste actif
+                    return
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            self._options_validate()
+
+    def _draw_options_menu(self, mouse):
+        """Écran d'options (après sélection du parcours) : panneau de gauche avec
+        le bloc JOUEURS (2-6) et les blocs Extensions (Météo/Peloton), preview du
+        parcours choisi à droite, JOUER en bas à droite."""
+        frame = self._options_frame_rect()
+        self._draw_card(frame, PANEL, radius=CARD_R)
+        title = self.display_font.render("Options", True, INK)
+        self.screen.blit(title, (frame.x + 20, frame.y + 14))
+        stage_name = STAGE_NAMES.get(self._pending_stage, self._pending_stage or "")
+        sub = self.label_font.render(f"Parcours : {stage_name}", True, TEXT_DIM)
+        self.screen.blit(sub, (frame.x + 22, frame.y + 14 + title.get_height() + 6))
+        self._draw_players_block(mouse)
+        self._draw_extensions(mouse)
+        # preview du parcours choisi à droite (sans chevaucher le panneau options)
+        if self.width >= 1100 and self._pending_stage:
+            pr = pygame.Rect(frame.right + 16, MENU_TOP,
+                             self.width - 16 - (frame.right + 16),
+                             self.height - 12 - MENU_TOP)
+            self._draw_menu_preview(self._pending_stage, pr, code=self._pending_code)
+        # JOUER en bas à droite + retour en haut à droite
         self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
+        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
+                             mouse, pressed=(self._pressed_button == "back"))
 
     # ------------------------------------------------------------------
     # Écran d'assignation des équipes (extension Peloton)
@@ -2263,7 +2312,7 @@ class FlammeRougeGame:
     def _teams_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self._back_button_rect().collidepoint(event.pos):
-                self.menu_step = "stage"  # retour au choix d'étape
+                self.menu_step = "options"  # retour aux options (joueurs/extensions)
                 return
             if self._next_button_rect().collidepoint(event.pos):
                 self._pressed_button = "next"
@@ -2419,6 +2468,9 @@ class FlammeRougeGame:
         if self.menu_step == "teams":
             self._teams_event(event)
             return
+        if self.menu_step == "options":
+            self._options_event(event)
+            return
         entries = self._menu_entries()
         mouse = pygame.mouse.get_pos()
         if event.type == pygame.MOUSEWHEEL:
@@ -2471,19 +2523,6 @@ class FlammeRougeGame:
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for n, rect in self._player_count_option_rects().items():
-                if rect.collidepoint(event.pos):
-                    self.player_count = n
-                    if n >= 5:
-                        self.ext_peloton = True  # 5/6 joueurs -> Peloton IMPÉRATIF
-                    return
-            for key, tr in self._ext_tick_rects().items():
-                if tr.collidepoint(event.pos):
-                    if key == "meteo":
-                        self.ext_meteo = not self.ext_meteo
-                    elif not (self.player_count >= 5 and self.ext_peloton):
-                        self.ext_peloton = not self.ext_peloton  # à 5/6 joueurs, Peloton reste actif
-                    return
             if self._next_button_rect().collidepoint(event.pos):
                 # gros bouton rouge = passer à l'écran suivant
                 # (même animation d'enfoncement que les autres boutons)
@@ -2524,13 +2563,10 @@ class FlammeRougeGame:
         if kind == "editor":
             self.menu_step = "editor"
         else:
-            # le nombre de joueurs a déjà été choisi (1er écran) : on démarre
+            # parcours sélectionné -> écran d'options (nb joueurs + extensions)
             self._pending_stage = name
             self._pending_code = code if kind == "perso" else None
-            if self.ext_peloton:
-                self.menu_step = "teams"  # Peloton : d'abord qui contrôle quelle équipe
-            else:
-                self._select_stage(name)
+            self.menu_step = "options"
 
     def _placement_click(self, pos):
         """Phase de placement : clic sur une case derrière la ligne DÉPART."""

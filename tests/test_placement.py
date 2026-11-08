@@ -450,7 +450,7 @@ class TestTrackSaveJson(unittest.TestCase):
 class TestMenuCategories(unittest.TestCase):
     def test_perso_circuits_from_saves_json(self):
         """Les JSON de saves/ apparaissent en catégorie 'Circuits perso' et
-        lancent une partie avec custom_code."""
+        lancent une partie avec custom_code (via l'écran d'options)."""
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
@@ -462,13 +462,15 @@ class TestMenuCategories(unittest.TestCase):
         self.assertEqual(len(perso), 1)
         self.assertEqual(perso[0][0], "mon_beau_parcours")
         self.assertEqual(perso[0][2], "abKcdfu")
-        # validation (JOUER) -> démarre directement avec le code perso
+        # sélection du parcours -> écran d'options, puis JOUER -> partie avec le code perso
         ui.menu_index = entries.index(perso[0])
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "options")
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._next_button_rect().center))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.custom_code, "abKcdfu")
         self.assertEqual([t.letter for t in ui.game.track.tiles], list("abKcdfu"))
-
     def test_editor_save_with_name(self):
         """Clic sur Sauver -> saisie du nom au clavier -> fichier nommé."""
         import tempfile, os, pygame
