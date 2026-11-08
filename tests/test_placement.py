@@ -879,7 +879,8 @@ class TestCircuitZoom(unittest.TestCase):
         rects = [r for r in ui._frame_button_rects().values()] + \
                 [r for r in ui._purple_button_rects().values()] + [ui._button_rect()]
         for rect in rects:
-            c_mid = ui.screen.get_at(rect.center)
+            # échantillon pris sur le FOND du bouton (à gauche, hors icône/texte)
+            c_mid = ui.screen.get_at((rect.x + 4, rect.centery))
             c_bot = ui.screen.get_at((rect.centerx, rect.bottom - 2))
             self.assertGreater(sum(c_mid[:3]), sum(c_bot[:3]) - 40,
                                "pas d'effet enfoncé")

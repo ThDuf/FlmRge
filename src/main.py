@@ -492,7 +492,12 @@ class FlammeRougeGame:
             pygame.draw.line(self.screen, light, (rect.x + 6, rect.y + 2),
                              (rect.right - 6, rect.y + 2), 1)
         pygame.draw.rect(self.screen, dark, rect, width=1, border_radius=BTN_R)
-        text_color = TEXT_DIM if not enabled else WHITE
+        # contraste auto : texte FONCÉ sur bouton clair, BLANC sur bouton foncé
+        if not enabled:
+            text_color = TEXT_DIM
+        else:
+            lum = 0.299 * fill[0] + 0.587 * fill[1] + 0.114 * fill[2]
+            text_color = INK if lum > 150 else WHITE
         # icône à gauche
         tx = rect.x + 8
         if icon == "loupe":
@@ -1468,7 +1473,7 @@ class FlammeRougeGame:
         """Boutons d'action de l'éditeur : Retirer, Effacer, Jouer, Retour."""
         labels = [("Retirer", "retirer"), ("Effacer", "effacer"),
                   ("Sauver", "sauver"), ("Charger", "charger"),
-                  ("Retour", "retour")]
+                  ("Dossier", "dossier"), ("Retour", "retour")]
         if self.width < 1100:  # pas de panneau d'aperçu à droite -> JOUER à gauche
             labels.insert(4, ("JOUER", "jouer"))
         x0, y0, bw, bh, gap, cols, label_h = self._editor_palette_geom()
@@ -1576,6 +1581,8 @@ class FlammeRougeGame:
                         self._editor_load_latest()
                     elif key == "jouer":
                         self._editor_play()
+                    elif key == "dossier":
+                        self._open_saves_folder()
                     elif key == "retour":
                         self.menu_step = "stage"
                     return
@@ -1592,6 +1599,21 @@ class FlammeRougeGame:
                 if len(name) == 1 and name.lower() in self.EDITOR_LETTERS:
                     upper = bool(getattr(event, 'mod', 0) & pygame.KMOD_SHIFT)
                     self._editor_append(name.upper() if upper else name)
+
+    def _open_saves_folder(self):
+        """Ouvre le dossier des parcours perso (saves/) dans l'explorateur de
+        fichiers de l'OS."""
+        import os
+        path = os.path.abspath(self.saves_dir)
+        os.makedirs(path, exist_ok=True)
+        if hasattr(os, "startfile"):  # Windows
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", path])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", path])
 
     def _editor_track(self):
         from game.game import build_track_from_code
