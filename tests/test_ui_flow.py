@@ -432,5 +432,83 @@ class TestTrackLayout(unittest.TestCase):
             self.assertIn("Fatigue", ui.last_action[0])
 
 
+
+class TestEditorBackButton(unittest.TestCase):
+    """L'éditeur de circuits a un bouton « ← Retour » dans le bandeau titre
+    (comme ÉCHAP) : clic -> retour à l'écran de choix d'étape."""
+
+    def test_editor_back_button_renders_and_clicks(self):
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_step = "editor"
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header()
+        ui._draw_menu()  # dispatch editor
+        br = ui._back_button_rect()
+        self.assertLess(br.y, main.HEADER_H)  # dans le bandeau titre
+        # le bouton est bien dessiné (pixel du corps gris au centre, hors texte)
+        body = ui.screen.get_at((br.x + 6, br.centery))[:3]
+        self.assertNotEqual(body, (255, 255, 255))
+        # clic -> retour au choix d'étape
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=br.center))
+        self.assertEqual(ui.menu_step, "stage")
+
+
+
+class TestEditorButtons(unittest.TestCase):
+    """Éditeur : boutons plus visibles (contraste auto du libellé) + bouton
+    « Dossier » qui ouvre le dossier des parcours perso."""
+
+    def test_button_text_contrast_auto(self):
+        """Bouton clair -> texte foncé ; bouton foncé -> texte blanc."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.screen = pygame.Surface((300, 60))
+        ui.screen.fill((255, 255, 255))
+        # bouton clair (ROW_SEL) : au moins un pixel sombre (texte) dans le rect
+        r1 = pygame.Rect(10, 10, 120, 40)
+        ui._draw_ui_button(r1, "Retirer", main.ROW_SEL, (0, 0))
+        dark = any(sum(ui.screen.get_at((x, y))[:3]) < 250
+                   for x in range(r1.x, r1.right) for y in range(r1.y, r1.bottom))
+        self.assertTrue(dark, "texte illisible sur bouton clair")
+        # bouton foncé (rouge) : au moins un pixel clair (texte blanc)
+        ui.screen.fill((255, 255, 255))
+        r2 = pygame.Rect(10, 10, 120, 40)
+        ui._draw_ui_button(r2, "JOUER", (200, 45, 45), (0, 0))
+        light = any(sum(ui.screen.get_at((x, y))[:3]) > 700
+                    for x in range(r2.x, r2.right) for y in range(r2.y, r2.bottom))
+        self.assertTrue(light, "texte blanc attendu sur bouton foncé")
+
+    def test_dossier_button_opens_saves_folder(self):
+        """Le bouton « Dossier » existe dans l'éditeur et ouvre saves/."""
+        import os
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_step = "editor"
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        rects = ui._editor_action_rects()
+        self.assertIn("dossier", rects)
+        label, rect = rects["dossier"]
+        self.assertEqual(label, "Ouvrir...")
+        self.assertLessEqual(rect.right, ui.width)  # tient à l'écran
+        opened = []
+        orig = getattr(os, "startfile", None)
+        os.startfile = lambda p: opened.append(p)
+        try:
+            ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                              pos=rect.center))
+        finally:
+            if orig is not None:
+                os.startfile = orig
+            else:
+                del os.startfile
+        self.assertTrue(opened)
+        self.assertTrue(opened[0].endswith("saves"))
+        self.assertTrue(os.path.isdir(opened[0]))  # dossier créé si besoin
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

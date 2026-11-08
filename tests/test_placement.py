@@ -304,6 +304,7 @@ class TestTrackEditor(unittest.TestCase):
     def test_editor_entry_in_menu_and_draw(self):
         import pygame
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"  # process : joueurs d'abord
         ui.screen = pygame.display.set_mode((1200, 800))
         entries = ui._menu_entries()
         self.assertEqual(entries[-1][0], "Créer un circuit")
@@ -453,6 +454,7 @@ class TestMenuCategories(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         save_track_json("abKcdfu", ui.saves_dir, name="mon_beau_parcours")
         entries = ui._menu_entries()
@@ -460,11 +462,8 @@ class TestMenuCategories(unittest.TestCase):
         self.assertEqual(len(perso), 1)
         self.assertEqual(perso[0][0], "mon_beau_parcours")
         self.assertEqual(perso[0][2], "abKcdfu")
-        # validation -> étape joueurs avec code perso en attente
+        # validation (JOUER) -> démarre directement avec le code perso
         ui.menu_index = entries.index(perso[0])
-        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        self.assertEqual(ui.menu_step, "players")
-        self.assertEqual(ui._pending_code, "abKcdfu")
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.custom_code, "abKcdfu")
@@ -872,7 +871,7 @@ class TestCircuitZoom(unittest.TestCase):
         ui._draw_ui()
         # boutons caméra à côté de la légende (bas du cadre)
         frame = ui._frame_rect()
-        legend_y = ui._bar_rect().y - 24
+        legend_y = ui._frame_rect().bottom - 26  # légende en bas du cadre (profil sous le parcours)
         for key, rect in ui._frame_button_rects().items():
             self.assertTrue(frame.contains(rect))
             self.assertGreaterEqual(rect.y, legend_y - 40)  # en bas, près de la légende
@@ -880,7 +879,8 @@ class TestCircuitZoom(unittest.TestCase):
         rects = [r for r in ui._frame_button_rects().values()] + \
                 [r for r in ui._purple_button_rects().values()] + [ui._button_rect()]
         for rect in rects:
-            c_mid = ui.screen.get_at(rect.center)
+            # échantillon pris sur le FOND du bouton (à gauche, hors icône/texte)
+            c_mid = ui.screen.get_at((rect.x + 4, rect.centery))
             c_bot = ui.screen.get_at((rect.centerx, rect.bottom - 2))
             self.assertGreater(sum(c_mid[:3]), sum(c_bot[:3]) - 40,
                                "pas d'effet enfoncé")
@@ -999,6 +999,7 @@ class TestCircuitZoom(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         for i in range(8):
             save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
@@ -1073,6 +1074,7 @@ class TestCircuitZoom(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         for i in range(12):
             save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")
@@ -1111,6 +1113,7 @@ class TestCircuitZoom(unittest.TestCase):
         import tempfile, pygame
         from game.game import save_track_json
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"
         ui.saves_dir = tempfile.mkdtemp()
         for i in range(12):
             save_track_json(f"abc{i}u", ui.saves_dir, name=f"parcours_{i}")

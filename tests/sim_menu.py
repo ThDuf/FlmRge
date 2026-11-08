@@ -10,6 +10,9 @@ ui = main.FlammeRougeGame()
 ui.width, ui.height = 1200, 800
 ui.screen = pygame.display.set_mode((1200, 800))
 names = [n for n, _d, _c in available_stages()]
+ui._draw_menu()  # 1er écran : nombre de joueurs
+pygame.display.flip()
+ui.menu_step = 'stage'
 for i, name in enumerate(names):
     ui.menu_index = i
     ui._draw_menu()

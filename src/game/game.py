@@ -5,7 +5,8 @@ from enum import Enum, auto
 from .player import Player
 from .runner import Runner, RunnerType
 from .card import Card, CardType
-from .track import Track, make_tile, CellGeographyType, CellRunType
+from .track import (Track, make_tile, CellGeographyType, CellRunType,
+                    WeatherType)
 
 
 # ------------------------------------------------------------------
@@ -190,12 +191,19 @@ class Game:
     """Moteur principal du jeu Flamme Rouge."""
 
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
-                 auto_place: bool = True, custom_code: str = None):
+                 auto_place: bool = True, custom_code: str = None,
+                 meteo: bool = False):
         player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
         self.stage = stage
         self.custom_code = custom_code  # code de tuiles perso (éditeur), prioritaire
+        self.meteo = meteo              # extension Météo activée ?
         self.players: List[Player] = []
         self.track = self._build_track(stage)
+        if self.meteo:
+            # jetons météo posés FACE VISIBLE sur les tuiles droites (hors
+            # départ/arrivée) dès la mise en place (logué plus bas, une fois
+            # l'historique initialisé)
+            self.track.assign_weather()
         self.current_phase: Phase = Phase.PLACEMENT
         self.turn_count: int = 0
         self.game_over: bool = False
@@ -218,6 +226,12 @@ class Game:
         self.placement_queue: List[tuple] = []
         self.placement_index = 0
         self.history: List[dict] = []  # historique des coups : un dict par tour
+        if self.meteo:
+            # météo de la course (jetons face visible dès la mise en place)
+            self.history.append({"turn": 0, "cards": [], "moves": [], "slips": [],
+                                 "weather": sorted((t.x, t.cells[0].weather.name)
+                                                   for t in self.track.tiles
+                                                   if t.cells and t.cells[0].weather != WeatherType.NONE)})
         if auto_place:
             self._auto_place_all()
             self.start_turn()
@@ -356,8 +370,20 @@ class Game:
         """Entrée d'historique du tour en cours (créée au besoin)."""
         if not self.history or self.history[-1]["turn"] != self.turn_count:
             self.history.append({"turn": self.turn_count, "cards": [], "moves": [],
-                                 "slips": []})
+                                 "slips": [], "weather": []})
         return self.history[-1]
+
+    def _draw_count_for(self, runner: Runner) -> int:
+        """Nombre de cartes piochées par le coureur ce tour : 4 de base ;
+        extension Météo, 5 en vent arrière et 3 en vent de face selon la
+        tuile où se trouve le coureur au moment de piocher."""
+        if self.meteo:
+            w = self.track.weather_at(runner.x)
+            if w == WeatherType.TAILWIND:
+                return 5
+            if w == WeatherType.HEADWIND:
+                return 3
+        return 4
 
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
@@ -368,8 +394,9 @@ class Game:
         self._hist_turn()
 
         for player in self.players:
-            player.draw_cards_for_all(4)
             for runner in player.get_runners():
+                # extension Météo : 5 cartes en vent arrière, 3 en vent de face
+                runner.draw_cards(self._draw_count_for(runner))
                 if runner.hand:
                     self.cards_played_per_runner[runner.id] = 0
                     self.total_cards_to_play += 1
@@ -434,16 +461,21 @@ class Game:
         print(f"--- Fin du calcul du mouvement ({len(moves)} coureurs) ---\n")
         return moves
 
-    def apply_movement_step(self, move) -> None:
-        """Applique UN mouvement de coureur (pour le pas-à-pas UI)."""
+    def apply_movement_step(self, move) -> Optional[str]:
+        """Applique UN mouvement de coureur (pour le pas-à-pas UI).
+
+        Retourne la raison du déplacement (chute pluie, relevé après chute,
+        plafonnement montagne, etc.) pour le bandeau UI."""
         runner, value = move
         print(f"  {runner.id} (pos {runner.x}) joue carte {value}")
         from_x = runner.x
-        eff, reason = self.track.effective_steps(from_x, value)
-        self.track.move_runner(runner, value)
-        print(f"    -> Déplacé à {runner.x}, file {runner.y}")
+        reason = self.track.move_runner(runner, value)  # gère chute pluie / −2
+        eff = runner.x - from_x
+        print(f"    -> Déplacé à {runner.x}, file {runner.y}"
+              + (f" ({reason})" if reason else ""))
         self._hist_turn()["moves"].append(
             (runner.id, runner.color, from_x, runner.x, value, eff, reason))
+        return reason
 
     def apply_movement_steps(self, moves: List) -> None:
         """Applique tous les mouvements (usage headless)."""

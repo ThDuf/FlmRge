@@ -248,6 +248,7 @@ class TestStageMenu(unittest.TestCase):
 
     def test_menu_click_selects_entry(self):
         ui = main.FlammeRougeGame()
+        ui.menu_step = "stage"  # process : joueurs d'abord
         entries = ui._menu_entries()
         name, _d, _c, rect, _kind = entries[1]  # première étape officielle (après l'en-tête)
         # simule un clic au centre de l'entrée
@@ -259,23 +260,26 @@ class TestStageMenu(unittest.TestCase):
         self.assertIsNone(ui.game)  # le clic n'a rien sélectionné (souris hors entrée)
         ui.menu_index = 1
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        self.assertIsNone(ui.game)  # ENTRÉE passe à l'étape "joueurs"
-        self.assertEqual(ui.menu_step, "players")
-        self.assertEqual(ui._pending_stage, name)
-        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        # ENTRÉE = JOUER : démarre directement (joueurs choisis au 1er écran)
         self.assertIsNotNone(ui.game)
         self.assertEqual(ui.game.stage, name)
+        self.assertEqual(ui._pending_stage, name)
         self.assertEqual(len(ui.game.players), 2)  # 2 joueurs par défaut
 
     def test_menu_player_count_2_to_4(self):
-        """Étape 'players' du menu : on choisit 3 joueurs au clavier."""
+        """Process : 1er écran = joueurs (choix 2-4), puis étape -> JOUER
+        démarre directement la partie (plus d'écran joueurs après)."""
         import pygame
         ui = main.FlammeRougeGame()
-        ui.menu_index = 1  # 1re étape de base (0 = en-tête de catégorie)
-        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-        self.assertEqual(ui.menu_step, "players")
+        self.assertEqual(ui.menu_step, "players")  # 1er écran
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT))
         self.assertEqual(ui.player_count, 3)
+        # SUIVANT (pas d'étape choisie) -> écran de choix d'étape
+        nb = ui._next_button_rect()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
+        self.assertEqual(ui.menu_step, "stage")
+        # JOUER sur l'étape choisie -> partie démarrée directement avec 3 joueurs
+        ui.menu_index = 1  # 1re étape de base (0 = en-tête de catégorie)
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertIsNotNone(ui.game)
         self.assertEqual(len(ui.game.players), 3)
@@ -414,6 +418,19 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.ui = main.FlammeRougeGame()
         self.ui.width, self.ui.height = 1200, 800
         self.ui.screen = pygame.display.set_mode((1200, 800))
+        self.ui.menu_step = "stage"  # l'écran joueurs vient en 1er ; on teste l'écran étape
+
+    def test_players_screen_comes_first(self):
+        """Process : l'écran du nombre de joueurs est le 1er ; SUIVANT (sans
+        étape choisie) mène au choix de l'étape."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        self.assertEqual(ui.menu_step, "players")
+        self.assertIsNone(ui._pending_stage)
+        nb = ui._next_button_rect()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
+        self.assertEqual(ui.menu_step, "stage")
+        self.assertEqual(ui.menu_index, 1)
 
     def test_selection_starts_on_first_course(self):
         """À l'arrivée sur le menu, la sélection est sur le 1er parcours
@@ -446,8 +463,53 @@ class TestMenuSelectionRules(unittest.TestCase):
             ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=nb.center))
         finally:
             pygame.mouse.get_pos = orig_get_pos
-        self.assertEqual(ui.menu_step, "players")        # bouton rouge = suivant
+        # bouton rouge JOUER : démarre la partie directement (plus d'écran
+        # joueurs après le choix du circuit, il est en 1er dans le process)
+        self.assertIsNotNone(ui.game)
         self.assertEqual(ui._pending_stage, entries[target][0])
+        self.assertEqual(len(ui.game.players), ui.player_count)
+
+    def test_extensions_tickboxes_toggle(self):
+        """Section Extensions sur l'écran de sélection : tickboxes Météo et
+        Peloton, bascule au clic."""
+        import pygame
+        ui = self.ui  # menu_step = "stage"
+        self.assertFalse(ui.ext_meteo)
+        self.assertFalse(ui.ext_peloton)
+        ticks = ui._ext_tick_rects()
+        self.assertEqual(set(ticks), {"meteo", "peloton"})
+        # deux BLOCS côte à côte (même y, météo à gauche de peloton, sans chevauchement)
+        self.assertEqual(ticks["meteo"].y, ticks["peloton"].y)
+        self.assertLessEqual(ticks["meteo"].right, ticks["peloton"].x)
+        er = ui._extensions_rect()
+        nxt = ui._next_button_rect()
+        self.assertLessEqual(er.right, nxt.x)   # à gauche du bouton JOUER
+        self.assertGreaterEqual(er.x, 0)
+        for k, tr in ticks.items():  # les blocs tiennent dans le panneau
+            self.assertTrue(er.contains(tr), f"bloc {k} hors panneau")
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ticks["meteo"].center))
+        self.assertTrue(ui.ext_meteo)
+        self.assertFalse(ui.ext_peloton)
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ticks["peloton"].center))
+        self.assertTrue(ui.ext_peloton)
+        ui._draw_menu()  # rendu avec les deux blocs actifs, sans erreur
+        import pygame as _pg
+        for key, tr in ui._ext_tick_rects().items():
+            edge = ui.screen.get_at((tr.centerx, tr.y + 1))[:3]  # bordure haut du bloc actif
+            self.assertEqual(edge, main.ACCENT, f"bloc {key} actif sans bordure accent")
+
+    def test_back_button_elevated_in_menu_and_stage_goes_to_players(self):
+        """Dans les menus, le bouton retour est dans le bandeau titre (en haut,
+        y < HEADER_H) ; sur l'écran de choix d'étape, il ramène à l'écran
+        joueurs (1er écran du process)."""
+        pygame = self.pygame
+        ui = self.ui  # menu_step = "stage"
+        r = ui._back_button_rect()
+        self.assertLess(r.y, main.HEADER_H)  # élevé dans le bandeau titre
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=r.center))
+        self.assertEqual(ui.menu_step, "players")
 
     def test_back_button_on_players_screen(self):
         """Sur l'écran du nombre de joueurs, le bouton « ← Retour » en haut à

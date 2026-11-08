@@ -22,6 +22,7 @@ def main_():
     ui.width, ui.height = 1200, 800
     ui.screen = pygame.display.set_mode((1200, 800))
     names = [n for n, _d, _c in available_stages()]
+    ui.menu_step = "stage"  # process : écran joueurs d'abord
     ui.menu_index = names.index("Col du Ballon")
     ui.screen.fill(main.BG)
     ui._draw_menu()
@@ -71,6 +72,7 @@ def main_():
     ui2 = main.FlammeRougeGame()
     ui2.width, ui2.height = 1200, 800
     ui2.screen = pygame.display.set_mode((1200, 800))
+    ui2.menu_step = "stage"
     ui2.menu_index = names.index("Avenue Corso Paseo") + 1  # +1 : l'index 0 est l'en-tête de catégorie
     ui2.screen.fill(main.BG)
     ui2._draw_menu()
@@ -89,6 +91,7 @@ def main_():
     assert counts[(255, 236, 130)] > 30, "ligne de départ jaune clair absente"
 
     # étape de montagne : mêmes couleurs que le profil (orange/bleu)
+    ui2.menu_step = "stage"
     ui2.menu_index = names.index("La Haut Montagne") + 1
     ui2.screen.fill(main.BG)
     ui2._draw_menu()
@@ -183,6 +186,7 @@ def main_():
     ui3 = main.FlammeRougeGame()
     ui3.width, ui3.height = 1200, 800
     ui3.screen = pygame.display.set_mode((1200, 800))
+    ui3.menu_step = "stage"
     ui3.menu_index = names.index("La Haut Montagne") + 1
     ui3.screen.fill(main.BG)
     ui3._draw_menu()
