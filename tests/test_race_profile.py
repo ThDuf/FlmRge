@@ -94,26 +94,16 @@ class TestRaceProfile(unittest.TestCase):
             self.assertGreaterEqual(r.y, frame.bottom)   # sous le parcours
             self.assertLessEqual(r.bottom, bar.y + 1)
 
-    def test_weather_badge_on_race_profile_when_meteo(self):
-        """Extension Météo active : le badge animé est aussi sur le profil de
-        course (météo réelle de la partie, pas l'aperçu seedé)."""
+    def test_no_moving_badge_next_to_finish_on_profile(self):
+        """Plus de légende animée (badge) à côté de l'arrivée sur le profil :
+        la méthode _draw_weather_badge n'existe plus ; le rendu fonctionne."""
         ui = main.FlammeRougeGame()
         ui.ext_meteo = True
         ui._select_stage("Avenue Corso Paseo")
         ui.game.auto_place_riders()
-        w = ui._game_weather()
-        self.assertTrue(w)  # au moins un type ([NONE]=soleil si aucun événement)
-        self.assertTrue(all(isinstance(x, WeatherType) for x in w))
-        # avec extension inactive -> pas de badge
-        ui2 = main.FlammeRougeGame(stage="Avenue Corso Paseo")
-        self.assertEqual(ui2._game_weather(), [])
-        # rendu avec badge
-        self._render(ui, (1280, 800))
-        r = ui._race_profile_rect()
-        badge = pygame.Rect(r.right - 64, r.y + 4, 24, 24)
-        hits = sum(1 for x in range(badge.x, badge.right) for y in range(badge.y, badge.bottom)
-                   if ui.screen.get_at((x, y))[:3] not in ((200, 200, 210), (255, 255, 255)))
-        self.assertGreater(hits, 0, "badge météo absent du profil de course")
+        self.assertFalse(hasattr(ui, "_draw_weather_badge"))
+        self.assertFalse(hasattr(ui, "_game_weather"))
+        self._render(ui, (1200, 920))  # rendu sans erreur
 
     def test_profile_updates_with_movement(self):
         """Les marqueurs suivent les groupes quand les coureurs avancent."""

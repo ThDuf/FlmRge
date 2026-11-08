@@ -368,45 +368,6 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         self.assertEqual([c.weather for t in t1.tiles for c in t.cells],
                          [c.weather for t in t2.tiles for c in t.cells])
 
-    def test_weather_badge_renders_pixels(self):
-        """Le badge dessine bien quelque chose (soleil/vent/pluie) dans son rect."""
-        import main, pygame
-        ui = main.FlammeRougeGame()
-        ui.screen = pygame.Surface((200, 60))
-        for w in (WeatherType.NONE, WeatherType.TAILWIND, WeatherType.HEADWIND,
-                  WeatherType.CROSSWIND, WeatherType.RAIN):
-            ui.screen.fill((255, 255, 255))
-            r = pygame.Rect(80, 10, 24, 24)
-            ui._draw_weather_badge(r, [w])
-            found = any(ui.screen.get_at((x, y))[:3] != (255, 255, 255)
-                        for x in range(r.x, r.right) for y in range(r.y, r.bottom))
-            self.assertTrue(found, f"badge {w.name} n'a rien dessiné")
-
-    def test_badge_only_on_race_screen_not_on_selection_profile(self):
-        """Le badge météo animé n'est PAS sur le profil de sélection du parcours,
-        mais bien sur le profil de l'écran de course."""
-        import main, pygame
-        ui = main.FlammeRougeGame()
-        ui.menu_step = "stage"
-        ui.ext_meteo = True
-        calls = []
-        orig = main.FlammeRougeGame._draw_weather_badge
-        ui._draw_weather_badge = lambda *a, **k: calls.append(a) or orig(ui, *a, **k)
-        ui.width, ui.height = 1280, 800
-        ui.screen = pygame.display.set_mode((1280, 800), pygame.RESIZABLE)
-        ui.screen.fill((255, 255, 255))
-        ui._draw_header()
-        ui._draw_menu()  # écran de SÉLECTION : aucun badge
-        self.assertEqual(calls, [])
-        # écran de COURSE : le badge est bien là
-        ui._select_stage("Avenue Corso Paseo")
-        ui.game.auto_place_riders()
-        calls.clear()
-        ui.screen.fill((255, 255, 255))
-        ui._draw_header(); ui._draw_phase_band()
-        ui._draw_track(); ui._draw_runners(); ui._draw_ui()
-        self.assertTrue(calls, "badge météo absent du profil de course")
-
     def test_weather_zones_in_profile_block_and_on_track(self):
         """Les animations météo sont dans le BLOC PROFIL de course (légende +
         zone sur toute la longueur de la tuile), et PLUS sur le parcours."""
