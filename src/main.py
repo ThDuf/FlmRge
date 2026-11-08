@@ -31,7 +31,7 @@ PANEL_HEADER = 30  # hauteur de l'en-tête des panneaux (nom + progression)
 PANEL_H = 170      # hauteur d'un panneau de joueur (colonne de gauche)
 BUTTONS_H = 100    # hauteur réservée en bas de colonne pour les 2 boutons
 BAR_H = 150        # hauteur de la barre du bas (cartes + log + boutons)
-PROFILE_H = 120    # hauteur du bandeau profil de course, SOUS le parcours
+PROFILE_H = 150    # hauteur du bandeau profil de course, SOUS le parcours
 CARD_H_MAIN = 36   # hauteur fixe des cartes à sélectionner (le bloc s'adapte, pas l'inverse)
 GREEN_CARD_FILL = (185, 230, 176)    # carte jouée (sélectionnée)
 GREEN_CARD_BORDER = (46, 125, 50)
@@ -2662,8 +2662,10 @@ class FlammeRougeGame:
                 ln = 3 + 5 * depth
                 col = _mix(c, WHITE, 0.55 * (1 - depth))
                 pygame.draw.line(self.screen, col, (x, y + o), (x, y + o + ln), 2)
-        else:  # soleil : voile jaune sur toute la tuile
-            pygame.draw.line(self.screen, (250, 210, 60), (x0, y), (x1, y), 6)
+        else:  # soleil (pas de météo spécifique) : voile jaune + petit soleil animé au milieu
+            pygame.draw.line(self.screen, (250, 210, 60), (x0, y + 8), (x1, y + 8), 3)
+            self._draw_weather_icon(WeatherType.NONE, (x0 + x1) / 2, y, 1.0, 0.0, 0.0, -1.0,
+                                    now * 5)  # now*5 car l'icône re-ralentit en interne
 
     def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
         """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
@@ -2845,6 +2847,21 @@ class FlammeRougeGame:
                             r = max(1, min(int((cell - 2) * 0.45), int(half * 0.45)))
                             pygame.draw.circle(self.screen, color,
                                                (int(cx), int(cy)), r, 2)
+
+        # Extension Météo : icône animée sur le parcours, UNE par tuile droite à
+        # jeton (hors départ/arrivée), au milieu de la tuile ; NONE -> petit soleil
+        if getattr(self.game, "meteo", False):
+            now = pygame.time.get_ticks()
+            for tile in track.tiles:
+                if tile.turn is not None or not tile.cells:
+                    continue
+                if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
+                    continue
+                mid = tile.x + tile.length // 2
+                px, py, tx, ty = self._path_at(geo, (mid + 0.5) * cell)
+                nx, ny = -ty, tx
+                mx, my = px - nx * (half + 14), py - ny * (half + 14)
+                self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
@@ -3132,7 +3149,8 @@ class FlammeRougeGame:
         if self.game is None or not getattr(self.game, "meteo", False):
             return []
         return [(t.x, t.length, t.cells[0].weather) for t in self.game.track.tiles
-                if t.cells and t.cells[0].weather != WeatherType.NONE]
+                if t.turn is None and t.cells
+                and not any(c.run in (CellRunType.START, CellRunType.END) for c in t.cells)]
 
     def _draw_race_profile(self):
         """Profil d'altitude de la course en cours, en haut à droite du cadre du

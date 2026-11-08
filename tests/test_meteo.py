@@ -407,7 +407,7 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         ui._draw_track(); ui._draw_runners(); ui._draw_ui()
         self.assertTrue(calls, "badge météo absent du profil de course")
 
-    def test_weather_zones_in_profile_block_not_on_track(self):
+    def test_weather_zones_in_profile_block_and_on_track(self):
         """Les animations météo sont dans le BLOC PROFIL de course (légende +
         zone sur toute la longueur de la tuile), et PLUS sur le parcours."""
         import main, pygame
@@ -437,7 +437,7 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
                 if p in colors:
                     in_prof.add(p)
         self.assertEqual(in_prof, colors, f"zones météo manquantes dans le bloc profil: {colors - in_prof}")
-        # plus rien sur le parcours (cadre du haut)
+        # les icônes sont AUSSI sur le parcours (une par tuile météo)
         frame = ui._frame_rect()
         in_track = set()
         for y in range(frame.y, frame.bottom, 2):
@@ -445,7 +445,7 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
                 p = ui.screen.get_at((x, y))[:3]
                 if p in colors:
                     in_track.add(p)
-        self.assertEqual(in_track, set(), f"icônes météo encore présentes sur le parcours: {in_track}")
+        self.assertTrue(in_track, "icônes météo absentes du parcours")
         # la zone pluie couvre toute la longueur de sa tuile sur le profil
         rain_tile = straights[3]
         n = game.track.length
@@ -484,6 +484,37 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         rain = sum(1 for x in range(r.x, r.right) for y in range(r.y, r.bottom)
                    if ui.screen.get_at((x, y))[:3] in ((90, 130, 210), (60, 100, 190)))
         self.assertGreater(rain, 0, "icône pluie absente du profil à l'emplacement de la tuile")
+
+
+    def test_sun_when_no_specific_weather(self):
+        """Si aucune tuile n'a de météo spécifique (jetons vierges), un petit
+        soleil apparaît : légende 'soleil' dans le bloc profil + icône sur le
+        parcours."""
+        import main, pygame
+        from game.track import CellRunType
+        ui = main.FlammeRougeGame()
+        ui.ext_meteo = True
+        ui._select_stage("Avenue Corso Paseo")
+        ui.game.auto_place_riders()
+        for t in ui.game.track.tiles:  # tout en NONE (jetons vierges)
+            for c in t.cells:
+                c.weather = WeatherType.NONE
+        tiles_w = ui._game_weather_tiles()
+        self.assertTrue(tiles_w)  # toutes les tuiles droites à jeton, en NONE
+        self.assertTrue(all(w == WeatherType.NONE for _x, _l, w in tiles_w))
+        ui.width, ui.height = 1200, 920
+        ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
+        ui.screen.fill((200, 200, 210))
+        ui._draw_header(); ui._draw_phase_band(); ui._draw_track(); ui._draw_runners(); ui._draw_ui()
+        sun = (250, 210, 60)
+        prof = ui._race_profile_rect()
+        sun_prof = any(ui.screen.get_at((x, y))[:3] == sun
+                       for y in range(prof.y, prof.bottom) for x in range(prof.x, prof.right))
+        self.assertTrue(sun_prof, "pas de soleil dans le bloc profil")
+        frame = ui._frame_rect()
+        sun_track = any(ui.screen.get_at((x, y))[:3] == sun
+                        for y in range(frame.y, frame.bottom) for x in range(frame.x, frame.right))
+        self.assertTrue(sun_track, "pas de soleil sur le parcours")
 
 
 
