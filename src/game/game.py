@@ -83,10 +83,12 @@ MOUNTAIN_DEFS = {
 #   v = pavés droit (1 file, pas d'aspiration), w = zone d'approvisionnement (3 files, min 4),
 #   x/y = pavés en virage (1 file)
 PELOTON_TILE_DEFS = {
-    'v': (None, 1, "cccccc"),
-    'w': (None, 3, "zzzzzz"),
-    'x': ((math.pi / 4, 1), 1, "cc"),
-    'y': ((math.pi / 2, -1), 1, "cc"),
+    'v': (None, 1, "cccccc"),               # pavés droit, 1 file
+    'w': (None, 3, "zzzzzz"),               # zone d'approvisionnement, 3 files
+    'x': ((math.pi / 4, 1), 1, "cc"),       # pavés virage 45°, 1 file
+    'y': ((math.pi / 2, -1), 1, "cc"),      # pavés virage serré 90°, 1 file
+    'z': (None, 3, "sssssf"),               # départ LARGE 3 files (5-6 joueurs)
+    'Z': (None, 3, "feeeee"),               # arrivée large 3 files (5-6 joueurs, tuile Bonus)
 }
 
 
@@ -96,7 +98,7 @@ def tile_def_for_letter(ch: str):
         return PELOTON_TILE_DEFS[ch]
     if ch.isupper():
         return MOUNTAIN_DEFS[ch]
-    return TILE_DEFS[ch]
+    return TILE_DEFS[ch]  # noqa
 
 
 def build_tile(ch: str) -> 'Tile':
@@ -206,7 +208,8 @@ class Game:
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
                  auto_place: bool = True, custom_code: str = None,
                  meteo: bool = False, peloton: bool = False, dummy_teams=None):
-        player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
+        player_count = max(2, min(6 if peloton else 4, player_count))  # 2-4 joueurs (6 avec Peloton)
+        self.player_count = player_count
         self.stage = stage
         self.custom_code = custom_code  # code de tuiles perso (éditeur), prioritaire
         self.meteo = meteo              # extension Météo activée ?
@@ -258,7 +261,8 @@ class Game:
 
     def _initialize_players(self, count: int) -> None:
         """Initialise les joueurs et leurs coureurs."""
-        colors = ["red", "blue", "green", "yellow"][:count]
+        colors = (["red", "blue", "green", "yellow"]
+                  + (["pink", "white"] if self.peloton else []))[:count]
         for i, color in enumerate(colors):
             sprinter = Runner(
                 id=f"sprinter_{i}",
@@ -332,7 +336,9 @@ class Game:
                     default=None)
             if x is None:
                 raise RuntimeError("Zone de départ pleine")
-            lane = random.choice([l for l in (0, 1) if self.can_place_at(x, l)])
+            cell0 = self.track.get_cell(x, 0)
+            lanes = range(len(cell0.runners)) if cell0 else (0, 1)
+            lane = random.choice([l for l in lanes if self.can_place_at(x, l)])
             self.place_runner_at(x, lane)
 
     def _generate_energy_deck(self, runner_type: RunnerType) -> List[Card]:
@@ -356,10 +362,19 @@ class Game:
 
     def _build_track(self, stage: str) -> Track:
         """Construit la piste : code perso (éditeur) si fourni, sinon l'étape
-        nommée (officielle ou 'test')."""
+        nommée (officielle ou 'test'). En 5-6 joueurs avec Peloton, les tuiles
+        de départ/arrivée passent en version LARGE (3 files, lettres z/Z)."""
         if self.custom_code:
-            return build_track_from_code(self.custom_code)
-        return build_stage_track(stage)
+            code = self.custom_code
+        elif stage in OFFICIAL_STAGES:
+            code = OFFICIAL_STAGES[stage]
+        elif stage == "test":
+            code = "a" + "f" * 4 + "u"
+        else:
+            code = OFFICIAL_STAGES["Avenue Corso Paseo"]
+        if self.peloton and self.player_count >= 5:
+            code = code.replace('a', 'z', 1).replace('u', 'Z', 1)  # départ/arrivée larges 3 files
+        return build_track_from_code(code)
 
     def _place_runner_at_start(self, runner: Runner) -> None:
         """Place un coureur au départ dans la première file libre.
@@ -376,7 +391,8 @@ class Game:
         """
         limit = self.track.start_line_x()  # la ligne est après les cases START
         for x in range(limit - 1, -1, -1):
-            for lane in (0, 1):
+            cell0 = self.track.get_cell(x, 0)
+            for lane in range(len(cell0.runners) if cell0 else 2):
                 cell = self.track.get_cell(x, lane)
                 if cell and cell.is_empty(lane):
                     cell.set_runner(runner, lane)

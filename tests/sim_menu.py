@@ -10,16 +10,12 @@ ui = main.FlammeRougeGame()
 ui.width, ui.height = 1200, 800
 ui.screen = pygame.display.set_mode((1200, 800))
 names = [n for n, _d, _c in available_stages()]
-ui._draw_menu()  # 1er écran : nombre de joueurs
+ui._draw_menu()  # écran de sélection (nb joueurs + extensions + étape)
 pygame.display.flip()
-ui.menu_step = 'stage'
 for i, name in enumerate(names):
     ui.menu_index = i
     ui._draw_menu()
     pygame.display.flip()
-ui.menu_step = 'players'
-ui._pending_stage = names[-1]
-ui._draw_menu()
 pygame.display.flip()
 # écran de la phase de placement (via le menu : placement manuel)
 ui._select_stage(names[0])

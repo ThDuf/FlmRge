@@ -170,7 +170,7 @@ class FlammeRougeGame:
         self.player_count = 2  # nombre de joueurs choisi au menu (2-4)
         self.game = Game(stage=stage, player_count=self.player_count) if stage else None
         self.menu_index = 1          # à l'arrivée, sélection sur le 1er parcours (index 0 = en-tête)
-        self.menu_step = "players"  # 1er écran : nb de joueurs, puis "stage" / "editor"
+        self.menu_step = "stage"    # écran de sélection (nb de joueurs + extensions + étape)
         self._pending_stage = None
         self.menu_scroll = 0        # scroll de la liste du menu
         self.menu_search = ""       # filtre de recherche (parcours perso)
@@ -963,6 +963,45 @@ class FlammeRougeGame:
         frame = self._menu_frame_rect()
         return pygame.Rect(frame.x + 20, MENU_TOP + 8, frame.w - 28, 28)
 
+    def _players_block_rect(self):
+        """Bloc du choix du nombre de joueurs (2-6) : à GAUCHE du panneau
+        Extensions en grand écran, dans le cadre de gauche au-dessus des
+        extensions sinon."""
+        if self.width >= 1100:
+            er = self._extensions_rect()
+            return pygame.Rect(er.x - 10 - 190, er.y, 190, er.h)
+        frame = self._menu_frame_rect()
+        srect = self._menu_search_rect()
+        return pygame.Rect(frame.x + 10, srect.bottom + 6, frame.w - 20, 64)
+
+    def _player_count_option_rects(self):
+        """Petits boutons 2..6 dans le bloc joueurs."""
+        br = self._players_block_rect()
+        bw = (br.w - 20 - 5 * 4) // 6
+        return {n: pygame.Rect(br.x + 10 + (n - 2) * (bw + 4), br.y + 30, bw, br.h - 38)
+                for n in range(2, 7)}
+
+    def _draw_players_block(self, mouse):
+        """Bloc « JOUEURS » avec les options 2-6 ; 5/6 -> Peloton impératif."""
+        br = self._players_block_rect()
+        self._draw_card(br, PANEL_ALT, radius=10, shadow=False)
+        h = self.small_font.render("JOUEURS", True, TEXT_DIM)
+        self.screen.blit(h, (br.x + 10, br.y + 5))
+        if self.player_count >= 5:
+            note = self.small_font.render("Peloton requis", True, ACCENT)
+            self.screen.blit(note, (br.right - 10 - note.get_width(), br.y + 6))
+        for n, rect in self._player_count_option_rects().items():
+            selected = (n == self.player_count)
+            hovered = rect.collidepoint(mouse)
+            if selected:
+                pygame.draw.rect(self.screen, ACCENT, rect, border_radius=6)
+            else:
+                pygame.draw.rect(self.screen, PANEL if not hovered else ROW_SEL, rect,
+                                 border_radius=6)
+                pygame.draw.rect(self.screen, BORDER, rect, width=1, border_radius=6)
+            lbl = self.label_font.render(str(n), True, WHITE if selected else INK)
+            self.screen.blit(lbl, lbl.get_rect(center=rect.center))
+
     def _extensions_rect(self):
         """Section « Extensions » (tickboxes Météo / Peloton) : en grand écran
         (>= 1100 px), dans la bande du bas à GAUCHE du gros bouton JOUER ;
@@ -971,8 +1010,8 @@ class FlammeRougeGame:
             nxt = self._next_button_rect()
             return pygame.Rect(nxt.x - 10 - 232, nxt.y + (nxt.h - 64) // 2, 232, 64)
         frame = self._menu_frame_rect()
-        srect = self._menu_search_rect()
-        return pygame.Rect(frame.x + 10, srect.bottom + 6, frame.w - 20, 64)
+        pr = self._players_block_rect()
+        return pygame.Rect(frame.x + 10, pr.bottom + 6, frame.w - 20, 64)
 
     def _draw_extensions(self, mouse):
         """Section Extensions : deux BLOCS côte à côte (Météo / Peloton), tout le
@@ -2059,9 +2098,6 @@ class FlammeRougeGame:
     def _draw_menu(self):
         """Menu de sélection (affiché quand self.game is None)."""
         mouse = pygame.mouse.get_pos()
-        if self.menu_step == "players":
-            self._draw_players_menu(mouse)
-            return
         if self.menu_step == "editor":
             self._draw_editor(mouse)
             return
@@ -2090,7 +2126,8 @@ class FlammeRougeGame:
         self.screen.blit(surf, (srect.x + 10, srect.centery - surf.get_height() // 2))
 
         if self.width < 1100:
-            self._draw_extensions(mouse)  # petit écran : dans le cadre, sous la recherche
+            self._draw_players_block(mouse)  # petit écran : dans le cadre, sous la recherche
+            self._draw_extensions(mouse)
 
         entries = self._menu_entries()
         area = getattr(self, "_menu_scroll_area", self._menu_list_area())
@@ -2160,16 +2197,13 @@ class FlammeRougeGame:
         # Section « Extensions » (tickboxes Météo / Peloton) à GAUCHE du bouton
         # JOUER, dans la bande du bas (grand écran)
         if self.width >= 1100:
+            self._draw_players_block(mouse)  # à gauche du panneau Extensions
             self._draw_extensions(mouse)
         # Gros bouton en bas à droite : JOUER (démarre la partie directement,
         # le nombre de joueurs a déjà été choisi au 1er écran)
         self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
                              mouse, pressed=(self._pressed_button == "next"),
                              font=self.phase_font)
-        # Bouton « ← Retour » élevé en haut à droite (dans le bandeau titre) :
-        # retour à l'écran du nombre de joueurs (1er écran du process)
-        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
-                             mouse, pressed=(self._pressed_button == "back"))
 
     # ------------------------------------------------------------------
     # Écran d'assignation des équipes (extension Peloton)
@@ -2322,76 +2356,6 @@ class FlammeRougeGame:
         pygame.draw.circle(self.screen, tuple(max(0, c - 45) for c in color),
                            (int(cx), int(cy)), max(2, r // 2), 1)         # bord du trou
 
-    def _players_frame_rect(self):
-        """Cadre de gauche de l'écran joueurs : plus large que celui de la
-        sélection d'étape (~42 % de la fenêtre) pour y voir clair."""
-        if self.width >= 1100:
-            w = max(380, int(self.width * 0.42))
-            return pygame.Rect(12, MENU_TOP, w, self.height - 12 - MENU_TOP)
-        return self._menu_frame_rect()
-
-    def _draw_players_menu(self, mouse):
-        """1er écran : choix du nombre de joueurs (2-4), façon « lobby » de jeu
-        de course en ligne : grosses cartes d'options à gauche (dans le cadre),
-        panneau hero à droite avec le gros chiffre et le peloton de jetons."""
-        frame = self._players_frame_rect()
-        self._draw_card(frame, PANEL, radius=CARD_R)
-        title = self.display_font.render("Combien de joueurs ?", True, INK)
-        self.screen.blit(title, (frame.x + 20, frame.y + 16))
-        sub = self.label_font.render("Chaque joueur pilote 2 coureurs (rouleur + sprinteur)",
-                                     True, TEXT_DIM)
-        self.screen.blit(sub, (frame.x + 22, frame.y + 16 + title.get_height() + 6))
-        if self._pending_stage:
-            stage = self.label_font.render(self._pending_stage, True, TEXT_DIM)
-            self.screen.blit(stage, (frame.x + 22, frame.y + 16 + title.get_height() + 30))
-        hint = self.small_font.render("Clic ou flèches G/D + ENTRÉE", True, TEXT_DIM)
-        self.screen.blit(hint, (frame.x + 22, frame.y + 16 + title.get_height() + 52))
-        for count, rect in self._player_count_rects():
-            selected = (count == self.player_count)
-            hovered = rect.collidepoint(mouse)
-            # grosse carte d'option : lift + ombre au survol, trait accent si
-            # sélectionnée, gros chiffre à gauche
-            fill = ROW_SEL if hovered else PANEL
-            if hovered:
-                sh = pygame.Surface((rect.w + 8, rect.h + 10), pygame.SRCALPHA)
-                pygame.draw.rect(sh, (*SHADOW_RGB, 40), (4, 6, rect.w, rect.h),
-                                 border_radius=CARD_R)
-                self.screen.blit(sh, (rect.x - 4, rect.y - 2))
-            pygame.draw.rect(self.screen, fill, rect, border_radius=CARD_R)
-            if selected:
-                pygame.draw.rect(self.screen, ACCENT, rect, width=2, border_radius=CARD_R)
-                pygame.draw.rect(self.screen, ACCENT,
-                                 (rect.x, rect.y + 2, 4, rect.h - 4))
-            n_surf = self.display_font.render(str(count), True, ACCENT if selected else INK)
-            self.screen.blit(n_surf, (rect.x + 20,
-                                      rect.centery - n_surf.get_height() // 2))
-            lbl = self.label_font.render("joueurs", True, TEXT_DIM)
-            self.screen.blit(lbl, (rect.x + 20 + n_surf.get_width() + 10,
-                                   rect.centery - lbl.get_height() // 2))
-            duo = self.small_font.render(f"soit {count * 2} coureurs", True, TEXT_DIM)
-            self.screen.blit(duo, (rect.right - 16 - duo.get_width(),
-                                   rect.centery - duo.get_height() // 2))
-        # Panneau hero à droite : si une étape est en attente, sa preview ;
-        # sinon un grand panneau dégradé avec le gros chiffre et le peloton
-        if self.width >= 1100:
-            if self._pending_stage:
-                self._draw_menu_preview(self._pending_stage, self._preview_rect())
-            else:
-                # hero = tout l'espace à droite du cadre élargi
-                hero = pygame.Rect(frame.right + 16, MENU_TOP,
-                                   self.width - 16 - (frame.right + 16),
-                                   self.height - 12 - MENU_TOP)
-                self._draw_players_hero(hero)
-        # Bouton « ← Retour » en haut à droite : comme ÉCHAP (retour au choix d'étape)
-        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
-                             mouse, pressed=(self._pressed_button == "back"))
-        # Gros bouton en bas à droite : JOUER si une étape est choisie, sinon
-        # SUIVANT -> écran de choix de l'étape (1er écran du process)
-        label = "JOUER" if self._pending_stage else "SUIVANT →"
-        self._draw_ui_button(self._next_button_rect(), label, (200, 45, 45),
-                             mouse, pressed=(self._pressed_button == "next"),
-                             font=self.phase_font)
-
     def _draw_cyclist(self, cx, cy, s, color):
         """Silhouette de cycliste (vélo + coureur) en `color`, échelle `s`."""
         w = max(2, int(2 * s))
@@ -2414,105 +2378,6 @@ class FlammeRougeGame:
         pygame.draw.line(self.screen, color, hip, (cx + 2 * s, cy - 4 * s), w)            # cuisse
         pygame.draw.line(self.screen, color, (cx + 2 * s, cy - 4 * s), (cx + 8 * s, cy), w)  # mollet
         pygame.draw.circle(self.screen, color, (int(head[0]), int(head[1])), int(4 * s))  # tête
-
-    def _load_hero_image(self):
-        """Image du hero si l'utilisateur a déposé assets/peloton.jpg/.png
-        (sinon None -> scène vectorielle dessinée en code)."""
-        import os
-        base = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            '..', 'assets')
-        for name in ('peloton.jpg', 'peloton.png', 'peloton.jpeg', 'hero.jpg', 'hero.png'):
-            p = os.path.join(base, name)
-            if os.path.exists(p):
-                try:
-                    return pygame.image.load(p)
-                except Exception:
-                    return None
-        return None
-
-    def _draw_players_hero(self, rect):
-        """Panneau hero de l'écran joueurs (à droite) : scène vectorielle d'un
-        peloton (ciel, soleil, collines, route, cyclistes), gros chiffre du
-        nombre de joueurs, et jetons R+S par couleur en dessous."""
-        self._draw_card(rect, PANEL, radius=CARD_R)
-        # scène en haut du panneau : photo assets/peloton.jpg si déposée,
-        # sinon la scène vectorielle dessinée en code
-        top_h = int(rect.h * 0.62)  # la scène (peloton) prend plus de place
-        scene = pygame.Rect(rect.x + 1, rect.y + 1, rect.w - 2, top_h)
-        img = self._load_hero_image()
-        if img is not None:
-            # l'image couvre la zone scène (cover)
-            scale = max(scene.w / img.get_width(), scene.h / img.get_height())
-            img = pygame.transform.smoothscale(
-                img, (max(1, int(img.get_width() * scale)),
-                      max(1, int(img.get_height() * scale))))
-            self.screen.blit(img, (scene.x + (scene.w - img.get_width()) // 2,
-                                   scene.y + (scene.h - img.get_height()) // 2))
-            # voile blanc léger pour garder le texte lisible
-            veil = pygame.Surface((scene.w, scene.h), pygame.SRCALPHA)
-            veil.fill((255, 255, 255, 90))
-            self.screen.blit(veil, (scene.x, scene.y))
-        else:
-            # scène vectorielle : ciel, soleil, collines, route, peloton
-            self._grad_fill(scene, (214, 233, 248), (243, 249, 253), CARD_R)  # ciel
-            pygame.draw.circle(self.screen, (255, 236, 170),
-                               (scene.right - 60, scene.y + 44), 22)
-            pygame.draw.circle(self.screen, (255, 244, 205),
-                               (scene.right - 60, scene.y + 44), 30)
-            pygame.draw.polygon(self.screen, (214, 232, 219),
-                                [(scene.x, scene.bottom - 40),
-                                 (scene.x + scene.w // 3, scene.bottom - 78),
-                                 (scene.x + 2 * scene.w // 3, scene.bottom - 46),
-                                 (scene.right, scene.bottom - 70),
-                                 (scene.right, scene.bottom), (scene.x, scene.bottom)])
-            road = pygame.Rect(scene.x, scene.bottom - 46, scene.w, 46)
-            pygame.draw.rect(self.screen, (120, 126, 138), road)
-            for x in range(road.x + 8, road.right - 8, 26):
-                pygame.draw.line(self.screen, (240, 242, 246), (x, road.centery),
-                                 (x + 12, road.centery), 2)
-            # PELOTON : silhouettes noires + les 2 coureurs de chaque équipe
-            # (colorés, R/S) AU MILIEU du peloton. Taille selon le nb d'équipes :
-            # 2 équipes -> 4 coureurs d'équipe, 3 -> 6, 4 -> 8, plus des noirs.
-            colors = list(PLAYER_COLORS.values())
-            n_team = self.player_count * 2
-            n_total = max(14, n_team + 8)  # peloton nombreux de silhouettes noires
-            n_rows = 3                      # 3 rangées en quinconce
-            cols = math.ceil(n_total / n_rows)
-            team_start = (n_total - n_team) // 2  # coureurs d'équipe au centre
-            for i in range(n_total):
-                row = i // cols            # 0 = arrière (haut) ... 2 = avant
-                col = i % cols + (row % 2) * 0.5  # quinconce
-                s = 0.42 + 0.06 * ((i * 7) % 3)   # plus petits -> plus nombreux
-                cx = scene.x + 22 + col * (scene.w - 44) / max(1, cols - 0.5)
-                cy = road.bottom - 6 - row * (13 * s)
-                if team_start <= i < team_start + n_team:
-                    # coureur d'équipe : silhouette colorée + tête cerclée de
-                    # blanc (sans lettre)
-                    tcol = colors[((i - team_start) // 2) % len(colors)]
-                    self._draw_cyclist(cx, cy, s, tcol)
-                    hx, hy = cx + 13 * s, cy - 26 * s  # tête
-                    pygame.draw.circle(self.screen, WHITE, (int(hx), int(hy)), int(4 * s) + 1)
-                    pygame.draw.circle(self.screen, tcol, (int(hx), int(hy)), int(4 * s))
-                else:
-                    self._draw_cyclist(cx, cy, s, _mix(INK, WHITE, 0.06 * (i % 3)))
-        # gros chiffre + libellé par-dessus la scène
-        big = self.display_font.render(str(self.player_count), True, INK)
-        self.screen.blit(big, (rect.x + 24, rect.y + 18))
-        lbl = self.phase_font.render("joueurs", True, ACCENT)
-        self.screen.blit(lbl, (rect.x + 24 + big.get_width() + 12,
-                               rect.y + 18 + big.get_height() - lbl.get_height() - 6))
-        cap = self.small_font.render("2 coureurs par joueur, dans le peloton", True, TEXT_DIM)
-        self.screen.blit(cap, (rect.x + 26, rect.y + 18 + big.get_height() + 8))
-
-    def _player_count_rects(self):
-        """Boutons 2/3/4 joueurs, empilés DANS le cadre de gauche du menu."""
-        frame = self._players_frame_rect()
-        rects = []
-        y = frame.y + 104
-        for count in (2, 3, 4):
-            rects.append((count, pygame.Rect(frame.x + 20, y, frame.w - 40, 56)))
-            y += 68
-        return rects
 
     def _select_stage(self, name: str):
         """Démarre une partie sur l'étape choisie (depuis le menu ou R).
@@ -2548,9 +2413,6 @@ class FlammeRougeGame:
 
     def _menu_event(self, event):
         """Événements du menu (étape 1 : choix de l'étape, étape 2 : nb joueurs)."""
-        if self.menu_step == "players":
-            self._players_menu_event(event)
-            return
         if self.menu_step == "editor":
             self._editor_event(event)
             return
@@ -2609,17 +2471,19 @@ class FlammeRougeGame:
             if kind != "header" and rect.collidepoint(mouse):
                 hovered = i
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for n, rect in self._player_count_option_rects().items():
+                if rect.collidepoint(event.pos):
+                    self.player_count = n
+                    if n >= 5:
+                        self.ext_peloton = True  # 5/6 joueurs -> Peloton IMPÉRATIF
+                    return
             for key, tr in self._ext_tick_rects().items():
                 if tr.collidepoint(event.pos):
                     if key == "meteo":
                         self.ext_meteo = not self.ext_meteo
-                    else:
-                        self.ext_peloton = not self.ext_peloton
+                    elif not (self.player_count >= 5 and self.ext_peloton):
+                        self.ext_peloton = not self.ext_peloton  # à 5/6 joueurs, Peloton reste actif
                     return
-            if self._back_button_rect().collidepoint(event.pos):
-                # « ← Retour » en haut : retour à l'écran du nombre de joueurs
-                self.menu_step = "players"
-                return
             if self._next_button_rect().collidepoint(event.pos):
                 # gros bouton rouge = passer à l'écran suivant
                 # (même animation d'enfoncement que les autres boutons)
@@ -2667,50 +2531,6 @@ class FlammeRougeGame:
                 self.menu_step = "teams"  # Peloton : d'abord qui contrôle quelle équipe
             else:
                 self._select_stage(name)
-
-    def _players_menu_event(self, event):
-        """Étape 2 du menu : choix du nombre de joueurs (2-4)."""
-        counts = [2, 3, 4]
-        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self._pressed_button = None  # relâche : les boutons reviennent à la normale
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self._back_button_rect().collidepoint(event.pos):
-                # « ← Retour » = ÉCHAP : retour au choix de l'étape (si on en vient)
-                if self._pending_stage:
-                    self.menu_step = "stage"
-                    self.menu_index = 1
-                return
-            if self._next_button_rect().collidepoint(event.pos):
-                self._pressed_button = "next"  # animation d'enfoncement au clic
-                if self._pending_stage:
-                    if self.ext_peloton:
-                        self.menu_step = "teams"
-                    else:
-                        self._select_stage(self._pending_stage)  # bouton JOUER : démarre
-                else:
-                    self.menu_step = "stage"  # 1er écran : SUIVANT -> choix de l'étape
-                    self.menu_index = 1
-                self._pressed_button = None  # revient à l'état initial après le clic
-                return
-            for count, rect in self._player_count_rects():
-                if rect.collidepoint(event.pos):
-                    self.player_count = count  # le clic ne fait QUE sélectionner
-                    return
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_LEFT:
-                self.player_count = counts[max(0, counts.index(self.player_count) - 1)]
-            elif event.key == pygame.K_RIGHT:
-                self.player_count = counts[min(len(counts) - 1, counts.index(self.player_count) + 1)]
-            elif event.key == pygame.K_RETURN:
-                if self._pending_stage:
-                    self._select_stage(self._pending_stage)
-                else:
-                    self.menu_step = "stage"
-                    self.menu_index = 1
-            elif event.key == pygame.K_ESCAPE:
-                if self._pending_stage:
-                    self.menu_step = "stage"
-                    self.menu_index = 1
 
     def _placement_click(self, pos):
         """Phase de placement : clic sur une case derrière la ligne DÉPART."""
@@ -3044,7 +2864,10 @@ class FlammeRougeGame:
                 for x in range(limit):
                     px, py, tx, ty = self._cell_anchor(x)
                     nx, ny = -ty, tx
-                    for lane, off in ((0, half * 0.5), (1, -half * 0.5)):
+                    cell0 = track.get_cell(x, 0)
+                    n_lanes = len(cell0.runners) if cell0 else 2
+                    for lane in range(n_lanes):
+                        off = 0 if n_lanes == 1 else half * (1 - 2 * lane / (n_lanes - 1))
                         if self.game.can_place_at(x, lane):
                             cx, cy = px + nx * off, py + ny * off
                             # rond de sélection toujours INFÉRIEUR à la case :
