@@ -215,7 +215,7 @@ Menu de sélection au lancement, en 2 étapes : d'abord le **nombre de joueurs (
 - [x] **Extension Météo (Meteo)** : règles officielles vérifiées en ligne dans `docs/extension-meteo.md` — 13 jetons (9 vierges + 4 événements) posés face visible sur les tuiles droites hors départ/arrivée, pioche 5/3 cartes selon le vent, pas d'aspiration en vent de travers, chute en pluie si bloqué en zone humide (case tout-accident impassable, effet domino) puis relevé à −2 après modificateurs au tour suivant (`Game(meteo=True)`, case « Météo » au menu à gauche de JOUER, icônes sur la piste + croix rouge du coureur couché + log, `tests/test_meteo.py`)
 - [ ] **Noms des groupes sur le profil de course** : éviter les superpositions de libellés quand les groupes sont proches (meilleure disposition verticale/horizontalale des noms)
 - [ ] **Animations météo** : améliorations à affiner (vent latéral effet de profondeur, pluie, soleil)
-- [ ] **Extension Peloton** : pavés, sections à une/trois voies, coureurs échappés, tuiles d'approvisionnement
+- [ ] **Extension Peloton** : règles officielles recherchées dans  — pavés (1-2 files, pas d'aspiration), zones d'approvisionnement (3 files, min 4), variante échappée (enchères 2 manches, +2 Fatigue), équipes factices Peloton/Muscle (IA), jusqu'à 6 joueurs (voire 12)
 - [ ] **Système de sauvegarde/reprise**
 
 ---
