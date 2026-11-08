@@ -40,8 +40,6 @@ LIGHT_TURN_FILL = (255, 250, 205)    # virage léger
 SHARP_TURN_FILL = (255, 224, 178)   # virage serré
 UPHILL_FILL = (255, 205, 205)       # montée (bords rouges dans le jeu officiel)
 DOWNHILL_FILL = (205, 225, 255)     # descente (bords bleus)
-UPHILL_ARROW = (180, 60, 60)        # triangle marqueur montée
-DOWNHILL_ARROW = (60, 90, 180)      # triangle marqueur descente
 
 # Couleurs
 WHITE = (255, 255, 255)
@@ -2665,17 +2663,14 @@ class FlammeRougeGame:
                     sx = x0 + p if sgn > 0 else x1 - p
                     pygame.draw.line(self.screen, c, (sx, ry), (sx + 8 * sgn, ry), 2)
         elif w == WeatherType.CROSSWIND:
-            # effet de profondeur : 4 plans, proche = trait long/foncé/rapide,
-            # loin = court/clair/lent (le vent traverse la route en perspective)
+            # vent de travers : FONDU — des rafales traversantes qui apparaissent
+            # puis disparaissent (opacité sinusoïdale déphasée), sur toute la tuile
             c = (60, 170, 80)
-            for k in range(4):
-                depth = k / 3.0
-                ln = 3 + 6 * depth
-                col = _mix(c, WHITE, 0.6 * (1 - depth))
-                spd = max(3, int(16 - 12 * depth))
-                for x in range(int(x0) + k * 3, int(x1), 9):
-                    o = (now // spd + x) % 14 - 4
-                    pygame.draw.line(self.screen, col, (x, y + o), (x, y + o + ln), 2)
+            for j in range(5):
+                a = max(0.08, 0.5 + 0.5 * math.sin(now / 700.0 + j * 1.3))
+                x = x0 + (j + 0.5) * span / 5
+                col = _mix(WHITE, c, a)  # fondu vers le fond
+                pygame.draw.line(self.screen, col, (x, y - 6), (x, y + 6), 2)
         else:  # soleil (pas de météo spécifique) : SEULEMENT le petit soleil animé au milieu
             self._draw_weather_icon(WeatherType.NONE, (x0 + x1) / 2, y, 1.0, 0.0, 0.0, -1.0,
                                     now * 3)  # now*3 car l'icône re-ralentit en interne
@@ -2718,18 +2713,15 @@ class FlammeRougeGame:
                 pygame.draw.line(self.screen, c,
                                  (bx + tx * sgn * o, by + ty * sgn * o),
                                  (bx + tx * sgn * (o + 5), by + ty * sgn * (o + 5)), 2)
-        else:  # CROSSWIND : effet de profondeur (traits traversants)
+        else:  # CROSSWIND : rafales qui traversent en FONDU (apparition/disparition)
             c = (60, 170, 80)
-            for k in range(4):
-                depth = k / 3.0  # 0 = loin, 1 = proche
-                o = (now // 8 + k * 5) % 16 - 8
-                lat = (k - 1.5) * 4
-                ln = 3 + 5 * depth  # plus long si proche
-                col = _mix(c, WHITE, 0.55 * (1 - depth))  # plus clair si loin
-                bx, by = cx + tx * lat, cy + ty * lat
+            for k in range(3):
+                a = max(0.08, 0.5 + 0.5 * math.sin(now / 550.0 + k * 2.1))
+                col = _mix(WHITE, c, a)
+                o = (now // 9 + k * 6) % 16 - 8
+                ax, ay = cx + nx * o, cy + ny * o
                 pygame.draw.line(self.screen, col,
-                                 (bx + nx * o, by + ny * o),
-                                 (bx + nx * (o + ln), by + ny * (o + ln)), 2)
+                                 (ax - nx * 4, ay - ny * 4), (ax + nx * 4, ay + ny * 4), 2)
     def _draw_track(self):
         """Dessine le circuit organique : un chemin continu sans saut.
 
@@ -2787,18 +2779,6 @@ class FlammeRougeGame:
                 left = [(x + ty * half, y - tx * half) for x, y, tx, ty in seg]
                 pygame.draw.polygon(self.screen, color, right + left[::-1])
 
-            # Marqueurs montée/descente : triangles à l'extérieur droit de la route
-            if cell_geo in (CellGeographyType.UPHILL, CellGeographyType.DOWNHILL):
-                px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
-                nx, ny = -ty, tx
-                mx = px + nx * (half + 12)
-                my = py + ny * (half + 12)
-                forward = 1 if cell_geo == CellGeographyType.UPHILL else -1
-                tri = [(mx + tx * 7 * forward, my + ty * 7 * forward),
-                       (mx + nx * 5, my + ny * 5),
-                       (mx - nx * 5, my - ny * 5)]
-                arrow_color = UPHILL_ARROW if cell_geo == CellGeographyType.UPHILL else DOWNHILL_ARROW
-                pygame.draw.polygon(self.screen, arrow_color, tri)
 
 
         # Ligne médiane entre les deux files (sur tout le tracé) + quadrillage des cases

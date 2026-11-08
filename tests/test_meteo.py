@@ -428,22 +428,26 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
         ui.screen.fill((200, 200, 210))
         ui._draw_header(); ui._draw_phase_band(); ui._draw_track(); ui._draw_runners(); ui._draw_ui()
-        colors = {(225, 185, 35), (60, 110, 220), (60, 170, 80), (90, 130, 210)}
+        exact = {(225, 185, 35), (60, 110, 220), (90, 130, 210)}  # vent arrière/face, pluie
         prof = ui._race_profile_rect()
         in_prof = set()
+        crosswind = False
         for y in range(prof.y, prof.bottom):
             for x in range(prof.x, prof.right):
                 p = ui.screen.get_at((x, y))[:3]
-                if p in colors:
+                if p in exact:
                     in_prof.add(p)
-        self.assertEqual(in_prof, colors, f"zones météo manquantes dans le bloc profil: {colors - in_prof}")
+                if p[1] > 120 and p[1] > p[0] and p[1] > p[2]:  # vert = vent de travers (fondu)
+                    crosswind = True
+        self.assertEqual(in_prof, exact, f"zones météo manquantes dans le bloc profil: {exact - in_prof}")
+        self.assertTrue(crosswind, "vent de travers (fondu) absent du bloc profil")
         # les icônes sont AUSSI sur le parcours (une par tuile météo)
         frame = ui._frame_rect()
         in_track = set()
         for y in range(frame.y, frame.bottom, 2):
             for x in range(frame.x, frame.right, 2):
                 p = ui.screen.get_at((x, y))[:3]
-                if p in colors:
+                if p in exact or (p[1] > 120 and p[1] > p[0] and p[1] > p[2]):
                     in_track.add(p)
         self.assertTrue(in_track, "icônes météo absentes du parcours")
         # la zone pluie couvre toute la longueur de sa tuile sur le profil
