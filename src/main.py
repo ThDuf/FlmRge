@@ -2851,11 +2851,16 @@ class FlammeRougeGame:
                     continue
                 if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
                     continue
-                mid = tile.x + tile.length // 2  # UNE icône animée par tuile, au milieu
-                px, py, tx, ty = self._path_at(geo, (mid + 0.5) * cell)
-                nx, ny = -ty, tx
-                mx, my = px - nx * (half + 14), py - ny * (half + 14)
-                self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
+                # animation CONTINUE sur TOUTE la tuile : une icône animée par case
+                # (soleil : un seul par tuile, au milieu)
+                cells = range(tile.x, tile.x + tile.length)
+                if tile.cells[0].weather == WeatherType.NONE:
+                    cells = [tile.x + tile.length // 2]
+                for x_cell in cells:
+                    px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
+                    nx, ny = -ty, tx
+                    mx, my = px - nx * (half + 14), py - ny * (half + 14)
+                    self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
