@@ -207,9 +207,13 @@ class Game:
 
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
                  auto_place: bool = True, custom_code: str = None,
-                 meteo: bool = False, peloton: bool = False, dummy_teams=None):
+                 meteo: bool = False, peloton: bool = False, team_modes=None):
+        if team_modes:
+            player_count = len(team_modes)  # un mode par équipe (human/peloton/muscle)
         player_count = max(2, min(6 if peloton else 4, player_count))  # 2-4 joueurs (6 avec Peloton)
         self.player_count = player_count
+        self.team_modes = list(team_modes) if team_modes else None
+        self.dummy_teams = []  # équipes factices réellement créées
         self.stage = stage
         self.custom_code = custom_code  # code de tuiles perso (éditeur), prioritaire
         self.meteo = meteo              # extension Météo activée ?
@@ -229,11 +233,8 @@ class Game:
         self.total_cards_to_play = 0
         self.cards_played_per_runner = {}
 
-        # Initialiser les joueurs humains, puis les équipes factices (Peloton/Muscle)
+        # Initialiser les équipes : humaines, ou factices (Peloton/Muscle) selon team_modes
         self._initialize_players(player_count)
-        self.dummy_teams = []
-        for spec in (dummy_teams or []):
-            self._add_dummy_team(spec)
 
         # Initialiser le compteur de cartes par coureur
         for player in self.players:
@@ -260,10 +261,16 @@ class Game:
                                     for r in (p.sprinter, p.roller)]
 
     def _initialize_players(self, count: int) -> None:
-        """Initialise les joueurs et leurs coureurs."""
+        """Initialise les équipes et leurs coureurs : 'human' -> joueur normal,
+        'peloton'/'muscle' -> équipe factice (IA)."""
         colors = (["red", "blue", "green", "yellow"]
                   + (["pink", "white"] if self.peloton else []))[:count]
+        modes = self.team_modes or ["human"] * count
         for i, color in enumerate(colors):
+            mode = modes[i] if i < len(modes) else "human"
+            if mode != "human":
+                self._add_dummy_team({"kind": mode, "color": color, "controller": None})
+                continue
             sprinter = Runner(
                 id=f"sprinter_{i}",
                 type=RunnerType.SPRINTER,

@@ -129,14 +129,15 @@ class TestSupplyZone(unittest.TestCase):
 
 
 class TestDummyTeams(unittest.TestCase):
-    """Équipes factices Peloton/Muscle (IA) + écran d'assignation des équipes."""
+    """Équipes factices (Peloton/Muscle IA) choisies sur l'écran d'options
+    (mode par équipe : Joueur / IA), plus d'écran « équipes en course » séparé."""
 
-    def _game(self, dummies, auto_place=False):
-        return Game(stage="test", player_count=2, peloton=True,
-                    dummy_teams=dummies, auto_place=auto_place)
+    def _game(self, modes, auto_place=False):
+        return Game(stage="test", player_count=len(modes), peloton=True,
+                    team_modes=modes, auto_place=auto_place)
 
     def test_peloton_dummy_creation(self):
-        g = self._game([{"kind": "peloton", "color": "pink", "controller": None}])
+        g = self._game(["human", "human", "peloton"])
         self.assertEqual(len(g.players), 3)
         dummy = g.players[2]
         self.assertEqual(dummy.ai, "peloton")
@@ -144,9 +145,11 @@ class TestDummyTeams(unittest.TestCase):
         self.assertTrue(g._is_ai(dummy))
         self.assertEqual(len(dummy.ai_deck), 17)  # deck rouleur 15 + 2 Attack!
         self.assertEqual(sum(1 for c in dummy.ai_deck if c.type == CardType.ATTACK), 2)
+        # les équipes humaines ne sont pas des IA
+        self.assertFalse(g._is_ai(g.players[0]))
 
     def test_muscle_dummy_creation(self):
-        g = self._game([{"kind": "muscle", "color": "white", "controller": None}])
+        g = self._game(["human", "human", "muscle"])
         dummy = g.players[2]
         self.assertEqual(dummy.ai, "muscle")
         self.assertTrue(g._is_ai(dummy))
@@ -154,7 +157,7 @@ class TestDummyTeams(unittest.TestCase):
                              if c.type == CardType.MUSCLE), 1)
 
     def test_ai_peloton_plays_one_card_for_both_riders(self):
-        g = self._game([{"kind": "peloton", "color": "pink", "controller": None}])
+        g = self._game(["human", "human", "peloton"])
         g.start_turn()
         dummy = g.players[2]
         for r in dummy.get_runners():
@@ -162,7 +165,7 @@ class TestDummyTeams(unittest.TestCase):
 
     def test_ai_peloton_attack_card_gives_2_and_9(self):
         from game.card import Card
-        g = self._game([{"kind": "peloton", "color": "pink", "controller": None}])
+        g = self._game(["human", "human", "peloton"])
         dummy = g.players[2]
         dummy.ai_deck = [Card(0, CardType.ATTACK, "R")] + dummy.ai_deck  # Attack! au dessus
         g.start_turn()
@@ -170,28 +173,22 @@ class TestDummyTeams(unittest.TestCase):
         self.assertEqual(values, [2, 9])  # avant 2, arrière 9
 
     def test_ai_muscle_plays_own_decks(self):
-        g = self._game([{"kind": "muscle", "color": "white", "controller": None}])
+        g = self._game(["human", "human", "muscle"])
         g.start_turn()
         dummy = g.players[2]
         self.assertIsNotNone(dummy.sprinter.played_card)
         self.assertIsNotNone(dummy.roller.played_card)
 
     def test_ai_never_gets_fatigue(self):
-        g = self._game([{"kind": "peloton", "color": "pink", "controller": None}],
-                       auto_place=True)
+        g = self._game(["human", "human", "peloton"], auto_place=True)
         g._assign_fatigue_cards()
         dummy = g.players[2]
         self.assertEqual(dummy.sprinter.discard_pile, [])
         self.assertEqual(dummy.roller.discard_pile, [])
 
-    def test_controller_human_means_not_ai(self):
-        g = self._game([{"kind": "muscle", "color": "white", "controller": 0}])
-        self.assertFalse(g._is_ai(g.players[2]))
-
-    def test_teams_screen_flow(self):
-        """UI : sélection du parcours -> écran OPTIONS (joueurs/extensions) ;
-        Peloton coché + JOUER -> écran d'assignation des équipes ; JOUER -> partie
-        avec l'équipe factice."""
+    def test_options_screen_team_mode_and_start(self):
+        """UI : écran d'options (après sélection du parcours) avec le choix
+        Joueur/IA par équipe ; JOUER démarre directement (plus d'écran teams)."""
         import main, pygame
         ui = main.FlammeRougeGame()
         entries = ui._menu_entries()
@@ -199,27 +196,30 @@ class TestDummyTeams(unittest.TestCase):
         ui.menu_index = entries.index(stage)
         ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
         self.assertEqual(ui.menu_step, "options")            # options après le parcours
-        self.assertEqual(ui._pending_stage, stage[0])
-        # coche le bloc Peloton sur l'écran d'options
+        self.assertFalse(hasattr(ui, "_draw_teams_menu"))     # plus d'écran équipes séparé
+        # 3 équipes, la 3e en IA Peloton
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        opts = ui._player_count_option_rects()
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
-                                          pos=ui._ext_tick_rects()["peloton"].center))
-        self.assertTrue(ui.ext_peloton)
-        # JOUER -> écran d'assignation des équipes
+                                          pos=opts[3].center))  # 3 joueurs
+        self.assertEqual(ui.player_count, 3)
+        rows = ui._team_mode_row_rects()
+        self.assertEqual(len(rows), 3)
+        # cycle le mode de l'équipe 3 : human -> peloton
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._team_mode_button_rect(rows[2][1]).center))
+        self.assertEqual(ui._team_mode(2), "peloton")
+        self.assertEqual(ui._team_modes_list(), ["human", "human", "peloton"])
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header(); ui._draw_menu()                     # rendu options, sans erreur
+        # JOUER démarre directement la partie avec l'équipe IA
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=ui._next_button_rect().center))
-        self.assertEqual(ui.menu_step, "teams")
-        ui.dummy_teams.append({"kind": "peloton", "color": "pink"})
-        ui.controllers[("d", 0)] = 1                    # contrôlée par le joueur 2
-        specs = ui._dummy_specs()
-        self.assertEqual(specs[0]["kind"], "peloton")
-        self.assertEqual(specs[0]["controller"], 1)
-        ui.width, ui.height = 1200, 920
-        ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
-        ui.screen.fill((255, 255, 255))
-        ui._draw_header(); ui._draw_menu()               # rendu écran teams, sans erreur
-        ui._teams_validate()                             # JOUER -> démarre
         self.assertIsNotNone(ui.game)
-        self.assertTrue(any(p.ai == "peloton" and p.controller == 1
-                            for p in ui.game.players))
+        self.assertEqual(ui.menu_step, "options")  # plus passé par un écran teams
+        self.assertTrue(any(p.ai == "peloton" for p in ui.game.players))
+        self.assertEqual(len(ui.game.players), 3)
+
 if __name__ == "__main__":
     unittest.main()

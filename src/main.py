@@ -175,8 +175,7 @@ class FlammeRougeGame:
         self.menu_scroll = 0        # scroll de la liste du menu
         self.menu_search = ""       # filtre de recherche (parcours perso)
         self.ext_meteo = False      # extension Météo activée ?
-        self.dummy_teams = []      # équipes factices choisies [{'kind','color'}]
-        self.controllers = {}      # clé équipe -> index du joueur humain (None = IA)
+        self.team_modes = {}       # slot équipe -> "human" | "peloton" | "muscle" (défaut human)
         self.ext_peloton = False    # extension Peloton activée ?
         self.menu_search_active = False
         self._menu_sb_drag = None   # offset du drag du thumb de la scrollbar
@@ -1002,12 +1001,34 @@ class FlammeRougeGame:
             lbl = self.label_font.render(str(n), True, WHITE if selected else INK)
             self.screen.blit(lbl, lbl.get_rect(center=rect.center))
 
+    def _team_mode_row_rects(self):
+        """Une ligne par équipe (1..player_count) sur l'écran d'options, entre le
+        bloc joueurs et les extensions : choix Joueur / IA (Peloton/Muscle)."""
+        pr = self._players_block_rect()
+        y = pr.bottom + 8
+        rows = []
+        for i in range(self.player_count):
+            rows.append((i, pygame.Rect(pr.x, y, pr.w, 34)))
+            y += 40
+        return rows
+
+    def _team_mode_button_rect(self, row):
+        return pygame.Rect(row.right - 128, row.y + 4, 118, 26)
+
+    def _team_mode(self, i):
+        return self.team_modes.get(i, "human")
+
+    def _team_modes_list(self):
+        """Liste des modes par équipe, passée au moteur."""
+        return [self._team_mode(i) for i in range(self.player_count)]
+
     def _extensions_rect(self):
-        """Panneau « Extensions » (blocs Météo / Peloton), sous le bloc joueurs
+        """Panneau « Extensions » (blocs Météo / Peloton), sous les lignes d'équipes
         sur l'écran d'options (après sélection du parcours)."""
         fr = self._options_frame_rect()
-        pr = self._players_block_rect()
-        return pygame.Rect(fr.x + 10, pr.bottom + 8, fr.w - 20, 64)
+        rows = self._team_mode_row_rects()
+        y = rows[-1][1].bottom + 8 if rows else self._players_block_rect().bottom + 8
+        return pygame.Rect(fr.x + 10, y, fr.w - 20, 64)
 
     def _draw_extensions(self, mouse):
         """Section Extensions : deux BLOCS côte à côte (Météo / Peloton), tout le
@@ -2093,9 +2114,6 @@ class FlammeRougeGame:
         if self.menu_step == "editor":
             self._draw_editor(mouse)
             return
-        if self.menu_step == "teams":
-            self._draw_teams_menu(mouse)
-            return
         if self.menu_step == "options":
             self._draw_options_menu(mouse)
             return
@@ -2196,11 +2214,8 @@ class FlammeRougeGame:
     # ------------------------------------------------------------------
 
     def _options_validate(self):
-        """JOUER sur l'écran d'options : Peloton -> écran équipes, sinon démarre."""
-        if self.ext_peloton:
-            self.menu_step = "teams"  # Peloton : d'abord qui contrôle quelle équipe
-        else:
-            self._select_stage(self._pending_stage)
+        """JOUER sur l'écran d'options : démarre la partie (équipes humain/IA choisies ici)."""
+        self._select_stage(self._pending_stage)
 
     def _options_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -2217,6 +2232,11 @@ class FlammeRougeGame:
                     self.player_count = n
                     if n >= 5:
                         self.ext_peloton = True  # 5/6 joueurs -> Peloton IMPÉRATIF
+                    return
+            for i, row in self._team_mode_row_rects():
+                if self._team_mode_button_rect(row).collidepoint(event.pos):
+                    cycle = ["human", "peloton", "muscle"]
+                    self.team_modes[i] = cycle[(cycle.index(self._team_mode(i)) + 1) % 3]
                     return
             for key, tr in self._ext_tick_rects().items():
                 if tr.collidepoint(event.pos):
@@ -2240,6 +2260,22 @@ class FlammeRougeGame:
         sub = self.label_font.render(f"Parcours : {stage_name}", True, TEXT_DIM)
         self.screen.blit(sub, (frame.x + 22, frame.y + 14 + title.get_height() + 6))
         self._draw_players_block(mouse)
+        # lignes des équipes : couleur + mode (Joueur / IA Peloton / IA Muscle)
+        for i, row in self._team_mode_row_rects():
+            hovered = row.collidepoint(mouse)
+            pygame.draw.rect(self.screen, ROW_SEL if hovered else PANEL_ALT, row,
+                             border_radius=8)
+            pygame.draw.rect(self.screen, BORDER, row, width=1, border_radius=8)
+            col = PLAYER_COLORS.get(["red", "blue", "green", "yellow", "pink", "white"][i], BLACK)
+            pygame.draw.circle(self.screen, col, (row.x + 16, row.centery), 8)
+            pygame.draw.circle(self.screen, BORDER, (row.x + 16, row.centery), 8, 1)
+            mode = self._team_mode(i)
+            lbl = self.label_font.render(f"Équipe {i + 1}", True, INK)
+            self.screen.blit(lbl, (row.x + 32, row.centery - lbl.get_height() // 2))
+            b = self._team_mode_button_rect(row)
+            label = {"human": "Joueur", "peloton": "IA Peloton", "muscle": "IA Muscle"}[mode]
+            self._draw_ui_button(b, label, ACCENT if mode != "human" else (90, 96, 110),
+                                 mouse, font=self.small_font)
         self._draw_extensions(mouse)
         # preview du parcours choisi à droite (sans chevaucher le panneau options)
         if self.width >= 1100 and self._pending_stage:
@@ -2247,144 +2283,6 @@ class FlammeRougeGame:
                              self.width - 16 - (frame.right + 16),
                              self.height - 12 - MENU_TOP)
             self._draw_menu_preview(self._pending_stage, pr, code=self._pending_code)
-        # JOUER en bas à droite + retour en haut à droite
-        self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
-                             mouse, pressed=(self._pressed_button == "next"),
-                             font=self.phase_font)
-        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
-                             mouse, pressed=(self._pressed_button == "back"))
-
-    # ------------------------------------------------------------------
-    # Écran d'assignation des équipes (extension Peloton)
-    # ------------------------------------------------------------------
-
-    def _teams_list(self):
-        """Équipes de la partie : équipes humaines + équipes factices.
-        -> [(clé, libellé, couleur, kind)] avec kind = 'player'/'peloton'/'muscle'."""
-        colors = ["red", "blue", "green", "yellow", "pink", "white"]
-        out = []
-        for i in range(self.player_count):
-            out.append((("p", i), f"Joueur {i + 1}", colors[i], "player"))
-        for j, d in enumerate(self.dummy_teams):
-            label = "Peloton" if d["kind"] == "peloton" else "Muscle"
-            out.append((("d", j), f"Équipe {label}", d["color"], d["kind"]))
-        return out
-
-    def _dummy_specs(self):
-        """Specs passées au moteur : kind, couleur, contrôleur (None = IA)."""
-        return [{"kind": d["kind"], "color": d["color"],
-                 "controller": self.controllers.get(("d", j))}
-                for j, d in enumerate(self.dummy_teams)]
-
-    def _teams_frame_rect(self):
-        return pygame.Rect(12, MENU_TOP, min(620, self.width - 24),
-                           self.height - 12 - MENU_TOP - 90)
-
-    def _team_row_rects(self):
-        frame = self._teams_frame_rect()
-        rows = []
-        y = frame.y + 70
-        for key, _label, _color, _kind in self._teams_list():
-            rows.append((key, pygame.Rect(frame.x + 16, y, frame.w - 32, 40)))
-            y += 48
-        return rows
-
-    def _team_controller_rect(self, row):
-        return pygame.Rect(row.right - 150, row.y + 7, 100, 26)
-
-    def _team_remove_rect(self, row):
-        return pygame.Rect(row.right - 40, row.y + 7, 26, 26)
-
-    def _team_add_rects(self):
-        frame = self._teams_frame_rect()
-        y = frame.bottom - 46
-        return {"peloton": pygame.Rect(frame.x + 16, y, 140, 32),
-                "muscle": pygame.Rect(frame.x + 166, y, 140, 32)}
-
-    def _controller_label(self, key):
-        c = self.controllers.get(key)
-        return "IA" if c is None else f"J{c + 1}"
-
-    def _teams_validate(self):
-        """JOUER sur l'écran équipes : démarre la partie avec les équipes choisies."""
-        self._select_stage(self._pending_stage)
-
-    def _teams_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self._back_button_rect().collidepoint(event.pos):
-                self.menu_step = "options"  # retour aux options (joueurs/extensions)
-                return
-            if self._next_button_rect().collidepoint(event.pos):
-                self._pressed_button = "next"
-                self._teams_validate()
-                self._pressed_button = None
-                return
-            for kind, rect in self._team_add_rects().items():
-                if rect.collidepoint(event.pos):
-                    if kind == "peloton" and any(d["kind"] == "peloton" for d in self.dummy_teams):
-                        return  # une seule équipe Peloton
-                    if kind == "muscle" and sum(1 for d in self.dummy_teams if d["kind"] == "muscle") >= 3:
-                        return
-                    color = "pink" if kind == "peloton" else "white"
-                    if any(d["color"] == color for d in self.dummy_teams):
-                        color = "pink" if color == "white" else "white"
-                    self.dummy_teams.append({"kind": kind, "color": color})
-                    return
-            for key, row in self._team_row_rects():
-                if self._team_remove_rect(row).collidepoint(event.pos) and key[0] == "d":
-                    self.dummy_teams.pop(key[1])
-                    self.controllers.pop(key, None)
-                    return
-                if self._team_controller_rect(row).collidepoint(event.pos):
-                    # cycle : IA -> J1 -> ... -> JN -> IA
-                    cycle = [None] + list(range(self.player_count))
-                    cur = self.controllers.get(key)
-                    self.controllers[key] = cycle[(cycle.index(cur) + 1) % len(cycle)]
-                    return
-
-    def _draw_teams_menu(self, mouse):
-        """Écran d'assignation des équipes (Peloton) : chaque équipe (humaine ou
-        factice) avec le bouton de son contrôleur (IA / J1..JN), + pour ajouter
-        des équipes factices, JOUER en bas à droite."""
-        frame = self._teams_frame_rect()
-        self._draw_card(frame, PANEL, radius=CARD_R)
-        title = self.display_font.render("Équipes en course", True, INK)
-        self.screen.blit(title, (frame.x + 20, frame.y + 14))
-        sub = self.label_font.render(
-            f"{self.player_count} joueur(s) · Peloton : cliquez pour changer le contrôleur (IA / Jn)",
-            True, TEXT_DIM)
-        self.screen.blit(sub, (frame.x + 22, frame.y + 14 + title.get_height() + 6))
-        for key, label, color, kind in self._teams_list():
-            row = next(r for k, r in self._team_row_rects() if k == key)
-            hovered = row.collidepoint(mouse)
-            pygame.draw.rect(self.screen, ROW_SEL if hovered else PANEL_ALT, row,
-                             border_radius=8)
-            pygame.draw.rect(self.screen, BORDER, row, width=1, border_radius=8)
-            col = PLAYER_COLORS.get(color, BLACK)
-            pygame.draw.circle(self.screen, col, (row.x + 20, row.centery), 9)
-            pygame.draw.circle(self.screen, BORDER, (row.x + 20, row.centery), 9, 1)
-            tag = {"player": "", "peloton": " (factice)", "muscle": " (factice)"}[kind]
-            lbl = self.label_font.render(label + tag, True, INK)
-            self.screen.blit(lbl, (row.x + 38, row.centery - lbl.get_height() // 2))
-            # bouton contrôleur (cycle IA / Jn)
-            cr = self._team_controller_rect(row)
-            self._draw_ui_button(cr, self._controller_label(key),
-                                 (90, 96, 110) if self.controllers.get(key) is None else ACCENT,
-                                 mouse, font=self.small_font)
-            # bouton supprimer (équipes factices seulement)
-            if key[0] == "d":
-                rr = self._team_remove_rect(row)
-                self._draw_ui_button(rr, "×", (150, 60, 60), mouse, font=self.small_font)
-        # boutons d'ajout d'équipes factices
-        for kind, rect in self._team_add_rects().items():
-            enabled = True
-            if kind == "peloton":
-                enabled = not any(d["kind"] == "peloton" for d in self.dummy_teams)
-            else:
-                enabled = sum(1 for d in self.dummy_teams if d["kind"] == "muscle") < 3
-            label = "+ Peloton" if kind == "peloton" else "+ Muscle"
-            self._draw_ui_button(rect, label, ACCENT_SOFT, mouse, enabled=enabled,
-                                 font=self.small_font)
         # JOUER en bas à droite + retour en haut à droite
         self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
                              mouse, pressed=(self._pressed_button == "next"),
@@ -2436,7 +2334,7 @@ class FlammeRougeGame:
         self._pending_code = None
         self.game = Game(stage=name, player_count=self.player_count, auto_place=False,
                          custom_code=code, meteo=self.ext_meteo, peloton=self.ext_peloton,
-                         dummy_teams=self._dummy_specs() if self.ext_peloton else None)
+                         team_modes=self._team_modes_list())
         self.showing_movement = False
         self.movement_step = 0
         self.movement_total = 0
@@ -2464,9 +2362,6 @@ class FlammeRougeGame:
         """Événements du menu (étape 1 : choix de l'étape, étape 2 : nb joueurs)."""
         if self.menu_step == "editor":
             self._editor_event(event)
-            return
-        if self.menu_step == "teams":
-            self._teams_event(event)
             return
         if self.menu_step == "options":
             self._options_event(event)
