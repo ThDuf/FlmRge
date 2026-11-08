@@ -65,6 +65,40 @@ class TestPelotonTiles(unittest.TestCase):
                          for l in range(len(c.runners)) if c.runners[l])
             self.assertEqual(placed, 2 * n)  # tous les coureurs placés au départ
 
+    def test_wide_start_render_3_riders_same_cell(self):
+        """Rendu course : départ large 3 files — 3 coureurs peuvent occuper la
+        même case (files 0/1/2), la route y est 1,5x plus large, et le rendu
+        de l'écran de course fonctionne avec ces offsets."""
+        import pygame
+        import main
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui.game = Game(stage="Avenue Corso Paseo", player_count=6, peloton=True,
+                       auto_place=False)
+        geo = ui._track_geometry()
+        # géométrie locale : 3 files au départ, 2 files ensuite
+        self.assertEqual(ui._lane_count(0), 3)
+        self.assertAlmostEqual(ui._lane_half(geo, 0), geo["lane_w"] * 1.5)
+        self.assertAlmostEqual(ui._lane_off(geo, 0, 0), geo["lane_w"])
+        self.assertAlmostEqual(ui._lane_off(geo, 0, 1), 0.0)
+        self.assertAlmostEqual(ui._lane_off(geo, 0, 2), -geo["lane_w"])
+        self.assertEqual(ui._lane_count(6), 2)
+        self.assertAlmostEqual(ui._lane_half(geo, 6), geo["lane_w"])
+        # 3 coureurs placés sur la MÊME case (dernière case avant la ligne)
+        limit = ui.game.track.start_line_x()
+        for lane in range(3):
+            self.assertTrue(ui.game.place_runner_at(limit - 1, lane))
+        here = [r for x, _l, r in ui.game.track.get_all_runners() if x == limit - 1]
+        self.assertEqual(len(here), 3)
+        # rendu complet de l'écran de course sans erreur
+        ui.screen.fill((200, 200, 210))
+        ui._draw_header()
+        ui._draw_phase_band()
+        ui._draw_track()
+        ui._draw_runners()
+        ui._draw_ui()
+
     def test_menu_checkbox_wires_peloton(self):
         import main
         ui = main.FlammeRougeGame()

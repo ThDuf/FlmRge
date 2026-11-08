@@ -327,6 +327,25 @@ class FlammeRougeGame:
         geo = self._track_geometry()
         return self._path_at(geo, (x_cell + 0.5) * geo["cell"])
 
+    def _lane_count(self, x_cell: int) -> int:
+        """Nombre de files de la case x_cell (1 à 3 selon la tuile : pavés = 1,
+        normal = 2, départ large / zone d'appro = 3)."""
+        cell0 = self.game.track.get_cell(x_cell, 0)
+        return len(cell0.runners) if cell0 else 2
+
+    def _lane_half(self, geo: dict, x_cell: int) -> float:
+        """Demi-largeur de la route (px) à la case x_cell, proportionnelle au
+        nombre de files : 2 files = geo['half'], 3 files = 1,5x, 1 file = 0,5x."""
+        return geo["lane_w"] * max(1, self._lane_count(x_cell)) / 2.0
+
+    def _lane_off(self, geo: dict, x_cell: int, lane: int) -> float:
+        """Offset latéral (px) de la file `lane` à la case x_cell : files
+        espacées de lane_w, centrées sur la route (file 0 = droite)."""
+        n = self._lane_count(x_cell)
+        if n <= 1:
+            return 0.0
+        return geo["lane_w"] * ((n - 1) / 2.0 - lane)
+
     # ------------------------------------------------------------------
     # Géométrie : panneaux de cartes (colonne de gauche)
     # ------------------------------------------------------------------
@@ -2496,15 +2515,15 @@ class FlammeRougeGame:
         limit = game.track.start_line_x()
         geo = self._track_geometry()
         cell = geo["cell"]
-        half = geo["half"]
         best = None
         best_d = cell * 0.75
         for x in range(limit):
             px, py, tx, ty = self._cell_anchor(x)
             nx, ny = -ty, tx
-            for lane, off in ((0, half * 0.5), (1, -half * 0.5)):  # A = droite
+            for lane in range(self._lane_count(x)):  # file 0 = droite, puis 1, 2...
                 if not game.can_place_at(x, lane):
                     continue
+                off = self._lane_off(geo, x, lane)
                 cx, cy = px + nx * off, py + ny * off
                 d = math.hypot(pos[0] - cx, pos[1] - cy)
                 if d < best_d:
@@ -2602,13 +2621,14 @@ class FlammeRougeGame:
             self._draw_weather_icon(WeatherType.NONE, (x0 + x1) / 2, y, 1.0, 0.0, 0.0, -1.0,
                                     now * 3)  # now*3 car l'icône re-ralentit en interne
 
-    def _draw_weather_tile(self, w, tile, geo, cell, half, now):
+    def _draw_weather_tile(self, w, tile, geo, cell, now):
         """Animation météo sur TOUTE LA LONGUEUR de la tuile sur le parcours :
         les traits ne sont PAS limités à une case — vent = longs traits qui
         défilent le long de la tuile, pluie = traits qui tombent sur toute la
         tuile + gouttes au sol, vent de travers = traits qui apparaissent et
         disparaissent sur toute la tuile. Soleil (NONE) : un seul petit soleil
         au milieu de la tuile."""
+        half = self._lane_half(geo, tile.x)  # demi-largeur locale (3 files -> route plus large)
         now = now // 3  # ralenti
         t0, t1 = tile.x, tile.x + tile.length
         span = max(1, t1 - t0)
@@ -2711,13 +2731,13 @@ class FlammeRougeGame:
         """Dessine le circuit organique : un chemin continu sans saut.
 
         La route suit le chemin (rangées droites + demi-cercles), les cases
-        sont quadrillées le long de l'arc, les virages sont teintés, la ligne
-        médiane blanche sépare les files A (droite) et B (gauche).
+        sont quadrillées le long de l'arc, les virages sont teintés, des
+        séparateurs blancs délimitent les files (2 ou 3 selon la tuile) et la
+        demi-largeur de la route suit le nombre de files de chaque case.
         """
         geo = self._track_geometry()
         track = self.game.track
         cell = geo["cell"]
-        half = geo["half"]
 
         # Échantillons du chemin (point + tangente) pour les bords de route
         pts = geo["points"]
@@ -2732,9 +2752,16 @@ class FlammeRougeGame:
                 tx, ty = (x1 - x0) / d, (y1 - y0) / d
             samples.append((x, y, tx, ty))
 
-        # Route : polygone entre les bords gauche et droit du sens de marche
-        left_edge = [(x + ty * half, y - tx * half) for x, y, tx, ty in samples]
-        right_edge = [(x - ty * half, y + tx * half) for x, y, tx, ty in samples]
+        # Route : polygone entre les bords gauche et droit du sens de marche ;
+        # la demi-largeur varie selon le nombre de files de la case sous-jacente
+        # (tuiles larges à 3 files : la route est plus large à cet endroit)
+        cum = geo["cum"]
+        halfs = [self._lane_half(geo, min(track.length - 1, max(0, int(cum[i] / cell))))
+                 for i in range(len(samples))]
+        left_edge = [(x + ty * halfs[i], y - tx * halfs[i])
+                     for i, (x, y, tx, ty) in enumerate(samples)]
+        right_edge = [(x - ty * halfs[i], y + tx * halfs[i])
+                      for i, (x, y, tx, ty) in enumerate(samples)]
         road = right_edge + left_edge[::-1]
         # ombre douce sous la route (décalée de 3 px)
         pygame.draw.polygon(self.screen, ROAD_SHADOW, [(x, y + 3) for x, y in road])
@@ -2763,22 +2790,31 @@ class FlammeRougeGame:
                 color = None
             if color is not None:
                 s0, s1 = x_cell * cell, (x_cell + 1) * cell
+                hl = self._lane_half(geo, x_cell)
                 seg = [self._path_at(geo, s0 + (s1 - s0) * k / 8) for k in range(9)]
-                right = [(x - ty * half, y + tx * half) for x, y, tx, ty in seg]
-                left = [(x + ty * half, y - tx * half) for x, y, tx, ty in seg]
+                right = [(x - ty * hl, y + tx * hl) for x, y, tx, ty in seg]
+                left = [(x + ty * hl, y - tx * hl) for x, y, tx, ty in seg]
                 pygame.draw.polygon(self.screen, color, right + left[::-1])
 
 
 
-        # Ligne médiane entre les deux files (sur tout le tracé) + quadrillage des cases
-        pygame.draw.lines(self.screen, WHITE, False,
-                          [(x, y) for x, y, _tx, _ty in samples], 2)
+        # Séparateurs entre les files (1 ligne à 2 files, 2 lignes à 3 files...)
+        # + quadrillage des cases ; la demi-largeur suit le nombre de files
+        for x_cell in range(track.length):
+            n = self._lane_count(x_cell)
+            s0, s1 = x_cell * cell, (x_cell + 1) * cell
+            for k in range(1, n):  # séparateur entre la file k-1 et la file k
+                off = geo["lane_w"] * ((n - 1) / 2.0 - (k - 0.5))
+                seg = [self._path_at(geo, s0 + (s1 - s0) * j / 8) for j in range(9)]
+                pygame.draw.lines(self.screen, WHITE, False,
+                                  [(x - ty * off, y + tx * off) for x, y, tx, ty in seg], 1)
         for k in range(track.length + 1):
             px, py, tx, ty = self._path_at(geo, k * cell)
             nx, ny = -ty, tx
+            hl = self._lane_half(geo, min(track.length - 1, k))
             pygame.draw.line(self.screen, WHITE,
-                             (px + nx * half, py + ny * half),
-                             (px - nx * half, py - ny * half), 1)
+                             (px + nx * hl, py + ny * hl),
+                             (px - nx * hl, py - ny * hl), 1)
 
         # Lignes de DÉPART (bande jaune) et d'ARRIVÉE (damier noir/blanc),
         # bien visibles en travers de toute la route
@@ -2787,25 +2823,26 @@ class FlammeRougeGame:
         for s, kind, label in line_specs:
             px, py, tx, ty = self._path_at(geo, s)
             nx, ny = -ty, tx
+            hl = self._lane_half(geo, min(track.length - 1, int(s / cell)))
             if kind == "start":
                 pygame.draw.line(self.screen, (255, 236, 130),
-                                 (px + nx * half, py + ny * half),
-                                 (px - nx * half, py - ny * half), 7)
+                                 (px + nx * hl, py + ny * hl),
+                                 (px - nx * hl, py - ny * hl), 7)
                 pygame.draw.line(self.screen, (60, 50, 10),
-                                 (px + nx * half, py + ny * half),
-                                 (px - nx * half, py - ny * half), 1)
+                                 (px + nx * hl, py + ny * hl),
+                                 (px - nx * hl, py - ny * hl), 1)
             else:
                 # damier dans le jaune vif de l'arrivée (comme la preview)
                 n = 8
                 for k in range(n):
-                    t0 = -half + 2 * half * k / n
-                    t1 = -half + 2 * half * (k + 1) / n
+                    t0 = -hl + 2 * hl * k / n
+                    t1 = -hl + 2 * hl * (k + 1) / n
                     c = (240, 210, 60) if k % 2 == 0 else (60, 50, 10)
                     pygame.draw.line(self.screen, c,
                                      (px + nx * t0, py + ny * t0),
                                      (px + nx * t1, py + ny * t1), 7)
             # libellé à l'extérieur droit de la route
-            lx, ly = px + nx * (half + 22), py + ny * (half + 22)
+            lx, ly = px + nx * (hl + 22), py + ny * (hl + 22)
             lbl = self.label_font.render(label, True,
                                          (255, 236, 130) if kind == "start" else (240, 210, 60))
             self.screen.blit(lbl, (lx - lbl.get_width() // 2, ly - lbl.get_height() // 2))
@@ -2820,16 +2857,15 @@ class FlammeRougeGame:
                 for x in range(limit):
                     px, py, tx, ty = self._cell_anchor(x)
                     nx, ny = -ty, tx
-                    cell0 = track.get_cell(x, 0)
-                    n_lanes = len(cell0.runners) if cell0 else 2
-                    for lane in range(n_lanes):
-                        off = 0 if n_lanes == 1 else half * (1 - 2 * lane / (n_lanes - 1))
+                    hl = self._lane_half(geo, x)
+                    for lane in range(self._lane_count(x)):
+                        off = self._lane_off(geo, x, lane)
                         if self.game.can_place_at(x, lane):
                             cx, cy = px + nx * off, py + ny * off
                             # rond de sélection toujours INFÉRIEUR à la case :
-                            # diamètre extérieur (2r+2) < cell, et r <= half*0.45
+                            # diamètre extérieur (2r+2) < cell, et r <= hl*0.45
                             # pour rester dans sa file (ne touche pas l'autre file)
-                            r = max(1, min(int((cell - 2) * 0.45), int(half * 0.45)))
+                            r = max(1, min(int((cell - 2) * 0.45), int(hl * 0.45)))
                             pygame.draw.circle(self.screen, color,
                                                (int(cx), int(cy)), r, 2)
 
@@ -2843,25 +2879,22 @@ class FlammeRougeGame:
                     continue
                 if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
                     continue
-                self._draw_weather_tile(tile.cells[0].weather, tile, geo, cell, half, now)
+                self._draw_weather_tile(tile.cells[0].weather, tile, geo, cell, now)
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
             px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
             nx, ny = -ty, tx
+            hl = self._lane_half(geo, x_cell)
             num = self.small_font.render(str(x_cell), True, GRAY)
             self.screen.blit(num, num.get_rect(
-                center=(px - nx * (half + 11), py - ny * (half + 11))))
+                center=(px - nx * (hl + 11), py - ny * (hl + 11))))
 
     def _draw_runners(self):
         """Dessine les coureurs placés sur la piste (source de vérité : la
         piste). Les coureurs non placés (phase PLACEMENT) ne sont PAS sur la
         piste : ils sont affichés en réserve par _draw_unplaced_runners."""
         geo = self._track_geometry()
-        lane_off = geo["lane_w"] / 2
-        # rayon borné par la taille de la case : la pastille + son anneau blanc
-        # restent plus petites que la case (2*(radius+2) < cell)
-        radius = max(2, min(int(geo["lane_w"] * 0.55), int(geo["cell"] * 0.5) - 3))
 
         players_by_runner = {r.id: p for p in self.game.players
                              for r in p.get_runners()}
@@ -2881,20 +2914,18 @@ class FlammeRougeGame:
                 s0 = (a["from_x"] + 0.5) * geo["cell"]
                 s1 = (a["to_x"] + 0.5) * geo["cell"]
                 px, py, tx, ty = self._path_at(geo, s0 + (s1 - s0) * e)
-                off0 = lane_off if a["from_lane"] == 0 else -lane_off
-                off1 = lane_off if a["to_lane"] == 0 else -lane_off
+                off0 = self._lane_off(geo, a["from_x"], a["from_lane"])
+                off1 = self._lane_off(geo, a["to_x"], a["to_lane"])
                 off = off0 + (off1 - off0) * e
             else:
                 px, py, tx, ty = self._cell_anchor(x)
-                cell0 = self.game.track.get_cell(x, 0)
-                n_lanes = len(cell0.runners) if cell0 else 2
-                if n_lanes <= 1:
-                    off = 0
-                elif n_lanes == 2:
-                    off = lane_off if lane == 0 else -lane_off  # file A = droite
-                else:
-                    off = lane_off - lane * (2 * lane_off / (n_lanes - 1))
+                off = self._lane_off(geo, x, lane)  # file 0 = droite
             nx, ny = -ty, tx
+            # rayon borné par la taille de la case et par la file : la pastille +
+            # son anneau restent dans la case et ne touchent pas la file voisine
+            n_lanes = self._lane_count(x)
+            fac = 0.55 if n_lanes <= 2 else 0.46  # 3 files : pastilles un peu plus petites
+            radius = max(2, min(int(geo["lane_w"] * fac), int(geo["cell"] * 0.5) - 3))
             cx = px + nx * off
             cy = py + ny * off
 
