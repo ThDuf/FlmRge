@@ -2871,7 +2871,10 @@ class FlammeRougeGame:
                     continue
                 if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
                     continue
-                for x_cell in range(tile.x, tile.x + tile.length):
+                cells = range(tile.x, tile.x + tile.length)
+                if tile.cells[0].weather == WeatherType.NONE:
+                    cells = [tile.x + tile.length // 2]  # UN SEUL soleil par tuile
+                for x_cell in cells:
                     px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
                     nx, ny = -ty, tx
                     mx, my = px - nx * (half + 14), py - ny * (half + 14)

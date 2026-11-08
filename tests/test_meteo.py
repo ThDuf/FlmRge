@@ -512,9 +512,14 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
                        for y in range(prof.y, prof.bottom) for x in range(prof.x, prof.right))
         self.assertTrue(sun_prof, "pas de soleil dans le bloc profil")
         frame = ui._frame_rect()
-        sun_track = any(ui.screen.get_at((x, y))[:3] == sun
-                        for y in range(frame.y, frame.bottom) for x in range(frame.x, frame.right))
-        self.assertTrue(sun_track, "pas de soleil sur le parcours")
+        sun_track = sum(1 for x in range(frame.x, frame.right) for y in range(frame.y, frame.bottom)
+                        if ui.screen.get_at((x, y))[:3] == sun)
+        self.assertTrue(sun_track > 0, "pas de soleil sur le parcours")
+        # UN SEUL soleil par tuile (7 tuiles droites -> ~7 icônes, pas 6 par tuile)
+        n_straights = len([t for t in ui.game.track.tiles if t.turn is None
+                           and not any(c.run in (CellRunType.START, CellRunType.END) for c in t.cells)])
+        self.assertLess(sun_track, n_straights * 200,  # ~130 px/icône soleil, 6x moins que 6 icônes/tuile
+                        f"trop de soleils sur le parcours: {sun_track} px pour {n_straights} tuiles")
 
 
 
