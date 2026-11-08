@@ -478,10 +478,15 @@ class TestMenuSelectionRules(unittest.TestCase):
         self.assertFalse(ui.ext_peloton)
         ticks = ui._ext_tick_rects()
         self.assertEqual(set(ticks), {"meteo", "peloton"})
+        # deux BLOCS côte à côte (même y, météo à gauche de peloton, sans chevauchement)
+        self.assertEqual(ticks["meteo"].y, ticks["peloton"].y)
+        self.assertLessEqual(ticks["meteo"].right, ticks["peloton"].x)
         er = ui._extensions_rect()
         nxt = ui._next_button_rect()
         self.assertLessEqual(er.right, nxt.x)   # à gauche du bouton JOUER
         self.assertGreaterEqual(er.x, 0)
+        for k, tr in ticks.items():  # les blocs tiennent dans le panneau
+            self.assertTrue(er.contains(tr), f"bloc {k} hors panneau")
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=ticks["meteo"].center))
         self.assertTrue(ui.ext_meteo)
@@ -489,7 +494,11 @@ class TestMenuSelectionRules(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                           pos=ticks["peloton"].center))
         self.assertTrue(ui.ext_peloton)
-        ui._draw_menu()  # rendu avec les deux cochées, sans erreur
+        ui._draw_menu()  # rendu avec les deux blocs actifs, sans erreur
+        import pygame as _pg
+        for key, tr in ui._ext_tick_rects().items():
+            edge = ui.screen.get_at((tr.centerx, tr.y + 1))[:3]  # bordure haut du bloc actif
+            self.assertEqual(edge, main.ACCENT, f"bloc {key} actif sans bordure accent")
 
     def test_back_button_elevated_in_menu_and_stage_goes_to_players(self):
         """Dans les menus, le bouton retour est dans le bandeau titre (en haut,

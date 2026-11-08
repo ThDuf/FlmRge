@@ -971,35 +971,43 @@ class FlammeRougeGame:
         return pygame.Rect(frame.x + 10, srect.bottom + 6, frame.w - 20, 64)
 
     def _draw_extensions(self, mouse):
-        """Dessine la section Extensions à l'endroit donné par _extensions_rect ;
-        la bascule au clic est gérée dans _menu_event via _ext_tick_rects."""
+        """Section Extensions : deux BLOCS côte à côte (Météo / Peloton), tout le
+        bloc est cliquable ; actif = fond teinté accent + bordure + coche,
+        inactif = bloc neutre (survol = léger highlight)."""
         er = self._extensions_rect()
         self._draw_card(er, PANEL_ALT, radius=10, shadow=False)
         h = self.small_font.render("EXTENSIONS", True, TEXT_DIM)
         self.screen.blit(h, (er.x + 10, er.y + 5))
-        for key, label in (("meteo", "Météo"), ("peloton", "Peloton")):
+        for key, label, icon_col in (("meteo", "Météo", (250, 190, 40)),
+                                     ("peloton", "Peloton", (126, 87, 194))):
             tr = self._ext_tick_rects()[key]
             on = self.ext_meteo if key == "meteo" else self.ext_peloton
             hovered = tr.collidepoint(mouse)
-            if on:
-                pygame.draw.rect(self.screen, ACCENT, tr, border_radius=4)
-                pygame.draw.line(self.screen, WHITE, (tr.x + 4, tr.centery),
-                                 (tr.x + 8, tr.bottom - 5), 2)
-                pygame.draw.line(self.screen, WHITE, (tr.x + 8, tr.bottom - 5),
-                                 (tr.right - 4, tr.y + 5), 2)
-            else:
+            if on:  # actif : bloc mis en évidence
+                pygame.draw.rect(self.screen, _mix(ACCENT, WHITE, 0.85), tr, border_radius=8)
+                pygame.draw.rect(self.screen, ACCENT, tr, width=2, border_radius=8)
+            else:  # inactif : bloc neutre
                 pygame.draw.rect(self.screen, PANEL if not hovered else ROW_SEL, tr,
-                                 border_radius=4)
-                pygame.draw.rect(self.screen, BORDER, tr, width=1, border_radius=4)
+                                 border_radius=8)
+                pygame.draw.rect(self.screen, BORDER, tr, width=1, border_radius=8)
+            pygame.draw.circle(self.screen, icon_col, (tr.x + 15, tr.centery), 6)
+            pygame.draw.circle(self.screen, WHITE, (tr.x + 15, tr.centery), 6, 1)
             lbl = self.label_font.render(label, True, INK if on else TEXT_DIM)
-            self.screen.blit(lbl, (tr.right + 8, tr.centery - lbl.get_height() // 2))
-
+            self.screen.blit(lbl, (tr.x + 27, tr.centery - lbl.get_height() // 2))
+            if on:  # coche
+                pygame.draw.line(self.screen, ACCENT, (tr.right - 15, tr.centery),
+                                 (tr.right - 10, tr.bottom - 9), 2)
+                pygame.draw.line(self.screen, ACCENT, (tr.right - 10, tr.bottom - 9),
+                                 (tr.right - 4, tr.y + 8), 2)
     def _ext_tick_rects(self):
-        """Tickboxes des extensions : {'meteo': Rect, 'peloton': Rect}."""
+        """Blocs des extensions : {'meteo': Rect, 'peloton': Rect}, deux blocs
+        côte à côte dans le panneau (toute la surface du bloc est cliquable)."""
         er = self._extensions_rect()
-        return {"meteo": pygame.Rect(er.x + 10, er.y + 26, 18, 18),
-                "peloton": pygame.Rect(er.x + 10, er.y + 46, 18, 18)}
-
+        bw = (er.w - 28) // 2  # deux blocs côte à côte sous l'en-tête
+        by = er.y + 24
+        bh = er.h - 30
+        return {"meteo": pygame.Rect(er.x + 10, by, bw, bh),
+                "peloton": pygame.Rect(er.x + 18 + bw, by, bw, bh)}
     def _menu_list_area(self):
         """Zone visible (scrollable) de la liste : sous la barre de recherche en
         grand écran (les extensions sont à côté de JOUER), sous les extensions sinon."""
