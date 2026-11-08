@@ -2663,14 +2663,18 @@ class FlammeRougeGame:
                     sx = x0 + p if sgn > 0 else x1 - p
                     pygame.draw.line(self.screen, c, (sx, ry), (sx + 8 * sgn, ry), 2)
         elif w == WeatherType.CROSSWIND:
-            # vent de travers : FONDU — des rafales traversantes qui apparaissent
-            # puis disparaissent (opacité sinusoïdale déphasée), sur toute la tuile
+            # vent de travers : des TRAITS qui apparaissent puis disparaissent
+            # complètement (opacité sinusoïdale déphasée, 0 = trait disparu),
+            # répartis sur toute la longueur de la tuile
             c = (60, 170, 80)
-            for j in range(5):
-                a = max(0.08, 0.5 + 0.5 * math.sin(now / 700.0 + j * 1.3))
-                x = x0 + (j + 0.5) * span / 5
-                col = _mix(WHITE, c, a)  # fondu vers le fond
-                pygame.draw.line(self.screen, col, (x, y - 6), (x, y + 6), 2)
+            for j in range(6):
+                a = max(0.0, math.sin(now / 650.0 + j * 1.1))  # 0..1
+                a = a * a  # courbe nette : apparition/disparition franche
+                if a <= 0.02:
+                    continue  # trait complètement disparu
+                x = x0 + (j + 0.5) * span / 6
+                col = _mix(WHITE, c, a)
+                pygame.draw.line(self.screen, col, (x, y - 7), (x, y + 7), 2)
         else:  # soleil (pas de météo spécifique) : SEULEMENT le petit soleil animé au milieu
             self._draw_weather_icon(WeatherType.NONE, (x0 + x1) / 2, y, 1.0, 0.0, 0.0, -1.0,
                                     now * 3)  # now*3 car l'icône re-ralentit en interne
