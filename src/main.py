@@ -2247,7 +2247,11 @@ class FlammeRougeGame:
             for i, row in self._team_mode_row_rects():
                 if self._team_mode_button_rect(row).collidepoint(event.pos):
                     cycle = ["human", "peloton", "muscle"]
-                    self.team_modes[i] = cycle[(cycle.index(self._team_mode(i)) + 1) % 3]
+                    mode = self._team_mode(i)
+                    others = [m for j, m in enumerate(self._team_modes_list()) if j != i]
+                    if mode != "peloton" and "peloton" in others:
+                        cycle = ["human", "muscle"]  # une seule équipe IA Peloton par partie
+                    self.team_modes[i] = cycle[(cycle.index(mode) + 1) % len(cycle)]
                     if self.team_modes[i] in ("peloton", "muscle"):
                         self.ext_peloton = True  # IA Peloton/Muscle -> Peloton obligatoire
                     return
@@ -2288,6 +2292,11 @@ class FlammeRougeGame:
             mode = self._team_mode(i)
             lbl = self.label_font.render(f"Équipe {i + 1}", True, INK)
             self.screen.blit(lbl, (row.x + 32, row.centery - lbl.get_height() // 2))
+            others = [m for j, m in enumerate(self._team_modes_list()) if j != i]
+            if mode != "peloton" and "peloton" in others:
+                note = self.small_font.render("IA Peloton déjà prise", True, TEXT_DIM)
+                self.screen.blit(note, (row.x + 40 + lbl.get_width(),
+                                        row.centery - note.get_height() // 2))
             b = self._team_mode_button_rect(row)
             label = {"human": "Joueur", "peloton": "IA Peloton", "muscle": "IA Muscle"}[mode]
             self._draw_ui_button(b, label, ACCENT if mode != "human" else (90, 96, 110),

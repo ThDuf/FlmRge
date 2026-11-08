@@ -279,5 +279,41 @@ class TestDummyTeams(unittest.TestCase):
         ui.screen.fill((255, 255, 255))
         ui._draw_header(); ui._draw_menu()  # rendu avec cadenas, sans erreur
 
+    def test_options_single_peloton_ai(self):
+        """UI : une seule équipe IA Peloton par partie — le cycle des autres
+        équipes saute 'peloton' tant qu'une équipe l'est déjà."""
+        import main, pygame
+        ui = main.FlammeRougeGame()
+        entries = ui._menu_entries()
+        stage = next(e for e in entries if e[4] == "base")
+        ui.menu_index = entries.index(stage)
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        opts = ui._player_count_option_rects()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=opts[3].center))  # 3 joueurs
+        rows = ui._team_mode_row_rects()
+        btn = [ui._team_mode_button_rect(r[1]) for r in rows]
+        clic = lambda b: ui._menu_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, button=1, pos=b.center))
+        clic(btn[0])  # équipe 1 -> IA Peloton
+        self.assertEqual(ui._team_mode(0), "peloton")
+        self.assertTrue(ui.ext_peloton)
+        # équipe 2 : le cycle saute peloton (human -> muscle -> human -> ...)
+        seen = set()
+        for _ in range(6):
+            clic(btn[1])
+            seen.add(ui._team_mode(1))
+        self.assertEqual(seen, {"human", "muscle"})
+        self.assertNotIn("peloton", seen)
+        # équipe 1 repassée en Joueur -> équipe 2 peut devenir IA Peloton
+        clic(btn[0]); clic(btn[0])  # peloton -> muscle -> human
+        self.assertEqual(ui._team_mode(0), "human")
+        clic(btn[1])  # human -> peloton (plus de conflit)
+        self.assertEqual(ui._team_mode(1), "peloton")
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header(); ui._draw_menu()  # rendu avec la note, sans erreur
+
 if __name__ == "__main__":
     unittest.main()
