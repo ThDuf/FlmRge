@@ -58,6 +58,21 @@ class TestPelotonTiles(unittest.TestCase):
         ui2._select_stage("Avenue Corso Paseo")
         self.assertFalse(ui2.game.peloton)
 
+    def test_ai_team_modes_force_peloton(self):
+        """Moteur : une équipe en IA Peloton/Muscle rend l'extension Peloton
+        obligatoire (même si peloton=False passé au constructeur)."""
+        g = Game(stage="test", team_modes=["human", "peloton"])
+        self.assertTrue(g.peloton)
+        g = Game(stage="test", team_modes=["human", "muscle"])
+        self.assertTrue(g.peloton)
+        # 5 équipes dont une IA Muscle, peloton non demandé -> 5 joueurs conservés
+        g = Game(stage="test", team_modes=["human"] * 4 + ["muscle"])
+        self.assertTrue(g.peloton)
+        self.assertEqual(g.player_count, 5)
+        # sans IA Peloton/Muscle, l'extension reste optionnelle
+        g = Game(stage="test", team_modes=["human", "human"])
+        self.assertFalse(g.peloton)
+
 
 class TestCobblestones(unittest.TestCase):
     def _track(self):
@@ -220,6 +235,49 @@ class TestDummyTeams(unittest.TestCase):
         self.assertEqual(ui.menu_step, "options")  # plus passé par un écran teams
         self.assertTrue(any(p.ai == "peloton" for p in ui.game.players))
         self.assertEqual(len(ui.game.players), 3)
+
+    def test_options_peloton_locked_by_ai(self):
+        """UI : IA Peloton/Muscle verrouille l'extension Peloton (forcée, non
+        désactivable, cadenas affiché) ; 5/6 joueurs verrouille aussi."""
+        import main, pygame
+        ui = main.FlammeRougeGame()
+        entries = ui._menu_entries()
+        stage = next(e for e in entries if e[4] == "base")
+        ui.menu_index = entries.index(stage)
+        ui._menu_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
+        self.assertEqual(ui.menu_step, "options")
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        opts = ui._player_count_option_rects()
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=opts[3].center))  # 3 joueurs
+        self.assertFalse(ui.ext_peloton)
+        rows = ui._team_mode_row_rects()
+        pel = ui._ext_tick_rects()["peloton"]
+        # équipe 2 en IA Peloton -> Peloton forcé
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=ui._team_mode_button_rect(rows[1][1]).center))
+        self.assertEqual(ui._team_mode(1), "peloton")
+        self.assertTrue(ui.ext_peloton)
+        self.assertTrue(ui._peloton_required())
+        # clic sur le bloc Peloton : reste actif (verrouillé)
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pel.center))
+        self.assertTrue(ui.ext_peloton)
+        # retour en Joueur (2 clics : peloton -> muscle -> human) -> déverrouillé
+        for _ in range(2):
+            ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                              pos=ui._team_mode_button_rect(rows[1][1]).center))
+        self.assertEqual(ui._team_mode(1), "human")
+        self.assertFalse(ui._peloton_required())
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pel.center))
+        self.assertFalse(ui.ext_peloton)
+        # 5 joueurs -> verrouillé aussi
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                          pos=opts[5].center))
+        self.assertTrue(ui.ext_peloton)
+        self.assertTrue(ui._peloton_required())
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header(); ui._draw_menu()  # rendu avec cadenas, sans erreur
 
 if __name__ == "__main__":
     unittest.main()

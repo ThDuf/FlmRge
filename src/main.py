@@ -1022,6 +1022,12 @@ class FlammeRougeGame:
         """Liste des modes par équipe, passée au moteur."""
         return [self._team_mode(i) for i in range(self.player_count)]
 
+    def _peloton_required(self):
+        """Extension Peloton verrouillée (active et non désactivable) :
+        5/6 joueurs OU au moins une équipe en IA Peloton / IA Muscle."""
+        return (self.player_count >= 5
+                or any(m in ("peloton", "muscle") for m in self._team_modes_list()))
+
     def _extensions_rect(self):
         """Panneau « Extensions » (blocs Météo / Peloton), sous les lignes d'équipes
         sur l'écran d'options (après sélection du parcours)."""
@@ -1054,7 +1060,12 @@ class FlammeRougeGame:
             pygame.draw.circle(self.screen, WHITE, (tr.x + 15, tr.centery), 6, 1)
             lbl = self.label_font.render(label, True, INK if on else TEXT_DIM)
             self.screen.blit(lbl, (tr.x + 27, tr.centery - lbl.get_height() // 2))
-            if on:  # coche
+            locked = key == "peloton" and self._peloton_required()
+            if on and locked:  # cadenas : Peloton requis (5/6 joueurs ou IA Peloton/Muscle)
+                lx, ly = tr.right - 15, tr.centery
+                pygame.draw.arc(self.screen, ACCENT, (lx - 4, ly - 9, 8, 10), math.pi, 0, 2)
+                pygame.draw.rect(self.screen, ACCENT, (lx - 6, ly - 1, 12, 9), border_radius=2)
+            elif on:  # coche
                 pygame.draw.line(self.screen, ACCENT, (tr.right - 15, tr.centery),
                                  (tr.right - 10, tr.bottom - 9), 2)
                 pygame.draw.line(self.screen, ACCENT, (tr.right - 10, tr.bottom - 9),
@@ -2237,13 +2248,18 @@ class FlammeRougeGame:
                 if self._team_mode_button_rect(row).collidepoint(event.pos):
                     cycle = ["human", "peloton", "muscle"]
                     self.team_modes[i] = cycle[(cycle.index(self._team_mode(i)) + 1) % 3]
+                    if self.team_modes[i] in ("peloton", "muscle"):
+                        self.ext_peloton = True  # IA Peloton/Muscle -> Peloton obligatoire
                     return
             for key, tr in self._ext_tick_rects().items():
                 if tr.collidepoint(event.pos):
                     if key == "meteo":
                         self.ext_meteo = not self.ext_meteo
-                    elif not (self.player_count >= 5 and self.ext_peloton):
-                        self.ext_peloton = not self.ext_peloton  # à 5/6 joueurs, Peloton reste actif
+                    elif key == "peloton":
+                        if self._peloton_required():
+                            self.ext_peloton = True  # verrouillé : 5/6 joueurs ou IA Peloton/Muscle
+                        else:
+                            self.ext_peloton = not self.ext_peloton
                     return
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
             self._options_validate()

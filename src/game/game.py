@@ -208,6 +208,8 @@ class Game:
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
                  auto_place: bool = True, custom_code: str = None,
                  meteo: bool = False, peloton: bool = False, team_modes=None):
+        if team_modes and any(m in ("peloton", "muscle") for m in team_modes):
+            peloton = True  # IA Peloton/Muscle -> extension Peloton obligatoire
         if team_modes:
             player_count = len(team_modes)  # un mode par équipe (human/peloton/muscle)
         player_count = max(2, min(6 if peloton else 4, player_count))  # 2-4 joueurs (6 avec Peloton)
