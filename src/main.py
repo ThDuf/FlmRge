@@ -61,8 +61,8 @@ PLAYER_COLORS = {
 
 # ===================== DESIGN SYSTEM (thème clair « soft ») =====================
 # Palette
-BG_TOP = (242, 244, 249)        # fond en haut (dégradé)
-BG_BOT = (233, 236, 243)        # fond en bas (dégradé)
+BG_TOP = (233, 246, 233)        # fond en haut (dégradé vert clair)
+BG_BOT = (215, 235, 215)        # fond en bas (dégradé vert)
 BG = BG_TOP                      # fond de référence (menu)
 HEADER_BG = (255, 255, 255)     # bandeau de titre
 PANEL = (255, 255, 255)         # surfaces (cartes, panneaux)
@@ -782,10 +782,10 @@ class FlammeRougeGame:
                 self._draw_menu()
             else:
                 self._grad_fill(pygame.Rect(0, 0, self.width, self.height),
-                                (255, 255, 255), (246, 247, 250), 0)
+                                (248, 253, 248), (222, 240, 222), 0)
                 # cadre autour de la zone du parcours (tout le reste que la barre du bas)
                 frame = self._frame_rect()
-                self._draw_card(frame, (242, 244, 248), radius=CARD_R)
+                self._draw_card(frame, (232, 243, 232), radius=CARD_R)
                 # le tracé ne s'affiche QUE dans le cadre du parcours
                 self.screen.set_clip(frame)
                 # ombre interne en haut du cadre (effet "table" enfoncée)
@@ -2851,14 +2851,11 @@ class FlammeRougeGame:
                     continue
                 if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
                     continue
-                cells = range(tile.x, tile.x + tile.length)
-                if tile.cells[0].weather == WeatherType.NONE:
-                    cells = [tile.x + tile.length // 2]  # UN SEUL soleil par tuile
-                for x_cell in cells:
-                    px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
-                    nx, ny = -ty, tx
-                    mx, my = px - nx * (half + 14), py - ny * (half + 14)
-                    self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
+                mid = tile.x + tile.length // 2  # UNE icône animée par tuile, au milieu
+                px, py, tx, ty = self._path_at(geo, (mid + 0.5) * cell)
+                nx, ny = -ty, tx
+                mx, my = px - nx * (half + 14), py - ny * (half + 14)
+                self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
