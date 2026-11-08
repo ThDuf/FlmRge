@@ -372,7 +372,9 @@ class Game:
     def _build_track(self, stage: str) -> Track:
         """Construit la piste : code perso (éditeur) si fourni, sinon l'étape
         nommée (officielle ou 'test'). En 5-6 joueurs avec Peloton, les tuiles
-        de départ/arrivée passent en version LARGE (3 files, lettres z/Z)."""
+        de départ/arrivée passent en version LARGE (3 files) — on élargit
+        directement les tuiles, quelle que soit leur face (plate a/u ou
+        montagne A/U, ex. Col du Ballon en 'A...u')."""
         if self.custom_code:
             code = self.custom_code
         elif stage in OFFICIAL_STAGES:
@@ -381,9 +383,15 @@ class Game:
             code = "a" + "f" * 4 + "u"
         else:
             code = OFFICIAL_STAGES["Avenue Corso Paseo"]
+        track = build_track_from_code(code)
         if self.peloton and self.player_count >= 5:
-            code = code.replace('a', 'z', 1).replace('u', 'Z', 1)  # départ/arrivée larges 3 files
-        return build_track_from_code(code)
+            # départ/arrivée larges 3 files (tuiles droites uniquement)
+            for tile in (track.tiles[0], track.tiles[-1]):
+                if tile.turn is None and tile.width == 2:
+                    tile.width = 3
+                    for c in tile.cells:
+                        c.runners = [None] * 3
+        return track
 
     def _place_runner_at_start(self, runner: Runner) -> None:
         """Place un coureur au départ dans la première file libre.
