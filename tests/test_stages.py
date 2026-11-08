@@ -228,7 +228,13 @@ class TestOfficialStages(unittest.TestCase):
 
 class TestStageMenu(unittest.TestCase):
     def test_menu_shown_at_launch_without_stage(self):
+        import tempfile, os, json
         ui = main.FlammeRougeGame()
+        # dossier saves temporaire avec 1 parcours perso (indépendant du disque)
+        tmp = tempfile.mkdtemp()
+        with open(os.path.join(tmp, 'mon_parcours.json'), 'w', encoding='utf-8') as f:
+            json.dump({'name': 'mon_parcours', 'code': 'abcu'}, f)
+        ui.saves_dir = tmp
         self.assertIsNone(ui.game)
         entries = ui._menu_entries()
         kinds = [e[4] for e in entries]
