@@ -1546,6 +1546,9 @@ class FlammeRougeGame:
                     break
             return
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._back_button_rect().collidepoint(event.pos):
+                self.menu_step = "stage"  # comme ÉCHAP : retour au choix d'étape
+                return
             for ch, rect in self._editor_palette_rects():
                 if rect.collidepoint(event.pos):
                     self.editor_hover_letter = ch
@@ -1669,6 +1672,10 @@ class FlammeRougeGame:
         else:
             self._draw_tile_preview(self.editor_hover_letter,
                                     pygame.Rect(self.width - 240, TOP_H + 40, 220, 160))
+
+        # Bouton « ← Retour » en haut à droite (bandeau titre), comme ÉCHAP
+        self._draw_ui_button(self._back_button_rect(), "← Retour", (90, 96, 110),
+                             mouse, pressed=(self._pressed_button == "back"))
 
     def _tile_preview_rect(self):
         """Panneau de preview de la tuile (au-dessus de l'aperçu du tracé)."""

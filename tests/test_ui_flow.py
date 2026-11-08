@@ -432,5 +432,29 @@ class TestTrackLayout(unittest.TestCase):
             self.assertIn("Fatigue", ui.last_action[0])
 
 
+
+class TestEditorBackButton(unittest.TestCase):
+    """L'éditeur de circuits a un bouton « ← Retour » dans le bandeau titre
+    (comme ÉCHAP) : clic -> retour à l'écran de choix d'étape."""
+
+    def test_editor_back_button_renders_and_clicks(self):
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.menu_step = "editor"
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header()
+        ui._draw_menu()  # dispatch editor
+        br = ui._back_button_rect()
+        self.assertLess(br.y, main.HEADER_H)  # dans le bandeau titre
+        # le bouton est bien dessiné (pixel du corps gris au centre, hors texte)
+        body = ui.screen.get_at((br.x + 6, br.centery))[:3]
+        self.assertNotEqual(body, (255, 255, 255))
+        # clic -> retour au choix d'étape
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=br.center))
+        self.assertEqual(ui.menu_step, "stage")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
