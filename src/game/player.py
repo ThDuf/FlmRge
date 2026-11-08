@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Optional
 from .runner import Runner, RunnerType
 from .card import Card
 
@@ -11,6 +11,10 @@ class Player:
     color: str
     sprinter: Runner
     roller: Runner
+    ai: Optional[str] = None          # None, "peloton" ou "muscle" (équipe factice)
+    controller: Optional[int] = None  # index du joueur humain qui la contrôle (None = IA)
+    ai_deck: list = field(default_factory=list)     # deck partagé de l'équipe Peloton
+    ai_discard: list = field(default_factory=list)  # défausse de l'équipe Peloton
 
     def __post_init__(self):
         """Initialise les coureurs avec la couleur du joueur."""

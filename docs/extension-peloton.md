@@ -2,7 +2,7 @@
 
 > Recherche faite sur le rulebook officiel (PDF anglais, 1jour-1jeu / ultraboardgames.com),
 > complété par dicetower, zatu, strongholdgames, lelabodesjeux, islaythedragon, opinionatedgamers.
-> **Pas encore implémenté** (branche `extension-peloton`, item roadmap).
+> **Partiellement implémenté** (branche `extension-peloton`) : pavés + zones d'approvisionnement (modèle/moteur/UI/tests), équipes factices Peloton/Muscle (IA) + écran d'assignation des équipes. Reste : variante échappée (enchères), 5-6 joueurs (arrivée large), 7-12 joueurs.
 
 ## Contenu
 

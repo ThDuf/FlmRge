@@ -6,6 +6,8 @@ from typing import Optional
 class CardType(Enum):
     ENERGY = auto()
     FATIGUE = auto()
+    ATTACK = auto()   # carte Peloton Attack! (équipe Peloton factice)
+    MUSCLE = auto()   # carte Muscle Team (équipe Muscle factice)
 
 
 @dataclass

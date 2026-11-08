@@ -205,7 +205,7 @@ class Game:
 
     def __init__(self, stage: str = "Avenue Corso Paseo", player_count: int = 2,
                  auto_place: bool = True, custom_code: str = None,
-                 meteo: bool = False, peloton: bool = False):
+                 meteo: bool = False, peloton: bool = False, dummy_teams=None):
         player_count = max(2, min(4, player_count))  # 2 à 4 joueurs
         self.stage = stage
         self.custom_code = custom_code  # code de tuiles perso (éditeur), prioritaire
@@ -226,8 +226,11 @@ class Game:
         self.total_cards_to_play = 0
         self.cards_played_per_runner = {}
 
-        # Initialiser les joueurs
+        # Initialiser les joueurs humains, puis les équipes factices (Peloton/Muscle)
         self._initialize_players(player_count)
+        self.dummy_teams = []
+        for spec in (dummy_teams or []):
+            self._add_dummy_team(spec)
 
         # Initialiser le compteur de cartes par coureur
         for player in self.players:
@@ -399,6 +402,70 @@ class Game:
                 return 3
         return 4
 
+    def _is_ai(self, player) -> bool:
+        """Une équipe factice est pilotée par l'IA si aucun humain ne la contrôle."""
+        return player.ai is not None and player.controller is None
+
+    def _add_dummy_team(self, spec: dict) -> None:
+        """Ajoute une équipe factice : kind = 'peloton' | 'muscle', couleur et
+        contrôleur (None = IA). Règle Peloton : l'équipe Peloton partage le deck
+        Rouleur + 2 cartes Attack! ; l'équipe Muscle a 1 carte Muscle dans le deck
+        du Sprinteur. Les deux équipes ne prennent jamais de carte Fatigue."""
+        kind, color = spec["kind"], spec["color"]
+        controller = spec.get("controller")
+        sprinter = Runner(id=f"sprinter_{color}_{kind}", type=RunnerType.SPRINTER,
+                          color=color, energy_deck=[])
+        roller = Runner(id=f"roller_{color}_{kind}", type=RunnerType.ROLLER,
+                        color=color, energy_deck=[])
+        player = Player(id=f"team_{color}_{kind}", color=color, sprinter=sprinter, roller=roller)
+        player.ai = kind
+        player.controller = controller
+        if kind == "peloton":
+            player.ai_deck = self._generate_energy_deck(RunnerType.ROLLER) + \
+                [Card(0, CardType.ATTACK, "R"), Card(0, CardType.ATTACK, "R")]
+            random.shuffle(player.ai_deck)
+        else:  # muscle
+            sprinter.energy_deck = self._generate_energy_deck(RunnerType.SPRINTER) + \
+                [Card(6, CardType.MUSCLE, "S")]
+            random.shuffle(sprinter.energy_deck)
+            roller.energy_deck = self._generate_energy_deck(RunnerType.ROLLER)
+        self.players.append(player)
+        self.dummy_teams.append(spec)
+        for runner in player.get_runners():
+            self.cards_played_per_runner[runner.id] = 0
+
+    def _ai_choose_cards(self, player) -> None:
+        """Phase d'énergie de l'IA : Peloton = 1 carte du deck partagé pour les
+        2 coureurs (Attack! -> avant 2 / arrière 9) ; Muscle = 1 carte par deck."""
+        runners = player.get_runners()
+        if player.ai == "peloton":
+            if not player.ai_deck and player.ai_discard:
+                player.ai_deck = player.ai_discard
+                player.ai_discard = []
+                random.shuffle(player.ai_deck)
+            if player.ai_deck:
+                card = player.ai_deck.pop(0)
+                player.ai_discard.append(card)
+                ordered = sorted(runners, key=lambda r: -r.x)
+                front, back = ordered[0], ordered[-1]  # avant / arrière (distincts)
+                if card.type == CardType.ATTACK:  # Attack! : avant 2, arrière 9
+                    front.played_card = Card(2, CardType.ENERGY, "R")
+                    back.played_card = Card(9, CardType.ENERGY, "R")
+                else:
+                    front.played_card = card
+                    back.played_card = card
+        else:  # muscle : chaque coureur joue la carte du dessus de son deck
+            for runner in runners:
+                if not runner.energy_deck and runner.discard_pile:
+                    runner.reshuffle_deck()
+                if runner.energy_deck:
+                    runner.played_card = runner.energy_deck.pop(0)
+        for runner in runners:
+            self.cards_played_per_runner[runner.id] = 1
+            self._hist_turn()["cards"].append((player.color, runner.id, 0))
+        self.cards_played_this_turn += len(runners)
+        self.total_cards_to_play += len(runners)
+
     def start_turn(self) -> None:
         """Démarre un nouveau tour."""
         self.turn_count += 1
@@ -408,6 +475,9 @@ class Game:
         self._hist_turn()
 
         for player in self.players:
+            if self._is_ai(player):
+                self._ai_choose_cards(player)  # équipe factice : l'IA joue
+                continue
             for runner in player.get_runners():
                 # extension Météo : 5 cartes en vent arrière, 3 en vent de face
                 runner.draw_cards(self._draw_count_for(runner))
@@ -555,6 +625,8 @@ class Game:
         """
         tired = []
         for player in self.players:
+            if self._is_ai(player):
+                continue  # équipe factice IA : jamais de carte Fatigue
             for runner in player.get_runners():
                 if self.track.is_square_empty(runner.x + 1):
                     fatigue_card = Card(2, CardType.FATIGUE,
