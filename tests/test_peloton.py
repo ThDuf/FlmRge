@@ -48,6 +48,23 @@ class TestPelotonTiles(unittest.TestCase):
         g2 = Game(stage="test", player_count=2)
         self.assertFalse(g2.peloton)
 
+    def test_wide_start_finish_at_5_6_players(self):
+        """En 5-6 joueurs avec Peloton, départ/arrivée passent en tuiles LARGES
+        (z/Z, 3 files) ; sinon départ 'a' classique 2 files."""
+        g4 = Game(stage="Avenue Corso Paseo", player_count=4, peloton=True)
+        self.assertEqual(g4.track.tiles[0].letter, "a")
+        self.assertEqual(g4.track.tiles[0].width, 2)
+        for n in (5, 6):
+            g = Game(stage="Avenue Corso Paseo", player_count=n, peloton=True,
+                     auto_place=True)
+            self.assertEqual(g.track.tiles[0].letter, "z")
+            self.assertEqual(g.track.tiles[0].width, 3)   # les 3 cases de départ
+            self.assertEqual(g.track.tiles[-1].letter, "Z")
+            self.assertEqual(g.track.tiles[-1].width, 3)
+            placed = sum(1 for t in g.track.tiles for c in t.cells
+                         for l in range(len(c.runners)) if c.runners[l])
+            self.assertEqual(placed, 2 * n)  # tous les coureurs placés au départ
+
     def test_menu_checkbox_wires_peloton(self):
         import main
         ui = main.FlammeRougeGame()
