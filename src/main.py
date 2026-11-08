@@ -2645,7 +2645,7 @@ class FlammeRougeGame:
             # répartis sur toute la longueur de la tuile
             c = (60, 170, 80)
             for j in range(6):
-                a = max(0.0, math.sin(now / 650.0 + j * 1.1))  # 0..1
+                a = max(0.0, math.sin(now / 150.0 + j * 1.1))  # 0..1, apparition/disparition BEAUCOUP plus rapide  # 0..1
                 a = a * a  # courbe nette : apparition/disparition franche
                 if a <= 0.02:
                     continue  # trait complètement disparu
@@ -2700,7 +2700,7 @@ class FlammeRougeGame:
         else:  # CROSSWIND : traits qui apparaissent/disparaissent sur toute la tuile
             c = (60, 170, 80)
             for j in range(6):
-                a = max(0.0, math.sin(now / 650.0 + j * 1.1))
+                a = max(0.0, math.sin(now / 150.0 + j * 1.1))  # 0..1, apparition/disparition BEAUCOUP plus rapide
                 a = a * a
                 if a <= 0.02:
                     continue
