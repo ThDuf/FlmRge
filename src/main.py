@@ -1976,7 +1976,9 @@ class FlammeRougeGame:
                 x0, y0 = pts[c0]
                 x1 = pts[c1][0]
                 fy = min(pts[c0][1], pts[c1][1])
-                self._draw_weather_zone(w, x0, x1, fy - 14, now)
+                # pluie : zone au niveau de la ligne -> les traits tombent SUR la route
+                zone_y = fy - 4 if w == WeatherType.RAIN else fy - 14
+                self._draw_weather_zone(w, x0, x1, zone_y, now)
             self.screen.set_clip(None)
         # petit fanion rouge sur CHAQUE col : une cote = une montée qui se
         # TERMINE par du plat (ou par l'arrivée, qui peut donc être un col).
@@ -2040,7 +2042,7 @@ class FlammeRougeGame:
         (vent = traits sur le côté, pluie = traits vers le bas + gouttes au sol,
         vent latéral = effet de profondeur, sinon soleil) et le libellé."""
         raw = pygame.time.get_ticks()
-        now = raw // 5  # cycle lent : 10 s par météo
+        now = raw // 3  # cycle un peu accéléré (~7 s par météo)
         w = types[(now // 2000) % len(types)]
         names = {WeatherType.NONE: "soleil", WeatherType.TAILWIND: "vent arrière",
                  WeatherType.HEADWIND: "vent de face", WeatherType.CROSSWIND: "vent de travers",
@@ -2637,7 +2639,7 @@ class FlammeRougeGame:
         centrée en y sur le profil de course) : mêmes codes que _draw_weather_icon
         (vent = traits qui défilent, pluie = traits vers le bas + gouttes au sol,
         vent latéral = effet de profondeur, soleil = voile jaune)."""
-        now = now // 5  # ralenti, comme les icônes
+        now = now // 3  # ralenti, comme les icônes
         span = max(8, x1 - x0)
         if w == WeatherType.RAIN:
             for x in range(int(x0), int(x1), 6):  # traits vers le bas sur toute la tuile
@@ -2655,17 +2657,20 @@ class FlammeRougeGame:
                     sx = x0 + p if sgn > 0 else x1 - p
                     pygame.draw.line(self.screen, c, (sx, ry), (sx + 8 * sgn, ry), 2)
         elif w == WeatherType.CROSSWIND:
+            # effet de profondeur : 4 plans, proche = trait long/foncé/rapide,
+            # loin = court/clair/lent (le vent traverse la route en perspective)
             c = (60, 170, 80)
-            for x in range(int(x0), int(x1), 8):  # effet de profondeur selon la position
-                depth = (x - x0) / span
-                o = (now // 8 + x * 5) % 14 - 7
-                ln = 3 + 5 * depth
-                col = _mix(c, WHITE, 0.55 * (1 - depth))
-                pygame.draw.line(self.screen, col, (x, y + o), (x, y + o + ln), 2)
-        else:  # soleil (pas de météo spécifique) : voile jaune + petit soleil animé au milieu
-            pygame.draw.line(self.screen, (250, 210, 60), (x0, y + 8), (x1, y + 8), 3)
+            for k in range(4):
+                depth = k / 3.0
+                ln = 3 + 6 * depth
+                col = _mix(c, WHITE, 0.6 * (1 - depth))
+                spd = max(3, int(16 - 12 * depth))
+                for x in range(int(x0) + k * 3, int(x1), 9):
+                    o = (now // spd + x) % 14 - 4
+                    pygame.draw.line(self.screen, col, (x, y + o), (x, y + o + ln), 2)
+        else:  # soleil (pas de météo spécifique) : SEULEMENT le petit soleil animé au milieu
             self._draw_weather_icon(WeatherType.NONE, (x0 + x1) / 2, y, 1.0, 0.0, 0.0, -1.0,
-                                    now * 5)  # now*5 car l'icône re-ralentit en interne
+                                    now * 3)  # now*3 car l'icône re-ralentit en interne
 
     def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
         """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
@@ -2676,7 +2681,7 @@ class FlammeRougeGame:
           PROFONdeur (proche = plus long et foncé, loin = plus court et clair) ;
         - pluie : TRAITS VERS LE BAS qui tombent + petites gouttes par terre ;
         - sinon (NONE) : SOLEIL (disque + rayons qui tournent)."""
-        now = now // 5  # animations BEAUCOUP plus lentes
+        now = now // 3  # animations ralenties, mais un peu accélérées
         if w == WeatherType.RAIN:
             for k in range(3):  # traits vers le bas qui tombent en boucle
                 dy = (now // 10 + k * 5) % 14
@@ -2848,8 +2853,9 @@ class FlammeRougeGame:
                             pygame.draw.circle(self.screen, color,
                                                (int(cx), int(cy)), r, 2)
 
-        # Extension Météo : icône animée sur le parcours, UNE par tuile droite à
-        # jeton (hors départ/arrivée), au milieu de la tuile ; NONE -> petit soleil
+        # Extension Météo : animation sur TOUTE LA TAILLE de la tuile sur le
+        # parcours = une icône animée PAR CASE de chaque tuile droite à jeton
+        # (hors départ/arrivée) ; NONE -> petit soleil
         if getattr(self.game, "meteo", False):
             now = pygame.time.get_ticks()
             for tile in track.tiles:
@@ -2857,11 +2863,11 @@ class FlammeRougeGame:
                     continue
                 if any(c.run in (CellRunType.START, CellRunType.END) for c in tile.cells):
                     continue
-                mid = tile.x + tile.length // 2
-                px, py, tx, ty = self._path_at(geo, (mid + 0.5) * cell)
-                nx, ny = -ty, tx
-                mx, my = px - nx * (half + 14), py - ny * (half + 14)
-                self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
+                for x_cell in range(tile.x, tile.x + tile.length):
+                    px, py, tx, ty = self._path_at(geo, (x_cell + 0.5) * cell)
+                    nx, ny = -ty, tx
+                    mx, my = px - nx * (half + 14), py - ny * (half + 14)
+                    self._draw_weather_icon(tile.cells[0].weather, mx, my, tx, ty, nx, ny, now)
 
         # Numéros de case tous les 5, à l'extérieur de la route
         for x_cell in range(0, track.length, 5):
