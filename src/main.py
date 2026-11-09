@@ -124,12 +124,15 @@ def weather_anim_elems(w, now, t0, span):
                           "len": 0.9, "sgn": sgn, "alpha": 0.55 + 0.2 * i / 2,
                           "phase": i * 1.7})
     elif w == WeatherType.CROSSWIND:
-        # rafales traversantes : apparition/disparition rapide (fondu), profondeur
+        # barres horizontales (parallèles au sol) réparties sur la tuile, qui
+        # apparaissent et disparaissent pseudo-aléatoirement (pulses de durées
+        # différentes selon la barre)
         for j in range(6):
             depth = j / 5.0                            # 0 = loin, 1 = proche
-            alpha = max(0.0, math.sin(now / 150.0 + j * 1.1)) ** 2
+            across = ((j / 5.0) * 2 - 1) * 0.8         # réparti en travers de la route
+            alpha = max(0.0, math.sin(now / (120.0 + j * 43.0) + j * 2.39)) ** 2
             elems.append({"kind": "gust", "along": t0 + (j + 0.5) * span / 6,
-                          "across": 0.0, "depth": depth, "alpha": alpha})
+                          "across": across, "depth": depth, "alpha": alpha})
     else:  # NONE : un seul soleil au milieu de la tuile, rayons qui tournent
         elems.append({"kind": "sun", "along": t0 + span / 2.0, "across": 0.0,
                       "rot": now / 900.0, "alpha": 1.0})
@@ -2743,15 +2746,17 @@ class FlammeRougeGame:
                     lat = across * half * 0.75 + wob
                     pts.append((p_x - p_nx * lat, p_y - p_ny * lat))
                 pygame.draw.lines(self.screen, col, False, pts, 2)
-            elif kind == "gust":  # rafale traversante, effet de profondeur + fondu
-                depth, a = e["depth"], e["alpha"]
+            elif kind == "gust":  # petite barre HORIZONTALE (parallèle au sol) sur la route
+                depth, a, across = e["depth"], e["alpha"], e["across"]
                 if a <= 0.03:
                     continue
-                L = half * (0.5 + 0.9 * depth)
-                col = _mix((232, 243, 232), (40, 150, 70), a * (0.4 + 0.6 * depth))
+                mx = px - nx * across * half * 0.8
+                my = py - ny * across * half * 0.8
+                L = 3 + 3 * depth                      # barre petite (3-6 px)
+                col = _mix(LIGHT_GRAY, (40, 150, 70), a * (0.4 + 0.6 * depth))
                 pygame.draw.line(self.screen, col,
-                                 (px - nx * L, py - ny * L), (px + nx * L, py + ny * L),
-                                 1 + int(2 * depth))
+                                 (int(mx - L), int(my)), (int(mx + L), int(my)),
+                                 1 + int(depth))
 
     def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
         """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
