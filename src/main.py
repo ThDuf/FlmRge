@@ -47,8 +47,8 @@ SUPPLY_FILL = (198, 232, 198)       # zone d'approvisionnement (Peloton) : vert 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GRAY = (200, 200, 200)
-LIGHT_GRAY = (176, 177, 186)   # route de la course (plus foncée)
-ROAD_BORDER = (118, 120, 130)  # bordure de la route, plus foncée que le remplissage
+LIGHT_GRAY = (148, 149, 158)   # route de la course (foncée)
+ROAD_BORDER = (95, 97, 108)    # bordure de la route, plus foncée que le remplissage
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 165, 0)      # assez foncé pour être lisible sur fond clair
@@ -79,7 +79,7 @@ TEXT_DIM = (95, 102, 114)       # texte secondaire
 ACCENT = (200, 45, 45)          # rouge principal (boutons SUIVANT/JOUER, logo)
 ACCENT_SOFT = (60, 170, 150)    # teal doux, complémentaire du rouge (Créer un circuit)
 SHADOW_RGB = (30, 35, 45)       # couleur des ombres portées
-ROAD_SHADOW = (188, 194, 205)   # ombre sous la route
+ROAD_SHADOW = (170, 176, 190)   # ombre sous la route
 # Échelle de rayons
 R_SM = 8                        # petites cartes
 CARD_R = 12                     # grandes cartes/panneaux
@@ -1378,8 +1378,14 @@ class FlammeRougeGame:
             right = [(all_pts[i][0] - normals[i][0] * road_w / 2,
                       all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(start, end + 1)]
             pygame.draw.polygon(self.screen, seg_color, left + right[::-1])
-        # ligne continue et très fine au MILIEU de la route (séparation des 2 files)
-        pygame.draw.lines(self.screen, (235, 238, 242), False, all_pts, 1)
+        # bande médiane BLANCHE DISCONTINUE au milieu de la route (pointillés
+        # d'une case sur deux, comme une vraie route)
+        for s in range(0, int(track.length) - 1, 2):
+            p0 = path_point_at(pts, float(s))
+            p1 = path_point_at(pts, float(s + 1))
+            pygame.draw.line(self.screen, (235, 238, 242),
+                             (ox + p0[0] * scale, oy + p0[1] * scale),
+                             (ox + p1[0] * scale, oy + p1[1] * scale), 2)
 
         # Un trait par CASE (pas par tuile) : FINE ligne claire à chaque
         # jonction de case, exactement sur la largeur de la route (1 px)
@@ -2891,16 +2897,17 @@ class FlammeRougeGame:
 
 
 
-        # Séparateurs entre les files (1 ligne à 2 files, 2 lignes à 3 files...)
-        # + quadrillage des cases ; la demi-largeur suit le nombre de files
-        for x_cell in range(track.length):
+        # Séparateurs entre les files en POINTILLÉS blancs (bande discontinue
+        # comme une vraie route : un tiret sur deux cases) + quadrillage des
+        # cases ; la demi-largeur suit le nombre de files
+        for x_cell in range(0, track.length, 2):  # un tiret sur deux cases
             n = self._lane_count(x_cell)
             s0, s1 = x_cell * cell, (x_cell + 1) * cell
             for k in range(1, n):  # séparateur entre la file k-1 et la file k
                 off = geo["lane_w"] * ((n - 1) / 2.0 - (k - 0.5))
                 seg = [self._path_at(geo, s0 + (s1 - s0) * j / 8) for j in range(9)]
                 pygame.draw.lines(self.screen, WHITE, False,
-                                  [(x - ty * off, y + tx * off) for x, y, tx, ty in seg], 1)
+                                  [(x - ty * off, y + tx * off) for x, y, tx, ty in seg], 2)
         for k in range(track.length + 1):
             px, py, tx, ty = self._path_at(geo, k * cell)
             nx, ny = -ty, tx
