@@ -508,6 +508,37 @@ class TestEditorBackButton(unittest.TestCase):
         ui._draw_header()
         ui._draw_menu()  # rendu de l'écran options sans erreur
 
+    def test_road_is_dark_on_course_and_preview(self):
+        """La route est foncée : sur l'écran de course (LIGHT_GRAY assombri)
+        et dans les previews du menu (gris très foncé)."""
+        import pygame
+        ui = main.FlammeRougeGame(stage="Avenue Corso Paseo")
+        ui.game.auto_place_riders()
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui.screen.fill((200, 200, 210))
+        ui._draw_header()
+        ui._draw_phase_band()
+        ui._draw_track()
+        ui._draw_runners()
+        geo = ui._track_geometry()
+        px, py, tx, ty = ui._cell_anchor(7)  # milieu d'une case droite (tuile b)
+        nx, ny = -ty, tx
+        col = ui.screen.get_at((int(px - nx * geo["half"] * 0.5),
+                                int(py - ny * geo["half"] * 0.5)))[:3]
+        self.assertEqual(col, main.LIGHT_GRAY)
+        self.assertLess(sum(col) / 3, 200, "route pas assez foncée")
+        # preview du menu : route en gris très foncé (48, 52, 60)
+        ui2 = main.FlammeRougeGame()
+        ui2.width, ui2.height = 1280, 920
+        ui2.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui2.screen.fill((255, 255, 255))
+        ui2._draw_menu_preview("Avenue Corso Paseo", ui2._preview_rect())
+        pr = ui2._preview_rect()
+        dark = sum(1 for x in range(pr.x, pr.right, 3) for y in range(pr.y, pr.bottom, 3)
+                   if ui2.screen.get_at((x, y))[:3] == (48, 52, 60))
+        self.assertGreater(dark, 50, "preview : route pas assez foncée")
+
 
 
 class TestEditorButtons(unittest.TestCase):

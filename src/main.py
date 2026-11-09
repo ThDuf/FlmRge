@@ -47,7 +47,8 @@ SUPPLY_FILL = (198, 232, 198)       # zone d'approvisionnement (Peloton) : vert 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GRAY = (200, 200, 200)
-LIGHT_GRAY = (220, 220, 220)
+LIGHT_GRAY = (176, 177, 186)   # route de la course (plus foncée)
+ROAD_BORDER = (118, 120, 130)  # bordure de la route, plus foncée que le remplissage
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 165, 0)      # assez foncé pour être lisible sur fond clair
@@ -78,7 +79,7 @@ TEXT_DIM = (95, 102, 114)       # texte secondaire
 ACCENT = (200, 45, 45)          # rouge principal (boutons SUIVANT/JOUER, logo)
 ACCENT_SOFT = (60, 170, 150)    # teal doux, complémentaire du rouge (Créer un circuit)
 SHADOW_RGB = (30, 35, 45)       # couleur des ombres portées
-ROAD_SHADOW = (205, 211, 221)   # ombre sous la route
+ROAD_SHADOW = (188, 194, 205)   # ombre sous la route
 # Échelle de rayons
 R_SM = 8                        # petites cartes
 CARD_R = 12                     # grandes cartes/panneaux
@@ -2001,7 +2002,7 @@ class FlammeRougeGame:
             elif cell.geography == CellGeographyType.SUPPLY:
                 c = (120, 190, 120)
             else:
-                c = (200, 205, 215)
+                c = (60, 64, 74)   # plat foncé (mini-tuiles de la palette)
             seg = [tr(p) for p in dense[ci * per_cell:(ci + 1) * per_cell + 1]]
             pygame.draw.lines(self.screen, c, False, seg, max(3, int(width)))
         for k in range(1, tile.length):
@@ -2858,7 +2859,7 @@ class FlammeRougeGame:
         # ombre douce sous la route (décalée de 3 px)
         pygame.draw.polygon(self.screen, ROAD_SHADOW, [(x, y + 3) for x, y in road])
         pygame.draw.polygon(self.screen, LIGHT_GRAY, road)
-        pygame.draw.polygon(self.screen, GRAY, road, width=2)
+        pygame.draw.polygon(self.screen, ROAD_BORDER, road, width=2)
 
         # Teinte des cases spéciales en POLYGONE borné par les bords de la
         # route (ne déborde pas dans les virages) : départ/arrivée jaunes,
