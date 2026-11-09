@@ -93,6 +93,49 @@ def _mix(c1, c2, t):
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
 
+def weather_anim_elems(w, now, t0, span):
+    """Éléments d'animation météo d'une tuile — fonction PURE de `now` (ms),
+    testable sans rendu. Retourne une liste de dicts en coordonnées relatives :
+      along  : position le long de la tuile, en cases (t0 .. t0+span)
+      across : position en travers, fraction de la demi-largeur [-1, 1]
+      fall   : progression de la chute [0, 1] (pluie : 0 = en haut, 1 = au sol)
+      depth  : profondeur [0, 1] (0 = loin, 1 = proche)
+      alpha  : opacité [0, 1]
+      rot    : rotation des rayons (soleil)
+    """
+    elems = []
+    if w == WeatherType.RAIN:
+        # gouttes réparties sur toute la tuile, chacune tombe en boucle
+        n = max(6, span * 3)
+        for i in range(n):
+            rnd = (i * 0.6180339887) % 1.0            # hash stable -> répartition fixe
+            across = (rnd * 2 - 1) * 0.85              # en travers de la route
+            depth = 1.0 - abs(across)                  # centre = proche
+            along = t0 + (i / n) * span + (rnd * 0.4)  # fixe le long de la tuile
+            fall = ((now / 650.0) + rnd * 7.0) % 1.0   # chute ~650 ms
+            elems.append({"kind": "drop", "along": along, "across": across,
+                          "fall": fall, "depth": depth, "alpha": 0.45 + 0.55 * depth})
+    elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
+        # lignes de courant qui défilent lentement LE LONG de la tuile
+        sgn = 1 if w == WeatherType.TAILWIND else -1
+        for i, across in enumerate((-0.55, 0.0, 0.55)):
+            along = t0 + ((now / 2600.0 + i / 3.0) * span) % span  # un tour de tuile ~2,6 s
+            elems.append({"kind": "streak", "along": along, "across": across,
+                          "len": 0.9, "sgn": sgn, "alpha": 0.55 + 0.2 * i / 2,
+                          "phase": i * 1.7})
+    elif w == WeatherType.CROSSWIND:
+        # rafales traversantes : apparition/disparition rapide (fondu), profondeur
+        for j in range(6):
+            depth = j / 5.0                            # 0 = loin, 1 = proche
+            alpha = max(0.0, math.sin(now / 150.0 + j * 1.1)) ** 2
+            elems.append({"kind": "gust", "along": t0 + (j + 0.5) * span / 6,
+                          "across": 0.0, "depth": depth, "alpha": alpha})
+    else:  # NONE : un seul soleil au milieu de la tuile, rayons qui tournent
+        elems.append({"kind": "sun", "along": t0 + span / 2.0, "across": 0.0,
+                      "rot": now / 900.0, "alpha": 1.0})
+    return elems
+
+
 def _dense_points(pts, length, per_cell=6):
     """Échantillonne une polyligne de tuile en points denses (pour un tracé lisse)."""
     from game.track import path_point_at
@@ -2660,62 +2703,55 @@ class FlammeRougeGame:
         disparaissent sur toute la tuile. Soleil (NONE) : un seul petit soleil
         au milieu de la tuile."""
         half = self._lane_half(geo, tile.x)  # demi-largeur locale (3 files -> route plus large)
-        now = now // 3  # ralenti
+        now = now // 3  # animations ralenties
         t0, t1 = tile.x, tile.x + tile.length
         span = max(1, t1 - t0)
-        if w == WeatherType.NONE:  # un seul soleil par tuile, au milieu
-            mid = (t0 + t1) // 2
-            px, py, tx, ty = self._path_at(geo, (mid + 0.5) * cell)
+        # éléments d'animation (fonction pure de now), projetés sur le tracé
+        for e in weather_anim_elems(w, now, t0, span):
+            along = min(e["along"], t1 - 0.01)
+            px, py, tx, ty = self._path_at(geo, along * cell)
             nx, ny = -ty, tx
-            self._draw_weather_icon(w, px - nx * (half + 14), py - ny * (half + 14),
-                                    tx, ty, nx, ny, now * 3)
-            return
-        if w == WeatherType.RAIN:  # pluie qui TOMBE SUR TOUTE LA PISTE (la tuile)
-            for xc in range(t0, t1):
-                px, py, tx, ty = self._path_at(geo, (xc + 0.5) * cell)
-                nx, ny = -ty, tx
-                for k in range(3):  # 3 filets répartis en travers de la route
-                    off = -half + 4 + k * max(1.0, (2 * half - 8) / 2)
-                    mx, my = px - nx * off, py - ny * off
-                    dy = (now // 7 + xc * 3 + k * 5) % max(6, int(cell * 0.7))
-                    # trait vers le bas qui descend sur la chaussée + goutte
-                    pygame.draw.line(self.screen, (90, 130, 210),
-                                     (int(mx), int(my - 6 + dy)), (int(mx), int(my + dy)), 2)
-                    pygame.draw.circle(self.screen, (60, 100, 190),
-                                       (int(mx), int(my + dy + 3)), 1)
-        elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
-            # longs traits (~1 case) qui défilent LE LONG de toute la tuile,
-            # lentement (vent ralenti)
-            c = (225, 185, 35) if w == WeatherType.TAILWIND else (60, 110, 220)
-            sgn = 1 if w == WeatherType.TAILWIND else -1
-            for j in range(2):
-                o = (now // 28 + j * (span // 2)) % span
-                for frac in (0.0, 0.5):
-                    xc = t0 + o + frac
-                    if xc >= t1:
-                        continue
-                    px, py, tx, ty = self._path_at(geo, (xc + 0.5) * cell)
-                    nx, ny = -ty, tx
-                    mx, my = px - nx * (half + 12), py - ny * (half + 12)
-                    ln = 0.8 * cell
-                    pygame.draw.line(self.screen, c, (mx, my),
-                                     (mx + tx * sgn * ln, my + ty * sgn * ln), 2)
-        else:  # CROSSWIND : traits qui apparaissent/disparaissent sur toute la tuile
-            c = (60, 170, 80)
-            for j in range(6):
-                a = max(0.0, math.sin(now / 150.0 + j * 1.1))  # 0..1, apparition/disparition BEAUCOUP plus rapide
-                a = a * a
-                if a <= 0.02:
-                    continue
-                xc = t0 + (j + 0.5) * span / 6
-                if xc >= t1:
-                    continue
-                px, py, tx, ty = self._path_at(geo, (xc + 0.5) * cell)
-                nx, ny = -ty, tx
-                mx, my = px - nx * (half + 12), py - ny * (half + 12)
-                col = _mix((232, 243, 232), c, a)  # fondu vers le fond vert du cadre
+            kind = e["kind"]
+            if kind == "sun":  # un seul soleil par tuile, à l'extérieur de la route
+                self._draw_weather_icon(w, px - nx * (half + 16), py - ny * (half + 16),
+                                        tx, ty, nx, ny, now)
+            elif kind == "drop":  # goutte de pluie qui tombe SUR la chaussée
+                across, fall, depth = e["across"], e["fall"], e["depth"]
+                mx = px - nx * across * half * 0.9
+                my = py - ny * across * half * 0.9
+                H = max(8.0, cell * 1.1)            # hauteur de chute au-dessus de la route
+                y = my - (1.0 - fall) * H           # descend vers la route
+                ln = 3 + 5 * depth                  # traînée de la goutte
+                col = _mix((150, 180, 230), (60, 100, 200), depth)
                 pygame.draw.line(self.screen, col,
-                                 (mx - nx * 5, my - ny * 5), (mx + nx * 5, my + ny * 5), 2)
+                                 (int(mx - 1.5), int(y - ln)), (int(mx), int(y)),
+                                 max(1, int(1 + depth)))
+                if fall > 0.82:  # éclaboussure au sol (petit cercle aplati)
+                    a = (fall - 0.82) / 0.18
+                    r = 1 + 2 * a * depth
+                    pygame.draw.ellipse(self.screen, _mix(LIGHT_GRAY, (60, 100, 190), 0.7 * a),
+                                        (int(mx - r), int(my - 1), max(2, int(2 * r)), 2))
+            elif kind == "streak":  # ligne de courant courbée qui suit le tracé
+                sgn, ln, across = e["sgn"], e["len"], e["across"]
+                col = (225, 185, 35) if w == WeatherType.TAILWIND else (60, 110, 220)
+                col = _mix(LIGHT_GRAY, col, e["alpha"])
+                pts = []
+                for k in range(7):
+                    p_x, p_y, p_tx, p_ty = self._path_at(geo, (along + sgn * ln * k / 6.0) * cell)
+                    p_nx, p_ny = -p_ty, p_tx
+                    wob = math.sin(k * 1.3 + e["phase"] + now / 400.0) * 2.0
+                    lat = across * half * 0.75 + wob
+                    pts.append((p_x - p_nx * lat, p_y - p_ny * lat))
+                pygame.draw.lines(self.screen, col, False, pts, 2)
+            elif kind == "gust":  # rafale traversante, effet de profondeur + fondu
+                depth, a = e["depth"], e["alpha"]
+                if a <= 0.03:
+                    continue
+                L = half * (0.5 + 0.9 * depth)
+                col = _mix((232, 243, 232), (40, 150, 70), a * (0.4 + 0.6 * depth))
+                pygame.draw.line(self.screen, col,
+                                 (px - nx * L, py - ny * L), (px + nx * L, py + ny * L),
+                                 1 + int(2 * depth))
 
     def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
         """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
@@ -2727,43 +2763,57 @@ class FlammeRougeGame:
         - pluie : TRAITS VERS LE BAS qui tombent + petites gouttes par terre ;
         - sinon (NONE) : SOLEIL (disque + rayons qui tournent)."""
         now = now // 3  # animations ralenties, mais un peu accélérées
+        if w == WeatherType.NONE:
+            # SOLEIL : halo, disque en dégradé, 8 rayons qui tournent, légère pulsation
+            rot = now / 900.0
+            r = max(3, int(6 * (1.0 + 0.06 * math.sin(now / 700.0))))
+            pygame.draw.circle(self.screen, _mix((232, 243, 232), (250, 210, 60), 0.25),
+                               (int(cx), int(cy)), r + 4)          # halo
+            pygame.draw.circle(self.screen, (245, 190, 50), (int(cx), int(cy)), r)
+            pygame.draw.circle(self.screen, (255, 236, 140), (int(cx), int(cy)), max(2, r - 2))
+            for k in range(8):                                   # rayons tournants
+                a = rot + k * math.pi / 4
+                pygame.draw.line(self.screen, (250, 205, 60),
+                                 (cx + math.cos(a) * (r + 1), cy + math.sin(a) * (r + 1)),
+                                 (cx + math.cos(a) * (r + 5), cy + math.sin(a) * (r + 5)), 2)
+            return
         if w == WeatherType.RAIN:
-            for k in range(3):  # traits vers le bas qui tombent en boucle
-                dy = (now // 10 + k * 5) % 14
+            # petit nuage gris + 3 gouttes qui tombent en boucle + flaque au sol
+            pygame.draw.ellipse(self.screen, (198, 203, 213), (int(cx - 7), int(cy - 10), 14, 6))
+            pygame.draw.circle(self.screen, (208, 213, 222), (int(cx - 3), int(cy - 9)), 4)
+            pygame.draw.circle(self.screen, (208, 213, 222), (int(cx + 3), int(cy - 9)), 4)
+            for k in range(3):
+                dy = (now // 8 + k * 5) % 12
                 x = cx - 5 + k * 5
                 pygame.draw.line(self.screen, (90, 130, 210),
-                                 (x, cy - 7 + dy), (x, cy - 1 + dy), 2)
-            # petites gouttes par terre
-            pygame.draw.circle(self.screen, (60, 100, 190), (int(cx - 3), int(cy + 6)), 2)
-            pygame.draw.circle(self.screen, (60, 100, 190), (int(cx + 3), int(cy + 7)), 1)
-            return
-        if w == WeatherType.NONE:  # soleil : disque + rayons tournants
-            pygame.draw.circle(self.screen, (250, 210, 60), (int(cx), int(cy)), 5)
-            for k in range(8):
-                a = now / 350.0 + k * math.pi / 4
-                pygame.draw.line(self.screen, (250, 210, 60),
-                                 (cx + math.cos(a) * 6, cy + math.sin(a) * 6),
-                                 (cx + math.cos(a) * 9, cy + math.sin(a) * 9), 2)
+                                 (int(x), int(cy - 2 + dy)), (int(x), int(cy + 2 + dy)), 2)
+            pygame.draw.ellipse(self.screen, (120, 150, 210), (int(cx - 6), int(cy + 6), 12, 3))
             return
         if w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
+            # 3 traits légèrement courbés qui défilent dans le sens du vent
             c = (225, 185, 35) if w == WeatherType.TAILWIND else (60, 110, 220)
             sgn = 1 if w == WeatherType.TAILWIND else -1
-            for k in range(3):  # traits sur le côté, défilant selon le vent
-                o = (now // 9 + k * 6) % 14 - 7
+            for k in range(3):
+                o = (now // 10 + k * 6) % 16 - 8
                 lat = (k - 1) * 5
                 bx, by = cx + nx * lat, cy + ny * lat
-                pygame.draw.line(self.screen, c,
-                                 (bx + tx * sgn * o, by + ty * sgn * o),
-                                 (bx + tx * sgn * (o + 5), by + ty * sgn * (o + 5)), 2)
-        else:  # CROSSWIND : rafales qui traversent en FONDU (apparition/disparition)
-            c = (60, 170, 80)
+                p0 = (bx + tx * sgn * o, by + ty * sgn * o)
+                p2 = (bx + tx * sgn * (o + 6), by + ty * sgn * (o + 6))
+                p1 = ((p0[0] + p2[0]) / 2 - ny * sgn * 2, (p0[1] + p2[1]) / 2 + nx * sgn * 2)
+                pygame.draw.lines(self.screen, c, False, [p0, p1, p2], 2)
+        else:  # CROSSWIND : rafales traversantes avec effet de profondeur + fondu
+            c = (40, 150, 70)
             for k in range(3):
-                a = max(0.08, 0.5 + 0.5 * math.sin(now / 550.0 + k * 2.1))
-                col = _mix(WHITE, c, a)
-                o = (now // 9 + k * 6) % 16 - 8
+                depth = 1.0 - k / 3.0                # 1 = proche (long, foncé)
+                a = max(0.15, 0.45 + 0.5 * math.sin(now / 160.0 + k * 2.1))
+                col = _mix(WHITE, c, a * depth + 0.15)
+                o = (now // 10 + k * 6) % 16 - 8
                 ax, ay = cx + nx * o, cy + ny * o
+                L = 3 + 4 * depth
                 pygame.draw.line(self.screen, col,
-                                 (ax - nx * 4, ay - ny * 4), (ax + nx * 4, ay + ny * 4), 2)
+                                 (ax - nx * L, ay - ny * L), (ax + nx * L, ay + ny * L),
+                                 1 + int(depth))
+
     def _draw_track(self):
         """Dessine le circuit organique : un chemin continu sans saut.
 

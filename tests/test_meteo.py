@@ -471,14 +471,14 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
         ui.screen = pygame.display.set_mode((1200, 920), pygame.RESIZABLE)
         ui.screen.fill((200, 200, 210))
         ui._draw_header(); ui._draw_phase_band(); ui._draw_track(); ui._draw_runners(); ui._draw_ui()
-        sun = (250, 210, 60)
+        sun = {(250, 210, 60), (245, 190, 50), (255, 236, 140), (250, 205, 60)}  # palette soleil
         prof = ui._race_profile_rect()
-        sun_prof = any(ui.screen.get_at((x, y))[:3] == sun
+        sun_prof = any(ui.screen.get_at((x, y))[:3] in sun
                        for y in range(prof.y, prof.bottom) for x in range(prof.x, prof.right))
         self.assertTrue(sun_prof, "pas de soleil dans le bloc profil")
         frame = ui._frame_rect()
         sun_track = sum(1 for x in range(frame.x, frame.right) for y in range(frame.y, frame.bottom)
-                        if ui.screen.get_at((x, y))[:3] == sun)
+                        if ui.screen.get_at((x, y))[:3] in sun)
         self.assertTrue(sun_track > 0, "pas de soleil sur le parcours")
         # UN SEUL soleil par tuile (7 tuiles droites -> ~7 icônes, pas 6 par tuile)
         n_straights = len([t for t in ui.game.track.tiles if t.turn is None
@@ -513,6 +513,82 @@ class TestWeatherTileRender(unittest.TestCase):
         ui._draw_track()      # inclut _draw_weather_tile pour chaque tuile
         ui._draw_runners()
         ui._draw_ui()
+
+
+class TestWeatherAnimElems(unittest.TestCase):
+    """Fonction pure d'animation météo (main.weather_anim_elems), testable
+    sans rendu : positions relatives + paramètres temporels."""
+
+    def test_rain_drops_fall_and_loop(self):
+        import main
+        e0 = main.weather_anim_elems(WeatherType.RAIN, 0, 6, 6)
+        e1 = main.weather_anim_elems(WeatherType.RAIN, 300, 6, 6)
+        self.assertTrue(all(e["kind"] == "drop" for e in e0))
+        self.assertGreaterEqual(len(e0), 12)          # assez dense sur toute la tuile
+        for e in e0 + e1:
+            self.assertTrue(0.0 <= e["fall"] <= 1.0)
+            self.assertTrue(-1.0 <= e["across"] <= 1.0)
+            self.assertTrue(0.0 <= e["depth"] <= 1.0)
+        self.assertNotEqual(sorted(e["fall"] for e in e0),
+                            sorted(e["fall"] for e in e1))  # la pluie bouge
+
+    def test_wind_streaks_move_slowly(self):
+        import main
+        e0 = main.weather_anim_elems(WeatherType.TAILWIND, 0, 6, 6)
+        e1 = main.weather_anim_elems(WeatherType.TAILWIND, 100, 6, 6)
+        self.assertEqual(len(e0), 3)                  # 3 lignes de courant
+        self.assertTrue(all(e["kind"] == "streak" for e in e0))
+        d = abs(e1[0]["along"] - e0[0]["along"])
+        self.assertGreater(d, 0)                      # le vent avance...
+        self.assertLess(d, 0.5)                       # ...mais lentement
+
+    def test_crosswind_gusts_fade_fast(self):
+        import main
+        a0 = [e["alpha"] for e in main.weather_anim_elems(WeatherType.CROSSWIND, 0, 6, 6)]
+        a1 = [e["alpha"] for e in main.weather_anim_elems(WeatherType.CROSSWIND, 150, 6, 6)]
+        self.assertEqual(len(a0), 6)
+        self.assertTrue(all(0.0 <= a <= 1.0 for a in a0 + a1))
+        self.assertNotEqual(a0, a1)                   # fondu rapide
+
+    def test_sun_single_rotating(self):
+        import main
+        e = main.weather_anim_elems(WeatherType.NONE, 0, 6, 6)
+        self.assertEqual(len(e), 1)                   # UN seul soleil par tuile
+        self.assertEqual(e[0]["kind"], "sun")
+        self.assertAlmostEqual(e[0]["along"], 9.0)   # au milieu de la tuile
+        e2 = main.weather_anim_elems(WeatherType.NONE, 500, 6, 6)
+        self.assertNotEqual(e[0]["rot"], e2[0]["rot"])  # les rayons tournent
+
+
+class TestWeatherAnimMovesOnScreen(unittest.TestCase):
+    def test_weather_tile_pixels_change_over_time(self):
+        """Test pixel : le rendu météo sur la piste bouge entre deux instants."""
+        import pygame
+        import main
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui.game = Game(stage="Avenue Corso Paseo", player_count=2, meteo=True,
+                       auto_place=True)
+        tile = next(t for t in ui.game.track.tiles
+                    if t.turn is None and t.x > 0 and not any(
+                        c.run in (CellRunType.START, CellRunType.END) for c in t.cells))
+        for c in tile.cells:
+            c.weather = WeatherType.RAIN
+        real = pygame.time.get_ticks
+
+        def snap(now):
+            pygame.time.get_ticks = lambda: now
+            ui.screen.fill((200, 214, 200))
+            ui._draw_track()
+            return [ui.screen.get_at((x, y))[:3]
+                    for y in range(0, ui.height, 4) for x in range(0, ui.width, 4)]
+
+        s0 = snap(0)
+        s1 = snap(900)
+        pygame.time.get_ticks = real
+        diff = sum(1 for a, b in zip(s0, s1) if a != b)
+        self.assertGreater(diff, 30, "l'animation météo ne bouge pas à l'écran")
 
 
 if __name__ == "__main__":
