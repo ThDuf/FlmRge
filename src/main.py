@@ -1384,7 +1384,7 @@ class FlammeRougeGame:
                       all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(start, end + 1)]
             outline = left + right[::-1]
             if edge is not None:
-                pygame.draw.lines(self.screen, edge, True, outline, 2)  # contour coloré
+                pygame.draw.lines(self.screen, edge, True, outline, 4)  # contour coloré épais
             else:
                 pygame.draw.polygon(self.screen, seg_color, outline)
         # bande médiane BLANCHE DISCONTINUE au milieu de la route (pointillés
@@ -2911,7 +2911,7 @@ class FlammeRougeGame:
                 outline = right + left[::-1]
                 if edge is not None:
                     # contour coloré autour de la case, asphalte inchangé
-                    pygame.draw.lines(self.screen, edge, True, outline, 3)
+                    pygame.draw.lines(self.screen, edge, True, outline, 5)
                 else:
                     pygame.draw.polygon(self.screen, color, outline)
 
