@@ -173,6 +173,7 @@ class FlammeRougeGame:
         self.menu_step = "stage"    # écran de sélection (nb de joueurs + extensions + étape)
         self._pending_stage = None
         self.menu_scroll = 0        # scroll de la liste du menu
+        self._menu_last_click = None  # (cible, ticks, pos) du dernier clic (double-clic)
         self.menu_search = ""       # filtre de recherche (parcours perso)
         self.ext_meteo = False      # extension Météo activée ?
         self.team_modes = {}       # slot équipe -> "human" | "peloton" | "muscle" (défaut human)
@@ -2411,7 +2412,7 @@ class FlammeRougeGame:
             self._options_event(event)
             return
         entries = self._menu_entries()
-        mouse = pygame.mouse.get_pos()
+        mouse = getattr(event, "pos", None) or pygame.mouse.get_pos()
         if event.type == pygame.MOUSEWHEEL:
             # molette sur la liste = scroll du menu
             area = self._menu_list_area()
@@ -2481,6 +2482,20 @@ class FlammeRougeGame:
                     self._pressed_button = None
                     return
                 self.menu_index = hovered  # les autres entrées : clic = sélectionner
+                # double-clic sur le circuit (entrée de la liste) = le valider
+                # directement -> écran d'options
+                if self._menu_double_click(("entry", hovered), event.pos):
+                    self._pressed_button = "next"
+                    self._menu_validate(entries[hovered])
+                    self._pressed_button = None
+                    return
+            elif (self._preview_rect().collidepoint(event.pos)
+                    and self._menu_double_click(("preview",), event.pos)):
+                # double-clic sur la preview du circuit = le valider aussi
+                self._pressed_button = "next"
+                self._menu_validate(entries[self.menu_index])
+                self._pressed_button = None
+                return
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.menu_index = (self.menu_index - 1) % len(entries)
@@ -2493,6 +2508,15 @@ class FlammeRougeGame:
             elif event.key == pygame.K_PAGEDOWN:
                 self.menu_scroll += 200
                 self._menu_entries()
+
+    def _menu_double_click(self, key, pos) -> bool:
+        """Détecte un double-clic (pygame n'en génère pas nativement) : même
+        cible, moins de 450 ms et positions proches -> True (et reset)."""
+        now = pygame.time.get_ticks()
+        last = self._menu_last_click
+        self._menu_last_click = (key, now, pos)
+        return (last is not None and last[0] == key and now - last[1] <= 450
+                and abs(pos[0] - last[2][0]) <= 12 and abs(pos[1] - last[2][1]) <= 12)
 
     def _menu_validate(self, entry):
         """Validation d'une entrée du menu : éditeur, étape de base ou perso."""

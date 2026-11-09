@@ -455,6 +455,38 @@ class TestEditorBackButton(unittest.TestCase):
         ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=br.center))
         self.assertEqual(ui.menu_step, "stage")
 
+    def test_menu_double_click_selects_stage(self):
+        """Menu : un simple clic sélectionne le circuit, un DOUBLE-clic sur le
+        circuit (entrée de la liste ou preview) le valide -> écran d'options."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        entries = ui._menu_entries()
+        stage_i = next(i for i, e in enumerate(entries) if e[4] == "base")
+        rect = entries[stage_i][3]
+        # simple clic = sélectionne seulement
+        pygame.mouse.set_pos(rect.center)
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center))
+        self.assertEqual(ui.menu_index, stage_i)
+        self.assertEqual(ui.menu_step, "stage")
+        # second clic rapide sur la même entrée = double-clic -> valide
+        pygame.mouse.set_pos(rect.center)
+        ui._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center))
+        self.assertEqual(ui.menu_step, "options")
+        self.assertEqual(ui._pending_stage, entries[stage_i][0])
+        # double-clic sur la preview du circuit = valide aussi
+        ui2 = main.FlammeRougeGame()
+        ui2.width, ui2.height = 1280, 920
+        ui2.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        entries2 = ui2._menu_entries()
+        ui2.menu_index = next(i for i, e in enumerate(entries2) if e[4] == "base")
+        pr = ui2._preview_rect()
+        for _ in range(2):
+            pygame.mouse.set_pos(pr.center)
+            ui2._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pr.center))
+        self.assertEqual(ui2.menu_step, "options")
+
 
 
 class TestEditorButtons(unittest.TestCase):
