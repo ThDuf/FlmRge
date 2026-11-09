@@ -487,6 +487,27 @@ class TestEditorBackButton(unittest.TestCase):
             ui2._menu_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pr.center))
         self.assertEqual(ui2.menu_step, "options")
 
+    def test_options_preview_does_not_overlap_play_button(self):
+        """Écran d'options : la preview du parcours ne chevauche pas le bouton
+        JOUER (ni le panneau de gauche)."""
+        import pygame
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        entries = ui._menu_entries()
+        stage_i = next(i for i, e in enumerate(entries) if e[4] == "base")
+        ui.menu_index = stage_i
+        ui._menu_validate(entries[stage_i])
+        self.assertEqual(ui.menu_step, "options")
+        pr = ui._options_preview_rect()
+        self.assertFalse(pr.colliderect(ui._next_button_rect()),
+                         "preview chevauche JOUER")
+        self.assertFalse(pr.colliderect(ui._options_frame_rect()),
+                         "preview chevauche le panneau options")
+        ui.screen.fill((255, 255, 255))
+        ui._draw_header()
+        ui._draw_menu()  # rendu de l'écran options sans erreur
+
 
 
 class TestEditorButtons(unittest.TestCase):

@@ -988,6 +988,14 @@ class FlammeRougeGame:
         return pygame.Rect(12, MENU_TOP, min(620, self.width - 24),
                            self.height - 12 - MENU_TOP - 90)
 
+    def _options_preview_rect(self):
+        """Panneau de preview du parcours choisi (colonne de droite de l'écran
+        d'options) : toute la hauteur SAUF la place du bouton JOUER en bas."""
+        frame = self._options_frame_rect()
+        return pygame.Rect(frame.right + 16, MENU_TOP,
+                           self.width - 16 - (frame.right + 16),
+                           self.height - MENU_TOP - 12 - 76)  # moins le bouton JOUER
+
     def _players_block_rect(self):
         """Bloc du choix du nombre de joueurs (2-6), en haut du panneau options."""
         fr = self._options_frame_rect()
@@ -2322,12 +2330,11 @@ class FlammeRougeGame:
             self._draw_ui_button(b, label, ACCENT if mode != "human" else (90, 96, 110),
                                  mouse, font=self.small_font)
         self._draw_extensions(mouse)
-        # preview du parcours choisi à droite (sans chevaucher le panneau options)
+        # preview du parcours choisi à droite (sans chevaucher le panneau
+        # options NI le bouton JOUER en bas à droite)
         if self.width >= 1100 and self._pending_stage:
-            pr = pygame.Rect(frame.right + 16, MENU_TOP,
-                             self.width - 16 - (frame.right + 16),
-                             self.height - 12 - MENU_TOP)
-            self._draw_menu_preview(self._pending_stage, pr, code=self._pending_code)
+            self._draw_menu_preview(self._pending_stage, self._options_preview_rect(),
+                                    code=self._pending_code)
         # JOUER en bas à droite + retour en haut à droite
         self._draw_ui_button(self._next_button_rect(), "JOUER", ACCENT,
                              mouse, pressed=(self._pressed_button == "next"),
