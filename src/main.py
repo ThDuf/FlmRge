@@ -130,7 +130,7 @@ def weather_anim_elems(w, now, t0, span):
         for j in range(10):
             depth = j / 9.0                            # 0 = loin, 1 = proche
             across = ((j / 9.0) * 2 - 1) * 0.8         # réparti en travers de la route
-            alpha = max(0.0, math.sin(now / (70.0 + j * 25.0) + j * 2.39)) ** 2
+            alpha = max(0.0, math.sin(now / (45.0 + j * 15.0) + j * 2.39)) ** 2
             elems.append({"kind": "gust", "along": t0 + (j + 0.5) * span / 10,
                           "across": across, "depth": depth, "alpha": alpha})
     else:  # NONE : un seul soleil au milieu de la tuile, rayons qui tournent
@@ -2756,7 +2756,7 @@ class FlammeRougeGame:
                 col = _mix(LIGHT_GRAY, (40, 150, 70), a * (0.4 + 0.6 * depth))
                 pygame.draw.line(self.screen, col,
                                  (int(mx - L), int(my)), (int(mx + L), int(my)),
-                                 1 + int(depth))
+                                 2 + int(2 * depth))       # barre plus épaisse (2-4 px)
 
     def _draw_weather_icon(self, w, cx, cy, tx, ty, nx, ny, now):
         """Icône météo ANIMÉE (écran de course), centrée en (cx, cy), orientée
