@@ -2663,20 +2663,26 @@ class FlammeRougeGame:
             self._draw_weather_icon(w, px - nx * (half + 14), py - ny * (half + 14),
                                     tx, ty, nx, ny, now * 3)
             return
-        if w == WeatherType.RAIN:  # pluie sur toute la tuile
+        if w == WeatherType.RAIN:  # pluie qui TOMBE SUR TOUTE LA PISTE (la tuile)
             for xc in range(t0, t1):
                 px, py, tx, ty = self._path_at(geo, (xc + 0.5) * cell)
                 nx, ny = -ty, tx
-                mx, my = px - nx * (half + 12), py - ny * (half + 12)
-                dy = (now // 10 + xc * 3) % 12
-                pygame.draw.line(self.screen, (90, 130, 210), (mx, my - 8 + dy), (mx, my - 2 + dy), 2)
-                pygame.draw.circle(self.screen, (60, 100, 190), (int(mx), int(my + 6)), 1)
+                for k in range(3):  # 3 filets répartis en travers de la route
+                    off = -half + 4 + k * max(1.0, (2 * half - 8) / 2)
+                    mx, my = px - nx * off, py - ny * off
+                    dy = (now // 7 + xc * 3 + k * 5) % max(6, int(cell * 0.7))
+                    # trait vers le bas qui descend sur la chaussée + goutte
+                    pygame.draw.line(self.screen, (90, 130, 210),
+                                     (int(mx), int(my - 6 + dy)), (int(mx), int(my + dy)), 2)
+                    pygame.draw.circle(self.screen, (60, 100, 190),
+                                       (int(mx), int(my + dy + 3)), 1)
         elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
-            # longs traits (~1 case) qui défilent LE LONG de toute la tuile
+            # longs traits (~1 case) qui défilent LE LONG de toute la tuile,
+            # lentement (vent ralenti)
             c = (225, 185, 35) if w == WeatherType.TAILWIND else (60, 110, 220)
             sgn = 1 if w == WeatherType.TAILWIND else -1
             for j in range(2):
-                o = (now // 9 + j * (span // 2)) % span
+                o = (now // 28 + j * (span // 2)) % span
                 for frac in (0.0, 0.5):
                     xc = t0 + o + frac
                     if xc >= t1:

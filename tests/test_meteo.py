@@ -488,5 +488,32 @@ class TestWeatherAnimationRaceScreen(unittest.TestCase):
 
 
 
+class TestWeatherTileRender(unittest.TestCase):
+    def test_weather_tile_renders_all_types_on_track(self):
+        """Rendu de l'écran de course avec chaque type de météo sur des tuiles
+        droites : pluie qui tombe SUR la piste, vent (lent), soleil — sans erreur."""
+        import pygame
+        import main
+        ui = main.FlammeRougeGame()
+        ui.width, ui.height = 1280, 920
+        ui.screen = pygame.display.set_mode((1280, 920), pygame.RESIZABLE)
+        ui.game = Game(stage="Avenue Corso Paseo", player_count=2, meteo=True,
+                       auto_place=True)
+        kinds = [WeatherType.RAIN, WeatherType.TAILWIND, WeatherType.HEADWIND,
+                 WeatherType.CROSSWIND, WeatherType.NONE]
+        straights = [t for t in ui.game.track.tiles if t.turn is None and not any(
+            c.run in (CellRunType.START, CellRunType.END) for c in t.cells)]
+        self.assertGreaterEqual(len(straights), len(kinds))
+        for tile, w in zip(straights, kinds):
+            for c in tile.cells:
+                c.weather = w
+        ui.screen.fill((200, 200, 210))
+        ui._draw_header()
+        ui._draw_phase_band()
+        ui._draw_track()      # inclut _draw_weather_tile pour chaque tuile
+        ui._draw_runners()
+        ui._draw_ui()
+
+
 if __name__ == "__main__":
     unittest.main()
