@@ -2721,14 +2721,14 @@ class FlammeRougeGame:
                 my = py - ny * across * half * 0.9
                 H = max(8.0, cell * 1.1)            # hauteur de chute au-dessus de la route
                 y = my - (1.0 - fall) * H           # descend vers la route
-                ln = 3 + 5 * depth                  # traînée de la goutte
+                ln = 4 + 6 * depth                  # traînée de la goutte
                 col = _mix((150, 180, 230), (60, 100, 200), depth)
                 pygame.draw.line(self.screen, col,
                                  (int(mx - 1.5), int(y - ln)), (int(mx), int(y)),
-                                 max(1, int(1 + depth)))
+                                 max(2, int(1 + 2 * depth)))
                 if fall > 0.82:  # éclaboussure au sol (petit cercle aplati)
                     a = (fall - 0.82) / 0.18
-                    r = 1 + 2 * a * depth
+                    r = 1.5 + 3 * a * depth
                     pygame.draw.ellipse(self.screen, _mix(LIGHT_GRAY, (60, 100, 190), 0.7 * a),
                                         (int(mx - r), int(my - 1), max(2, int(2 * r)), 2))
             elif kind == "streak":  # ligne de courant courbée qui suit le tracé
