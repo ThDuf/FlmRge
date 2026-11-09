@@ -38,8 +38,10 @@ GREEN_CARD_BORDER = (46, 125, 50)
 
 LIGHT_TURN_FILL = (255, 250, 205)    # virage léger
 SHARP_TURN_FILL = (255, 224, 178)   # virage serré
-UPHILL_FILL = (255, 205, 205)       # montée (bords rouges dans le jeu officiel)
-DOWNHILL_FILL = (205, 225, 255)     # descente (bords bleus)
+UPHILL_FILL = (255, 205, 205)       # montée (remplissage clair, legacy)
+DOWNHILL_FILL = (205, 225, 255)     # descente (remplissage clair, legacy)
+UPHILL_EDGE = (220, 50, 50)         # montée : CONTOUR rouge vif (comme le jeu officiel)
+DOWNHILL_EDGE = (50, 90, 220)       # descente : CONTOUR bleu vif
 COBBLE_FILL = (176, 176, 184)       # pavés (Peloton) : gris pavé
 SUPPLY_FILL = (198, 232, 198)       # zone d'approvisionnement (Peloton) : vert clair
 
@@ -1324,16 +1326,19 @@ class FlammeRougeGame:
         # contenues dans leur case (aucun débordement).
         steps = 4
         all_pts = []     # points écran du tracé complet
-        cell_spans = []  # (index début, index fin, couleur) par case
+        cell_spans = []  # (index début, index fin, couleur, contour ou None) par case
         for tile in track.tiles:
             for cell in tile.cells:
                 s0 = float(cell.x)
+                edge = None  # contour coloré (montée/descente) au lieu du remplissage
                 if cell.run in (CellRunType.START, CellRunType.END):
                     seg_color = (48, 52, 60)     # départ/arrivée en noir : identifiés par leurs lignes
                 elif cell.geography == CellGeographyType.UPHILL:
-                    seg_color = (235, 145, 50)   # montée : orange (comme le profil)
+                    seg_color = (48, 52, 60)     # asphalte comme le reste...
+                    edge = (235, 145, 50)        # ...mais contour orange (montée)
                 elif cell.geography == CellGeographyType.DOWNHILL:
-                    seg_color = (80, 120, 235)   # descente : bleu (comme le profil)
+                    seg_color = (48, 52, 60)
+                    edge = (80, 120, 235)        # contour bleu (descente)
                 elif cell.geography == CellGeographyType.COBBLE:
                     seg_color = (150, 150, 158)  # pavés : gris pavé
                 elif cell.geography == CellGeographyType.SUPPLY:
@@ -1349,7 +1354,7 @@ class FlammeRougeGame:
                         continue  # point frontière déjà posé par la case précédente
                     px, py, _tx, _ty = path_point_at(pts, s0 + k / steps)
                     all_pts.append((ox + px * scale, oy + py * scale))
-                cell_spans.append((start, len(all_pts) - 1, seg_color))
+                cell_spans.append((start, len(all_pts) - 1, seg_color, edge))
         normals = []
         for i, pt in enumerate(all_pts):
             if i == 0:
@@ -1372,12 +1377,16 @@ class FlammeRougeGame:
         pygame.draw.polygon(self.screen, (48, 52, 60), full_road)
         # Chaque case = bandeau polygonal (offset exact +/- road_w/2 le long
         # des normales partagées) : bords parfaitement droits.
-        for start, end, seg_color in cell_spans:
+        for start, end, seg_color, edge in cell_spans:
             left = [(all_pts[i][0] + normals[i][0] * road_w / 2,
                      all_pts[i][1] + normals[i][1] * road_w / 2) for i in range(start, end + 1)]
             right = [(all_pts[i][0] - normals[i][0] * road_w / 2,
                       all_pts[i][1] - normals[i][1] * road_w / 2) for i in range(start, end + 1)]
-            pygame.draw.polygon(self.screen, seg_color, left + right[::-1])
+            outline = left + right[::-1]
+            if edge is not None:
+                pygame.draw.lines(self.screen, edge, True, outline, 2)  # contour coloré
+            else:
+                pygame.draw.polygon(self.screen, seg_color, outline)
         # bande médiane BLANCHE DISCONTINUE au milieu de la route (pointillés
         # d'une case sur deux, comme une vraie route)
         for s in range(0, int(track.length) - 1, 2):
@@ -2869,31 +2878,40 @@ class FlammeRougeGame:
 
         # Teinte des cases spéciales en POLYGONE borné par les bords de la
         # route (ne déborde pas dans les virages) : départ/arrivée jaunes,
-        # montée rouge, descente bleue
+        # pavés/approvisionnement remplis ; MONTÉE/DESCENTE = asphalte comme
+        # le reste mais CONTOUR rouge/bleu (comme le jeu officiel)
         for x_cell in range(track.length):
             run = track.run_at(x_cell)
             cell_geo = track.geography_at(x_cell)
+            edge = None  # contour coloré (montée/descente) au lieu du remplissage
             if run == CellRunType.START:
                 color = (255, 240, 190)   # jaune clair (comme la preview)
             elif run == CellRunType.END:
                 color = (250, 230, 120)   # jaune vif (comme la preview)
             elif cell_geo == CellGeographyType.UPHILL:
-                color = UPHILL_FILL
+                color = None
+                edge = UPHILL_EDGE         # contour rouge vif
             elif cell_geo == CellGeographyType.DOWNHILL:
-                color = DOWNHILL_FILL
+                color = None
+                edge = DOWNHILL_EDGE       # contour bleu vif
             elif cell_geo == CellGeographyType.COBBLE:
                 color = COBBLE_FILL
             elif cell_geo == CellGeographyType.SUPPLY:
                 color = SUPPLY_FILL
             else:
                 color = None
-            if color is not None:
+            if color is not None or edge is not None:
                 s0, s1 = x_cell * cell, (x_cell + 1) * cell
                 hl = self._lane_half(geo, x_cell)
                 seg = [self._path_at(geo, s0 + (s1 - s0) * k / 8) for k in range(9)]
                 right = [(x - ty * hl, y + tx * hl) for x, y, tx, ty in seg]
                 left = [(x + ty * hl, y - tx * hl) for x, y, tx, ty in seg]
-                pygame.draw.polygon(self.screen, color, right + left[::-1])
+                outline = right + left[::-1]
+                if edge is not None:
+                    # contour coloré autour de la case, asphalte inchangé
+                    pygame.draw.lines(self.screen, edge, True, outline, 3)
+                else:
+                    pygame.draw.polygon(self.screen, color, outline)
 
 
 

@@ -829,8 +829,9 @@ class TestCircuitZoom(unittest.TestCase):
         ui._draw_ui()  # panneau scrollable rendu sans erreur
 
     def test_track_visuals_middle_line_and_tint_inside_road(self):
-        """Ligne médiane blanche sur tout le tracé ; teintes des cases spéciales
-        à l'intérieur de la route (pas de débordement en virage)."""
+        """Bande médiane blanche DISCONTINUE (pointillés) ; montée/descente =
+        contour coloré autour de la case, asphalte inchangé à l'intérieur,
+        pas de débordement hors de la route en virage."""
         import pygame
         from game.track import CellGeographyType
         ui = main.FlammeRougeGame(stage="Col du Ballon")  # virages + montagnes
@@ -839,29 +840,37 @@ class TestCircuitZoom(unittest.TestCase):
         ui.screen.fill((255, 255, 255))
         geo = ui._track_geometry()
         ui._draw_track()
-        # ligne médiane : au milieu de la route, le pixel est blanc
         cell = geo["cell"]
-        mid_s = (ui.game.track.length // 2) * cell
-        px, py, _tx, _ty = ui._path_at(geo, mid_s + cell / 2)
-        c = tuple(ui.screen.get_at((int(px), int(py))))[:3]
-        self.assertGreater(min(c), 200, f"pas de ligne médiane blanche au centre: {c}")
-        # teinte montée présente quelque part à l'intérieur de la route
-        found_uphill = False
+        # bande médiane discontinue : des tirets blancs au centre...
+        dash = gap = 0
+        for x in range(ui.game.track.length):
+            px, py, _tx, _ty = ui._path_at(geo, (x + 0.5) * cell)
+            c = tuple(ui.screen.get_at((int(px), int(py))))[:3]
+            if min(c) > 200:
+                dash += 1
+            else:
+                gap += 1
+        self.assertGreater(dash, 0, "pas de tiret blanc au centre de la route")
+        self.assertGreater(gap, 0, "la bande médiane n'est pas discontinue")
+        # montée : contour rouge autour de la case, asphalte normal au centre
+        found_edge = False
         for x in range(ui.game.track.length):
             if ui.game.track.geography_at(x) == CellGeographyType.UPHILL:
+                hl = ui._lane_half(geo, x)
                 qx, qy, _tx, _ty = ui._path_at(geo, (x + 0.5) * cell)
                 nx, ny = -_ty, _tx
-                qx, qy = qx + nx * geo["half"] * 0.5, qy + ny * geo["half"] * 0.5  # dans la file
-                c = tuple(ui.screen.get_at((int(qx), int(qy))))[:3]
-                if c == tuple(main.UPHILL_FILL):
-                    found_uphill = True
-                    # juste à côté, hors de la route : pas de teinte (bord gris/blanc)
-                    nx, ny = -_ty, _tx
-                    ox, oy = qx + nx * (geo["half"] + 6), qy + ny * (geo["half"] + 6)
-                    oc = tuple(ui.screen.get_at((int(ox), int(oy))))[:3]
-                    self.assertNotEqual(oc, tuple(main.UPHILL_FILL),
-                                        "la teinte déborde hors de la route en virage")
-        self.assertTrue(found_uphill)
+                ex, ey = qx + nx * (hl - 1), qy + ny * (hl - 1)  # dans le contour (3 px)
+                c = tuple(ui.screen.get_at((int(ex), int(ey))))[:3]
+                if c == tuple(main.UPHILL_EDGE):
+                    found_edge = True
+                cc = tuple(ui.screen.get_at((int(qx), int(qy))))[:3]  # centre = asphalte
+                self.assertNotEqual(cc, tuple(main.UPHILL_EDGE),
+                                    "la montée est encore remplie, pas en contour")
+                ox, oy = qx + nx * (hl + 6), qy + ny * (hl + 6)  # hors route
+                oc = tuple(ui.screen.get_at((int(ox), int(oy))))[:3]
+                self.assertNotEqual(oc, tuple(main.UPHILL_EDGE),
+                                    "le contour déborde hors de la route en virage")
+        self.assertTrue(found_edge, "pas de contour rouge autour des cases de montée")
 
     def test_buttons_recessed_and_labels_fit(self):
         """Chaque bouton a un effet enfoncé (ombre en bas) et son libellé tient."""
