@@ -1335,10 +1335,10 @@ class FlammeRougeGame:
                     seg_color = (48, 52, 60)     # départ/arrivée en noir : identifiés par leurs lignes
                 elif cell.geography == CellGeographyType.UPHILL:
                     seg_color = (48, 52, 60)     # asphalte comme le reste...
-                    edge = (235, 145, 50)        # ...mais contour orange (montée)
+                    edge = (220, 50, 50)         # ...mais contour ROUGE VIF (montée)
                 elif cell.geography == CellGeographyType.DOWNHILL:
                     seg_color = (48, 52, 60)
-                    edge = (80, 120, 235)        # contour bleu (descente)
+                    edge = (50, 90, 220)         # contour BLEU VIF (descente)
                 elif cell.geography == CellGeographyType.COBBLE:
                     seg_color = (150, 150, 158)  # pavés : gris pavé
                 elif cell.geography == CellGeographyType.SUPPLY:
@@ -1400,14 +1400,16 @@ class FlammeRougeGame:
         # jonction de case, exactement sur la largeur de la route (1 px)
         _marks, total = self._preview_tile_marks(name, code=code)
         half = road_w / 2 + 3          # pour les lignes de départ/arrivée
-        tick_half = road_w / 2         # les séparateurs de cases restent fins
         for s in range(1, int(total)):
             px, py, tx, ty = path_point_at(pts, float(s))
             sx, sy = ox + px * scale, oy + py * scale
             nx, ny = -ty, tx
-            pygame.draw.line(self.screen, (225, 229, 235),
-                             (sx + nx * tick_half, sy + ny * tick_half),
-                             (sx - nx * tick_half, sy - ny * tick_half), 1)
+            # séparateur de case = DEUX PETITS TRAITS aux bords, le centre de
+            # la route reste libre (la bande médiane discontinue passe au milieu)
+            for side in (1, -1):
+                pygame.draw.line(self.screen, (225, 229, 235),
+                                 (sx + nx * side * road_w / 2, sy + ny * side * road_w / 2),
+                                 (sx + nx * side * road_w * 0.3, sy + ny * side * road_w * 0.3), 1)
 
         # Départ noté à la LIGNE de départ, arrivée à la LIGNE d'arrivée :
         # lignes en travers de la route à ces positions + mots « départ » /
