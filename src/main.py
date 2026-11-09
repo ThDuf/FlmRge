@@ -1315,7 +1315,7 @@ class FlammeRougeGame:
         # Tracé coloré CASE PAR CASE, route large : mêmes couleurs que le
         # profil (montée orange, descente bleu), plat en gris très foncé,
         # départ jaune clair, arrivée jaune vif
-        road_w = max(9, min(16, round(scale * 1.3)))  # largeur de la route
+        road_w = max(12, min(22, round(scale * 1.8)))  # largeur de la route (plus épaisse)
         from game.game import build_stage_track, build_track_from_code
         from game.track import CellGeographyType, CellRunType
         track = build_track_from_code(code) if code else build_stage_track(name)
