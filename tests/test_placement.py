@@ -841,17 +841,19 @@ class TestCircuitZoom(unittest.TestCase):
         geo = ui._track_geometry()
         ui._draw_track()
         cell = geo["cell"]
-        # bande médiane discontinue : des tirets blancs au centre...
+        # bande médiane discontinue type T1 : tiret blanc court au début de la
+        # case (x+0.15), vide ensuite (x+0.7) — plein << vide comme une vraie route
         dash = gap = 0
         for x in range(ui.game.track.length):
-            px, py, _tx, _ty = ui._path_at(geo, (x + 0.5) * cell)
-            c = tuple(ui.screen.get_at((int(px), int(py))))[:3]
-            if min(c) > 200:
+            px, py, _tx, _ty = ui._path_at(geo, (x + 0.15) * cell)
+            if min(tuple(ui.screen.get_at((int(px), int(py))))[:3]) > 200:
                 dash += 1
-            else:
+            px, py, _tx, _ty = ui._path_at(geo, (x + 0.7) * cell)
+            if min(tuple(ui.screen.get_at((int(px), int(py))))[:3]) <= 200:
                 gap += 1
         self.assertGreater(dash, 0, "pas de tiret blanc au centre de la route")
         self.assertGreater(gap, 0, "la bande médiane n'est pas discontinue")
+        self.assertGreater(gap, dash, "les vides doivent dominer (norme T1 : 3 m plein / 10 m vide)")
         # montée : contour rouge autour de la case, asphalte normal au centre
         found_edge = False
         for x in range(ui.game.track.length):
