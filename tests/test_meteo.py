@@ -539,8 +539,8 @@ class TestWeatherAnimElems(unittest.TestCase):
         self.assertEqual(len(e0), 3)                  # 3 lignes de courant
         self.assertTrue(all(e["kind"] == "streak" for e in e0))
         d = abs(e1[0]["along"] - e0[0]["along"])
-        self.assertGreater(d, 0)                      # le vent avance...
-        self.assertLess(d, 0.5)                       # ...mais lentement
+        self.assertGreater(d, 0.2)                    # le vent avance bien...
+        self.assertLess(d, 0.5)                       # ...sans être une fusée (1,6 s/tour)
 
     def test_crosswind_gusts_fade_fast(self):
         import main

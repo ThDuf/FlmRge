@@ -119,7 +119,7 @@ def weather_anim_elems(w, now, t0, span):
         # lignes de courant qui défilent lentement LE LONG de la tuile
         sgn = 1 if w == WeatherType.TAILWIND else -1
         for i, across in enumerate((-0.55, 0.0, 0.55)):
-            along = t0 + ((now / 2600.0 + i / 3.0) * span) % span  # un tour de tuile ~2,6 s
+            along = t0 + ((now / 1600.0 + i / 3.0) * span) % span  # un tour de tuile ~1,6 s
             elems.append({"kind": "streak", "along": along, "across": across,
                           "len": 0.9, "sgn": sgn, "alpha": 0.55 + 0.2 * i / 2,
                           "phase": i * 1.7})
