@@ -1387,12 +1387,13 @@ class FlammeRougeGame:
                 pygame.draw.lines(self.screen, edge, True, outline, 4)  # contour coloré épais
             else:
                 pygame.draw.polygon(self.screen, seg_color, outline)
-        # bande médiane BLANCHE DISCONTINUE au milieu de la route : tirets
-        # courts (0,3 case au début de chaque case), comme le marquage T1
-        # d'une vraie route (plein 3 m / vide 10 m)
-        for s in range(int(track.length)):
+        # bande médiane BLANCHE DISCONTINUE au milieu de la route : petits
+        # tirets très espacés (2 tirets de 0,15 case par case), comme le
+        # marquage T1 d'une vraie route (plein 3 m / vide 10 m)
+        for i in range(int(track.length * 2)):
+            s = i * 0.5
             p0 = path_point_at(pts, float(s))
-            p1 = path_point_at(pts, float(s + 0.3))
+            p1 = path_point_at(pts, float(s + 0.15))
             pygame.draw.line(self.screen, (235, 238, 242),
                              (ox + p0[0] * scale, oy + p0[1] * scale),
                              (ox + p1[0] * scale, oy + p1[1] * scale), 2)
@@ -2918,19 +2919,20 @@ class FlammeRougeGame:
 
 
 
-        # Séparateurs entre les files en POINTILLÉS blancs, comme le marquage
-        # T1 d'une vraie route (plein 3 m / vide 10 m -> tiret de 0,3 case au
-        # début de chaque case) + quadrillage des cases ; la demi-largeur suit
-        # le nombre de files
+        # Séparateurs entre les files en PETITS TIRETS blancs très espacés,
+        # comme le marquage T1 d'une vraie route (plein 3 m / vide 10 m) :
+        # 2 tirets de 0,15 case par case (~30% de plein) ; la demi-largeur
+        # suit le nombre de files
         for x_cell in range(track.length):
             n = self._lane_count(x_cell)
-            s0 = x_cell * cell
-            s1 = s0 + 0.3 * cell  # tiret court (~30% de plein, comme la norme T1)
-            for k in range(1, n):  # séparateur entre la file k-1 et la file k
-                off = geo["lane_w"] * ((n - 1) / 2.0 - (k - 0.5))
-                seg = [self._path_at(geo, s0 + (s1 - s0) * j / 4) for j in range(5)]
-                pygame.draw.lines(self.screen, WHITE, False,
-                                  [(x - ty * off, y + tx * off) for x, y, tx, ty in seg], 2)
+            for sub in (0.0, 0.5):  # 2 petits tirets par case
+                s0 = x_cell * cell + sub * cell
+                s1 = s0 + 0.15 * cell
+                for k in range(1, n):  # séparateur entre la file k-1 et la file k
+                    off = geo["lane_w"] * ((n - 1) / 2.0 - (k - 0.5))
+                    seg = [self._path_at(geo, s0 + (s1 - s0) * j / 3) for j in range(4)]
+                    pygame.draw.lines(self.screen, WHITE, False,
+                                      [(x - ty * off, y + tx * off) for x, y, tx, ty in seg], 2)
         for k in range(track.length + 1):
             px, py, tx, ty = self._path_at(geo, k * cell)
             nx, ny = -ty, tx

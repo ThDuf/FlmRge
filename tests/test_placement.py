@@ -841,19 +841,22 @@ class TestCircuitZoom(unittest.TestCase):
         geo = ui._track_geometry()
         ui._draw_track()
         cell = geo["cell"]
-        # bande médiane discontinue type T1 : tiret blanc court au début de la
-        # case (x+0.15), vide ensuite (x+0.7) — plein << vide comme une vraie route
+        # bande médiane discontinue type T1 : 2 petits tirets blancs par case
+        # (à x+0.07 et x+0.57), vides entre les deux (x+0.35) — plein << vide
         dash = gap = 0
         for x in range(ui.game.track.length):
-            px, py, _tx, _ty = ui._path_at(geo, (x + 0.15) * cell)
-            if min(tuple(ui.screen.get_at((int(px), int(py))))[:3]) > 200:
-                dash += 1
-            px, py, _tx, _ty = ui._path_at(geo, (x + 0.7) * cell)
-            if min(tuple(ui.screen.get_at((int(px), int(py))))[:3]) <= 200:
-                gap += 1
-        self.assertGreater(dash, 0, "pas de tiret blanc au centre de la route")
-        self.assertGreater(gap, 0, "la bande médiane n'est pas discontinue")
-        self.assertGreater(gap, dash, "les vides doivent dominer (norme T1 : 3 m plein / 10 m vide)")
+            for frac, is_dash in ((0.07, True), (0.57, True), (0.35, False)):
+                px, py, _tx, _ty = ui._path_at(geo, (x + frac) * cell)
+                c = tuple(ui.screen.get_at((int(px), int(py))))[:3]
+                if min(c) > 200:
+                    if is_dash:
+                        dash += 1
+                elif not is_dash:
+                    gap += 1
+        n = ui.game.track.length
+        self.assertGreater(dash, n, "pas assez de petits tirets blancs (2 par case)")
+        self.assertGreater(gap, n // 4, "pas assez de vides entre les tirets")
+        self.assertLess(dash / (2 * n), 1.0)  # plein < 100% : la bande est discontinue
         # montée : contour rouge autour de la case, asphalte normal au centre
         found_edge = False
         for x in range(ui.game.track.length):
