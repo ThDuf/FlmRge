@@ -127,11 +127,11 @@ def weather_anim_elems(w, now, t0, span):
         # barres horizontales (parallèles au sol) réparties sur la tuile, qui
         # apparaissent et disparaissent pseudo-aléatoirement (pulses de durées
         # différentes selon la barre)
-        for j in range(6):
-            depth = j / 5.0                            # 0 = loin, 1 = proche
-            across = ((j / 5.0) * 2 - 1) * 0.8         # réparti en travers de la route
-            alpha = max(0.0, math.sin(now / (120.0 + j * 43.0) + j * 2.39)) ** 2
-            elems.append({"kind": "gust", "along": t0 + (j + 0.5) * span / 6,
+        for j in range(10):
+            depth = j / 9.0                            # 0 = loin, 1 = proche
+            across = ((j / 9.0) * 2 - 1) * 0.8         # réparti en travers de la route
+            alpha = max(0.0, math.sin(now / (70.0 + j * 25.0) + j * 2.39)) ** 2
+            elems.append({"kind": "gust", "along": t0 + (j + 0.5) * span / 10,
                           "across": across, "depth": depth, "alpha": alpha})
     else:  # NONE : un seul soleil au milieu de la tuile, rayons qui tournent
         elems.append({"kind": "sun", "along": t0 + span / 2.0, "across": 0.0,

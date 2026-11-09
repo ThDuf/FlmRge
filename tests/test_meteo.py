@@ -546,7 +546,7 @@ class TestWeatherAnimElems(unittest.TestCase):
         import main
         a0 = [e["alpha"] for e in main.weather_anim_elems(WeatherType.CROSSWIND, 0, 6, 6)]
         a1 = [e["alpha"] for e in main.weather_anim_elems(WeatherType.CROSSWIND, 150, 6, 6)]
-        self.assertEqual(len(a0), 6)
+        self.assertEqual(len(a0), 10)                 # plus d'occurrences
         self.assertTrue(all(0.0 <= a <= 1.0 for a in a0 + a1))
         self.assertNotEqual(a0, a1)                   # fondu rapide
 
