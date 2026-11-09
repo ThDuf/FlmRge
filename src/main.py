@@ -112,7 +112,7 @@ def weather_anim_elems(w, now, t0, span):
             across = (rnd * 2 - 1) * 0.85              # en travers de la route
             depth = 1.0 - abs(across)                  # centre = proche
             along = t0 + (i / n) * span + (rnd * 0.4)  # fixe le long de la tuile
-            fall = ((now / 650.0) + rnd * 7.0) % 1.0   # chute ~650 ms
+            fall = ((now / 450.0) + rnd * 7.0) % 1.0   # chute ~450 ms
             elems.append({"kind": "drop", "along": along, "across": across,
                           "fall": fall, "depth": depth, "alpha": 0.45 + 0.55 * depth})
     elif w in (WeatherType.TAILWIND, WeatherType.HEADWIND):
